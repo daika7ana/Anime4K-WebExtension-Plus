@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Anime4K WebExtension",
+  "name": "Anime4K WebExtension Plus",
   "description": "__MSG_description__",
   "version": "0.5.1",
   "action": {
