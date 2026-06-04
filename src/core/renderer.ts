@@ -290,16 +290,13 @@ export class Renderer {
     );
 
     // --- Phase 1: 创建所有管线实例（无 GPU 提交） ---
+    // 每个管线构造器可能触发同步 GPU 着色器编译（首次 200-500ms），
+    // 因此每个管线创建后都让出主线程，保持 UI 响应。
     for (let i = 0; i < this.effects.length; i++) {
       // 报告进度
       const loadingMsg = chrome.i18n.getMessage('loadingEffect', [String(i + 1), String(this.effects.length)])
         || `⏳ Loading effect ${i + 1}/${this.effects.length}...`;
       this.onProgress?.(loadingMsg, i + 1, this.effects.length);
-
-      // 每 3 个效果让出主线程一次，避免界面冻结（而非每个效果都让出）
-      if (i > 0 && i % 3 === 0) {
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
 
       const effect = this.effects[i];
       const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
@@ -344,19 +341,30 @@ export class Renderer {
       } else {
         console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
       }
+
+      // 每个管线创建后让出主线程（构造器可能已触发同步着色器编译）
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    // --- Phase 2: 批量预热 — 用单个命令编码器提交所有管线的着色器编译 ---
-    // 单次提交+同步代替逐个效果的同步，大幅减少 GPU 排空等待
-    try {
-      const warmupEncoder = this.device.createCommandEncoder();
-      for (const pipeline of pipelines) {
-        pipeline.pass(warmupEncoder);
+    // --- Phase 2: 分批预热 — 小批量提交着色器编译，每批之间让出主线程 ---
+    // 首次运行时着色器编译可能需要数秒，分批可让 UI 在各批次之间保持响应。
+    const WARMUP_BATCH_SIZE = 2;
+    for (let i = 0; i < pipelines.length; i += WARMUP_BATCH_SIZE) {
+      try {
+        const warmupEncoder = this.device.createCommandEncoder();
+        const batchEnd = Math.min(i + WARMUP_BATCH_SIZE, pipelines.length);
+        for (let j = i; j < batchEnd; j++) {
+          pipelines[j].pass(warmupEncoder);
+        }
+        this.device.queue.submit([warmupEncoder.finish()]);
+        await this.device.queue.onSubmittedWorkDone();
+      } catch (e) {
+        console.warn('[Anime4KWebExt] Warmup batch failed, shaders will compile on first frame:', e);
       }
-      this.device.queue.submit([warmupEncoder.finish()]);
-      await this.device.queue.onSubmittedWorkDone();
-    } catch (e) {
-      console.warn('[Anime4KWebExt] Batch warmup failed, shaders will compile on first frame:', e);
+      // 让出主线程，使 UI 可以处理输入事件和更新进度
+      if (i + WARMUP_BATCH_SIZE < pipelines.length) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
 
     if (pipelines.length === 0) {
