@@ -13,14 +13,14 @@ module.exports = (env, argv) => {
 
   const manifest = require('./manifest.json');
 
-  // 据目标浏览器修改 manifest
+  // Modify manifest based on target browser
   if (targetBrowser === 'firefox') {
-    // Firefox 特定的转换
+    // Firefox-specific transformations
     delete manifest.background.service_worker;
     manifest.background.scripts = ['background.js'];
     manifest.browser_specific_settings = {
       gecko: {
-        id: 'anime4k-webextension@chenmozhijin',
+        id: 'anime4k-webextension-plus@daika7ana',
         data_collection_permissions: {
           required: ['none']
         }
@@ -40,7 +40,7 @@ module.exports = (env, argv) => {
     output: {
       filename: '[name].js',
       path: path.resolve(__dirname, 'dist-' + targetBrowser),
-      clean: true, // 清理输出目录
+      clean: true, // Clean output directory
     },
     module: {
       rules: [
@@ -111,7 +111,7 @@ module.exports = (env, argv) => {
         new TerserPlugin({
           terserOptions: {
             compress: {
-              // 生产环境下移除 console.log 和 console.warn（保留 console.error）
+              // Remove console.log and console.warn in production (keep console.error)
               pure_funcs: ['console.log', 'console.warn'],
             },
           },
