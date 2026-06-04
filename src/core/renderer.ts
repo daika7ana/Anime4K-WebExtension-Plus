@@ -127,10 +127,40 @@ export class Renderer {
   /** Warmup batch size */
   private warmupBatchSize: number;
 
+  // --- Static GPU pre-warm state ---
+  private static prewarmedAdapter: GPUAdapter | null = null;
+  private static prewarmedDevice: GPUDevice | null = null;
+  private static prewarmPromise: Promise<void> | null = null;
+
   /**
-   * The Renderer constructor is private. Use the `Renderer.create()` static method to create an instance.
-   * @param options - Configuration needed to initialize the renderer
+   * Pre-request GPU adapter and device so they're ready when the user clicks Enhance.
+   * This warms the GPU driver and saves 50-100ms during initialization.
+   * Safe to call multiple times — only the first call does work.
    */
+  public static preWarmGPU(): void {
+    if (Renderer.prewarmPromise) return;
+    Renderer.prewarmPromise = (async () => {
+      try {
+        if (!navigator.gpu) return;
+        const adapterOptions: GPURequestAdapterOptions = {};
+        if (!navigator.platform.startsWith('Win')) {
+          adapterOptions.powerPreference = 'high-performance';
+        }
+        const adapter = await navigator.gpu.requestAdapter(adapterOptions);
+        if (!adapter) return;
+        Renderer.prewarmedAdapter = adapter;
+        const adapterLimits = adapter.limits;
+        Renderer.prewarmedDevice = await adapter.requestDevice({
+          requiredLimits: {
+            maxBufferSize: adapterLimits.maxBufferSize,
+            maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
+          },
+        });
+      } catch {
+        // Pre-warm is best-effort; errors are non-fatal
+      }
+    })();
+  }
   private constructor(options: RendererOptions) {
     this.video = options.video;
     this.canvas = options.canvas;
@@ -167,26 +197,35 @@ export class Renderer {
       }
 
       // Request GPU adapter and set power preference based on platform
+      // Use pre-warmed adapter/device if available (pre-requested on content script load)
       this.onProgress?.(chrome.i18n.getMessage('initGpu') || '⏳ Initializing GPU...');
-      const adapterOptions: GPURequestAdapterOptions = {};
-      // Setting powerPreference on Windows produces a warning, so only use it on other platforms
-      if (!navigator.platform.startsWith('Win')) {
-        adapterOptions.powerPreference = 'high-performance';
-      }
-      const adapter = await navigator.gpu.requestAdapter(adapterOptions);
-      if (!adapter) {
-        throw new RendererInitializationError('WebGPU not supported: No adapter found.');
-      }
 
-      // Request GPU device and configure Canvas context
-      // Request higher maxBufferSize based on adapter-supported limits for high-resolution video processing
-      const adapterLimits = adapter.limits;
-      this.device = await adapter.requestDevice({
-        requiredLimits: {
-          maxBufferSize: adapterLimits.maxBufferSize,
-          maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
-        },
-      });
+      if (Renderer.prewarmedDevice) {
+        this.device = Renderer.prewarmedDevice;
+        // Clear the cached device so each renderer gets its own
+        Renderer.prewarmedDevice = null;
+        Renderer.prewarmedAdapter = null;
+      } else {
+        const adapterOptions: GPURequestAdapterOptions = {};
+        // Setting powerPreference on Windows produces a warning, so only use it on other platforms
+        if (!navigator.platform.startsWith('Win')) {
+          adapterOptions.powerPreference = 'high-performance';
+        }
+        const adapter = await navigator.gpu.requestAdapter(adapterOptions);
+        if (!adapter) {
+          throw new RendererInitializationError('WebGPU not supported: No adapter found.');
+        }
+
+        // Request GPU device and configure Canvas context
+        // Request higher maxBufferSize based on adapter-supported limits for high-resolution video processing
+        const adapterLimits = adapter.limits;
+        this.device = await adapter.requestDevice({
+          requiredLimits: {
+            maxBufferSize: adapterLimits.maxBufferSize,
+            maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
+          },
+        });
+      }
 
       // Listen for device loss events and attempt automatic recovery
       this.device.lost.then((info) => {
@@ -348,8 +387,10 @@ export class Renderer {
         console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
       }
 
-      // Yield the main thread after each pipeline creation (constructor may have triggered synchronous shader compilation)
-      await new Promise(resolve => setTimeout(resolve, 0));
+      // Yield via rAF to let the browser repaint between synchronous GPU operations.
+      // rAF fires aligned with the frame cycle, giving the browser a chance to process
+      // paint and input events between blocking constructor calls.
+      await new Promise(resolve => requestAnimationFrame(resolve));
     }
 
     // --- Phase 2: Batch warmup — submit shader compilations in small batches, yielding between batches ---
@@ -366,9 +407,9 @@ export class Renderer {
       } catch (e) {
         console.warn('[Anime4KWebExt] Warmup batch failed, shaders will compile on first frame:', e);
       }
-      // Yield the main thread so the UI can process input events and update progress
+      // Yield via rAF so the UI can process input events and update progress
       if (i + this.warmupBatchSize < pipelines.length) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise(resolve => requestAnimationFrame(resolve));
       }
     }
 

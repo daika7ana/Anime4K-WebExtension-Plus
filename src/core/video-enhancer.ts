@@ -96,6 +96,10 @@ export class VideoEnhancer {
     this.button.disabled = true;
     this.fixAttempted = false; // Reset the fix attempt flag
 
+    // Defer heavy initialization to the next animation frame so the browser can
+    // repaint the "Enhancing..." button text before any blocking GPU work begins.
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
     const settings = await getSettings();
 
     try {

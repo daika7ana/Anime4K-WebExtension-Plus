@@ -4,6 +4,7 @@ import { getSettings } from '../utils/settings';
 import { Anime4KWebExtSettings } from '../types';
 import { stashEnhancer, findAndunstashEnhancer } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
+import { Renderer } from './renderer';
 
 // Use a Set to track processed documents or ShadowRoots so listeners can be removed
 const processedDocs = new Set<Document | ShadowRoot>();
@@ -120,6 +121,9 @@ export function initializeOnPage(): void {
 
   // 3. Set up DOM observer to handle dynamically loaded videos and Shadow DOM
   domObserver = setupDOMObserver();
+
+  // 4. Pre-warm GPU adapter/device so they're ready when the user clicks Enhance
+  Renderer.preWarmGPU();
 }
 
 /**
