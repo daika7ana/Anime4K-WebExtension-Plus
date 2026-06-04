@@ -114,7 +114,12 @@ export async function runGPUBenchmark(
 
     // 预先生成测试数据（复用于所有档位）
     const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
-    crypto.getRandomValues(testData);
+    // crypto.getRandomValues 有 65536 字节限制，分块填充
+    const CRYPTO_CHUNK = 65536;
+    for (let offset = 0; offset < testData.length; offset += CRYPTO_CHUNK) {
+        const end = Math.min(offset + CRYPTO_CHUNK, testData.length);
+        crypto.getRandomValues(testData.subarray(offset, end));
+    }
     // 确保 alpha 通道为 255
     for (let j = 3; j < testData.length; j += 4) {
         testData[j] = 255;
