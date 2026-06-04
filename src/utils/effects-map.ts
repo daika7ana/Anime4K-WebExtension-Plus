@@ -1,11 +1,11 @@
 import { EnhancementEffect } from '../types';
 
 /**
- * 所有可用的增强效果清单。
- * 这是系统中所有效果的唯一“真相来源”。
- * id: 唯一标识符，用于存储和识别。
- * name: 显示在UI上的用户友好名称。
- * className: 对应于 `anime4k-webgpu` 库中导出的类名，用于动态实例化。
+ * Catalog of all available enhancement effects.
+ * This is the single source of truth for all effects in the system.
+ * id: Unique identifier used for storage and identification.
+ * name: User-friendly display name shown in the UI.
+ * className: Corresponds to the class exported by the `anime4k-webgpu` library, used for dynamic instantiation.
  */
 export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
   // Deblur Effects
@@ -13,7 +13,7 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     id: 'anime4k/Deblur/DoG',
     name: 'Deblur (DoG)',
     className: 'DoG',
-    // params: { strength: 4 } // 示例：未来可支持参数配置
+    // params: { strength: 4 } // Example: parameter configuration could be supported in the future
   },
 
   // Denoise Effects
@@ -94,8 +94,8 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
   },
 
   // Helper Effects
-  // 注意：`Downscale` 将由扩展根据分辨率自动处理，不作为用户可选效果。
-  // `ClampHighlights` 可由用户选择。
+  // Note: `Downscale` is handled automatically by the extension based on resolution, not available as a user-selectable effect.
+  // `ClampHighlights` can be selected by the user.
   {
     id: 'anime4k/Helper/ClampHighlights',
     name: 'Clamp Highlights',

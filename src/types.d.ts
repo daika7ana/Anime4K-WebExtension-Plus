@@ -1,10 +1,10 @@
-// ===== 性能档位类型 =====
+// ===== Performance Tier Type =====
 type PerformanceTier = 'performance' | 'balanced' | 'quality' | 'ultra';
 
-// ===== 基础模式类型 =====
+// ===== Base Mode Type =====
 type BaseMode = 'A' | 'B' | 'C' | 'A+A' | 'B+B' | 'C+A';
 
-// 定义视频增强器接口
+// Video enhancer interface
 interface VideoEnhancer {
   destroy: () => void;
   toggleEnhancement: () => Promise<void>;
@@ -15,22 +15,22 @@ interface VideoEnhancer {
   reattach: (newVideo: HTMLVideoElement) => Promise<void>;
 }
 
-// 白名单规则接口
+// Whitelist rule interface
 interface WhitelistRule {
   pattern: string;
   enabled: boolean;
 }
 
-// 增强效果接口
+// Enhancement effect interface
 interface EnhancementEffect {
-  id: string;       // 唯一ID, e.g., "anime4k/Upscale/CNNx2VL"
-  name: string;     // 显示名称, e.g., "Upscale CNNx2VL"
-  className: string; // 用于代码中实例化的类名, e.g., "CNNx2VL"
-  params?: { [key: string]: any }; // 未来可用于配置效果参数
-  upscaleFactor?: number; // 效果的放大倍数，例如 2 表示 2x 放大
+  id: string;       // Unique ID, e.g., "anime4k/Upscale/CNNx2VL"
+  name: string;     // Display name, e.g., "Upscale CNNx2VL"
+  className: string; // Class name used for instantiation in code, e.g., "CNNx2VL"
+  params?: { [key: string]: any }; // Could be used in the future for effect parameter configuration
+  upscaleFactor?: number; // Upscale factor of the effect, e.g. 2 means 2x upscale
 }
 
-// ===== 内置模式接口（效果链由档位决定）=====
+// ===== Built-in Mode Interface (effect chain determined by tier) =====
 interface BuiltInMode {
   id: string;          // 'builtin-mode-a'
   baseMode: BaseMode;  // 'A'
@@ -38,7 +38,7 @@ interface BuiltInMode {
   isBuiltIn: true;
 }
 
-// ===== 自定义模式接口（效果链完全用户控制）=====
+// ===== Custom Mode Interface (effect chain fully user-controlled) =====
 interface CustomMode {
   id: string;
   name: string;
@@ -46,19 +46,19 @@ interface CustomMode {
   effects: EnhancementEffect[];
 }
 
-// 统一的增强模式类型
+// Unified enhancement mode type
 type EnhancementMode = BuiltInMode | CustomMode;
 
-// ===== GPU 测试结果接口 =====
+// ===== GPU Benchmark Result Interface =====
 interface GPUBenchmarkResult {
   tier: PerformanceTier;
-  scores: Record<PerformanceTier, number>;       // 各档位平均帧时间 (ms)
-  maxScores: Record<PerformanceTier, number>;    // 各档位最大帧时间 (ms)
+  scores: Record<PerformanceTier, number>;       // Average frame time per tier (ms)
+  maxScores: Record<PerformanceTier, number>;    // Max frame time per tier (ms)
   timestamp: number;
   adapterInfo: string;
 }
 
-// ===== 跨设备同步的设置 (storage.sync) =====
+// ===== Cross-device Synced Settings (storage.sync) =====
 interface SyncedSettings {
   selectedModeId: string;
   targetResolutionSetting: string;
@@ -69,7 +69,7 @@ interface SyncedSettings {
   warmupBatchSize: number;
 }
 
-// ===== 仅本地存储的设置 (storage.local) =====
+// ===== Local-only Settings (storage.local) =====
 interface LocalSettings {
   performanceTier: PerformanceTier;
   gpuBenchmarkResult: GPUBenchmarkResult | null;
@@ -77,20 +77,20 @@ interface LocalSettings {
   hasCompletedOnboarding: boolean;
 }
 
-// ===== 运行时合并的完整设置 =====
+// ===== Runtime-merged Full Settings =====
 interface Anime4KWebExtSettings extends SyncedSettings {
   performanceTier: PerformanceTier;
-  // 内置模式会在运行时动态生成并与 customModes 合并
+  // Built-in modes are dynamically generated at runtime and merged with customModes
   enhancementModes: EnhancementMode[];
 }
 
-// 定义尺寸接口
+// Dimensions interface
 interface Dimensions {
   width: number;
   height: number;
 }
 
-// 导出接口供其他模块使用
+// Export interfaces for use by other modules
 export {
   PerformanceTier,
   BaseMode,

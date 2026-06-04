@@ -5,8 +5,8 @@ import { Dimensions, Anime4KWebExtSettings, EnhancementMode } from '../types';
 import { OverlayManager } from './overlay-manager';
 
 /**
- * 视频增强器类，封装Anime4K处理逻辑
- * 负责管理单个视频元素的增强状态、渲染实例和资源清理
+ * Video enhancer class that encapsulates Anime4K processing logic.
+ * Manages the enhancement state, renderer instance, and resource cleanup for a single video element.
  */
 export class VideoEnhancer {
   private renderer: Renderer | null = null;
@@ -21,15 +21,15 @@ export class VideoEnhancer {
   }
 
   /**
-   * 创建并初始化一个新的 VideoEnhancer 实例。
-   * 这是推荐的实例化方法。
+   * Creates and initializes a new VideoEnhancer instance.
+   * This is the recommended instantiation method.
    */
   public static create(video: HTMLVideoElement): VideoEnhancer {
     return new VideoEnhancer(video);
   }
 
   /**
-   * 初始化UI组件和事件监听
+   * Initializes UI components and event listeners
    */
   private initUI(): void {
     this.button.onclick = (e) => {
@@ -41,8 +41,8 @@ export class VideoEnhancer {
   private fixAttempted = false;
 
   /**
-   * 检查并修复视频的跨域问题。
-   * @param isFallback - 是否作为错误后的兜底方案调用
+   * Checks and fixes cross-origin issues with the video.
+   * @param isFallback - Whether this is called as a fallback after an error
    * @returns {Promise<void>}
    */
   private async fixCrossOrigin(isFallback = false): Promise<void> {
@@ -83,7 +83,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 切换视频增强的开关状态
+   * Toggles the video enhancement on/off
    */
   async toggleEnhancement(): Promise<void> {
     if (this.renderer) {
@@ -94,13 +94,13 @@ export class VideoEnhancer {
 
     this.button.innerText = chrome.i18n.getMessage('enhancing');
     this.button.disabled = true;
-    this.fixAttempted = false; // 重置修复尝试标志
+    this.fixAttempted = false; // Reset the fix attempt flag
 
     const settings = await getSettings();
 
     try {
       if (settings.enableCrossOriginFix) {
-        // --- 第一道防线：前置检查 ---
+        // --- First line of defense: proactive check ---
         const videoUrl = this.video.src;
         if (videoUrl && videoUrl.startsWith('http') && !this.video.crossOrigin) {
           try {
@@ -125,11 +125,11 @@ export class VideoEnhancer {
       const isCrossOriginError = err.name === 'SecurityError' && err.message.includes('tainted');
 
       if (isCrossOriginError && settings.enableCrossOriginFix && !this.fixAttempted) {
-        // --- 第二道防线：错误兜底 ---
+        // --- Second line of defense: error fallback ---
         console.warn('[Anime4KWebExt] Fallback: Caught a SecurityError. Attempting to fix and retry...');
         try {
           await this.fixCrossOrigin();
-          await this.initRenderer(); // 重试
+          await this.initRenderer(); // Retry
           this.video.setAttribute(ANIME4K_APPLIED_ATTR, 'true');
           this.button.innerText = chrome.i18n.getMessage('cancelEnhance');
         } catch (retryError) {
@@ -138,12 +138,12 @@ export class VideoEnhancer {
           this.showErrorModal((retryError as Error).message || chrome.i18n.getMessage('enhanceError'));
         }
       } else if (isCrossOriginError && !settings.enableCrossOriginFix) {
-        // --- 用户提示 ---
+        // --- User prompt ---
         console.warn('[Anime4KWebExt] Cross-origin error detected, but fix is disabled. Prompting user.');
         this.disableEnhancement();
         this.showErrorModal(chrome.i18n.getMessage('crossOriginHint') || 'Enhancement failed due to cross-origin restrictions. Please enable Compatibility Mode in the options.', true);
       } else {
-        // --- 其他错误 ---
+        // --- Other errors ---
         console.error('[Anime4KWebExt] Failed to initialize enhancer:', err);
         this.disableEnhancement();
         this.showErrorModal(err.message || chrome.i18n.getMessage('enhanceError'));
@@ -155,10 +155,10 @@ export class VideoEnhancer {
 
 
   /**
-   * 初始化渲染器，包括获取设置、加载模块和创建Renderer实例
+   * Initializes the renderer, including loading settings, loading modules, and creating the Renderer instance
    */
   private async initRenderer(): Promise<void> {
-    // 在初始化渲染器之前，确保元数据已加载
+    // Ensure metadata is loaded before initializing the renderer
     if (this.video.readyState < 1) { // HAVE_METADATA
       this.button.innerText = chrome.i18n.getMessage('waitingVideoLoad') || '⏳ Waiting for video...';
       await new Promise(resolve => {
@@ -186,7 +186,7 @@ export class VideoEnhancer {
     canvas.width = targetDimensions.width;
     canvas.height = targetDimensions.height;
 
-    // 根据模式和档位获取实际效果链
+    // Get the actual effect chain based on mode and performance tier
     const effects = getEffectsForMode(selectedMode, settings.performanceTier);
 
     this.renderer = await Renderer.create({
@@ -211,7 +211,7 @@ export class VideoEnhancer {
       },
       onProgress: (stage: string | null) => {
         if (stage === null) {
-          // 预热完成，恢复按钮文字
+          // Warmup complete, restore button text
           this.button.innerText = chrome.i18n.getMessage('cancelEnhance');
         } else {
           this.button.innerText = stage;
@@ -224,9 +224,9 @@ export class VideoEnhancer {
   }
 
   /**
-   * 根据新设置更新渲染器。
-   * 这比完全重新初始化要高效得多。
-   * @param newSettings - 最新的设置对象
+   * Updates the renderer with new settings.
+   * This is much more efficient than a full reinitialization.
+   * @param newSettings - The latest settings object
    */
   public async updateSettings(newSettings: Anime4KWebExtSettings): Promise<void> {
     if (!this.renderer) return;
@@ -241,7 +241,7 @@ export class VideoEnhancer {
       targetResolutionSetting
     );
 
-    // 如果目标尺寸变化，更新canvas的大小。这必须在调用渲染器更新之前完成。
+    // If the target dimensions have changed, update the canvas size. This must be done before calling the renderer update.
     const canvas = this.overlay.getCanvas();
     if (newTargetDimensions.width !== canvas.width || newTargetDimensions.height !== canvas.height) {
       console.log(`[Anime4KWebExt] Target resolution changed, resizing canvas to ${newTargetDimensions.width}x${newTargetDimensions.height}.`);
@@ -249,10 +249,10 @@ export class VideoEnhancer {
       canvas.height = newTargetDimensions.height;
     }
 
-    // 根据模式和档位获取实际效果链
+    // Get the actual effect chain based on mode and performance tier
     const effects = getEffectsForMode(selectedMode, newSettings.performanceTier);
 
-    // 调用渲染器统一的配置更新方法，它会智能地处理变更
+    // Call the renderer's unified configuration update method, which intelligently handles changes
     this.renderer.updateConfiguration({
       effects: effects,
       targetDimensions: newTargetDimensions
@@ -263,7 +263,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 计算目标渲染尺寸（上限 8K，防止 OOM）
+   * Calculates the target rendering dimensions (capped at 8K to prevent OOM)
    */
   private calculateTargetDimensions(videoWidth: number, videoHeight: number, resolutionSetting: string): Dimensions {
     const MAX_WIDTH = 7680;
@@ -289,7 +289,7 @@ export class VideoEnhancer {
       return { width: videoWidth, height: videoHeight };
     }
 
-    // 限制最大分辨率，防止纹理过大导致 OOM
+    // Cap maximum resolution to prevent textures from being too large and causing OOM
     if (width > MAX_WIDTH || height > MAX_HEIGHT) {
       const scale = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
       width = Math.floor(width * scale);
@@ -300,7 +300,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 获取当前正在使用的模式ID
+   * Gets the ID of the currently active mode
    */
   public getCurrentModeId(): string | null {
     return this.currentModeId;
@@ -311,17 +311,17 @@ export class VideoEnhancer {
   }
 
   /**
-   * 分离方法
+   * Detach method
    */
   public detach(): void {
     console.log('[Anime4KWebExt] Detaching enhancer from video.');
     this.overlay.detach();
-    // 移除属性，因为此刻它不再“应用”于任何DOM元素
+    // Remove the attribute since it is no longer "applied" to any DOM element at this point
     this.video.removeAttribute(ANIME4K_APPLIED_ATTR);
   }
 
   /**
-   * 重附加方法
+   * Reattach method
    */
   public async reattach(newVideo: HTMLVideoElement): Promise<void> {
     console.log('[Anime4KWebExt] Re-attaching enhancer to new video.');
@@ -330,10 +330,10 @@ export class VideoEnhancer {
 
 
 
-    // 更新渲染器
+    // Update the renderer
     if (this.renderer) {
       this.renderer.updateVideoSource(newVideo);
-      // 重新应用属性
+      // Re-apply the attribute
       this.video.setAttribute(ANIME4K_APPLIED_ATTR, 'true');
     } else {
       this.disableEnhancement();
@@ -341,7 +341,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 销毁整个增强器实例（包括UI元素和内部资源）
+   * Destroys the entire enhancer instance (including UI elements and internal resources)
    */
   public destroy(): void {
     console.log('[Anime4KWebExt] Destroying enhancer instance:', this);
@@ -351,7 +351,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 禁用视频增强效果（释放资源并重置视频状态）
+   * Disables video enhancement (releases resources and resets video state)
    */
   private disableEnhancement(): void {
     console.log('[Anime4KWebExt] disableEnhancement called. Current renderer:', this.renderer);
@@ -366,7 +366,7 @@ export class VideoEnhancer {
   }
 
   /**
-   * 释放WebGPU相关资源
+   * Releases WebGPU-related resources
    */
   private releaseWebGPUResources(): void {
     if (this.renderer) {
@@ -384,13 +384,13 @@ export class VideoEnhancer {
   }
 
   /**
-   * 显示错误提示框（使用单例通知元素，避免重复创建 DOM）
+   * Shows an error notification (uses a singleton notification element to avoid duplicate DOM creation)
    */
   private static activeNotification: HTMLElement | null = null;
   private static notificationTimeout: number | null = null;
 
   private showErrorModal(message: string, showOptionsLink = false): void {
-    // 复用已有通知元素
+    // Reuse existing notification element
     if (VideoEnhancer.activeNotification) {
       VideoEnhancer.activeNotification.remove();
       VideoEnhancer.activeNotification = null;

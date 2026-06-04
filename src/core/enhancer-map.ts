@@ -1,20 +1,20 @@
 import { VideoEnhancer } from './video-enhancer';
 
-// 使用 Map 来存储 video 元素和其对应的 enhancer 实例
+// Use a Map to store video elements and their corresponding enhancer instances
 const enhancerMap = new Map<HTMLVideoElement, VideoEnhancer>();
 
 /**
- * 将一个 enhancer 实例与一个 video 元素关联起来
- * @param video HTMLVideoElement - 键
- * @param enhancer VideoEnhancer - 值
+ * Associate an enhancer instance with a video element
+ * @param video HTMLVideoElement - key
+ * @param enhancer VideoEnhancer - value
  */
 export function associateEnhancer(video: HTMLVideoElement, enhancer: VideoEnhancer): void {
   enhancerMap.set(video, enhancer);
 }
 
 /**
- * 根据 video 元素获取其关联的 enhancer 实例
- * @param video HTMLVideoElement - 键
+ * Get the enhancer instance associated with a video element
+ * @param video HTMLVideoElement - key
  * @returns VideoEnhancer | undefined
  */
 export function getEnhancer(video: HTMLVideoElement): VideoEnhancer | undefined {
@@ -22,8 +22,8 @@ export function getEnhancer(video: HTMLVideoElement): VideoEnhancer | undefined 
 }
 
 /**
- * 检查一个 video 元素是否已经有关联的 enhancer
- * @param video HTMLVideoElement - 键
+ * Check if a video element has an associated enhancer
+ * @param video HTMLVideoElement - key
  * @returns boolean
  */
 export function hasEnhancer(video: HTMLVideoElement): boolean {
@@ -31,15 +31,15 @@ export function hasEnhancer(video: HTMLVideoElement): boolean {
 }
 
 /**
- * 解除 video 元素与其 enhancer 实例的关联
- * @param video HTMLVideoElement - 键
+ * Dissociate a video element from its enhancer instance
+ * @param video HTMLVideoElement - key
  */
 export function dissociateEnhancer(video: HTMLVideoElement): void {
   enhancerMap.delete(video);
 }
 
 /**
- * 获取所有被管理的 video 元素
+ * Get all managed video elements
  * @returns HTMLVideoElement[]
  */
 export function getAllManagedVideos(): HTMLVideoElement[] {

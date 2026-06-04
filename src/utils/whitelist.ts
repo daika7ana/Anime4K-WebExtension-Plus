@@ -1,22 +1,22 @@
 /**
- * 白名单管理模块
- * 提供白名单规则匹配、验证和持久化功能
+ * Whitelist management module
+ * Provides whitelist rule matching, validation, and persistence
  */
 import { getSettings, saveSettings } from './settings';
 
-// 白名单规则接口
+// Whitelist rule interface
 export interface WhitelistRule {
-  pattern: string; // 通配符模式
+  pattern: string; // Wildcard pattern
   enabled: boolean;
 }
 
 /**
- * 验证白名单规则语法
- * @param pattern 通配符模式
+ * Validate whitelist rule syntax
+ * @param pattern Wildcard pattern
  */
 export function validateRulePattern(pattern: string): boolean {
   try {
-    // 简单验证：不能为空且至少包含一个有效字符
+    // Simple validation: must not be empty and contain at least one valid character
     return pattern.trim().length > 0;
   } catch {
     return false;
@@ -24,27 +24,27 @@ export function validateRulePattern(pattern: string): boolean {
 }
 
 /**
- * 检查URL是否匹配任何白名单规则
- * @param url 要检查的URL
- * @param rules 白名单规则数组
+ * Check if a URL matches any whitelist rule
+ * @param url The URL to check
+ * @param rules Array of whitelist rules
  */
 export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
   if (!rules || rules.length === 0) return false;
   
   try {
     const parsedUrl = new URL(url);
-    // 移除协议和查询参数
+    // Remove protocol and query parameters
     const baseUrl = parsedUrl.hostname + parsedUrl.pathname;
     
     const result = rules.some(rule => {
       if (!rule.enabled) return false;
       
-      // 将通配符模式转换为正则表达式
+      // Convert wildcard pattern to regular expression
       const regexPattern = rule.pattern
         .replace(/\./g, '\\.')
         .replace(/\*/g, '.*');
         
-      // 创建不区分大小写的正则表达式
+      // Create a case-insensitive regular expression
       const regex = new RegExp(regexPattern, 'i');
       const matchResult = regex.test(baseUrl);
       
@@ -53,15 +53,15 @@ export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
     
     return result;
   } catch (error) {
-    console.error('[Whitelist] URL匹配失败:', error);
+    console.error('[Whitelist] URL matching failed:', error);
     return false;
   }
 }
 
 /**
- * 添加新规则到白名单
- * @param pattern 通配符模式
- * @param enabled 是否启用
+ * Add a new rule to the whitelist
+ * @param pattern Wildcard pattern
+ * @param enabled Whether the rule is enabled
  */
 export async function addWhitelistRule(pattern: string, enabled: boolean = true): Promise<void> {
   const { whitelist } = await getSettings();
@@ -69,19 +69,19 @@ export async function addWhitelistRule(pattern: string, enabled: boolean = true)
 
   const newWhitelist = whitelist || [];
 
-  // 避免重复添加
+  // Avoid duplicate entries
   if (!newWhitelist.some(r => r.pattern === pattern)) {
     newWhitelist.push(newRule);
     await saveSettings({ whitelist: newWhitelist });
 
-    // 通知白名单已更新
+    // Notify that the whitelist has been updated
     chrome.runtime.sendMessage({ type: 'WHITELIST_UPDATED' });
   }
 }
 
 /**
- * 删除白名单规则
- * @param pattern 要删除的规则模式
+ * Remove a whitelist rule
+ * @param pattern The rule pattern to remove
  */
 export async function removeWhitelistRule(pattern: string): Promise<void> {
   const { whitelist } = await getSettings();
@@ -90,15 +90,15 @@ export async function removeWhitelistRule(pattern: string): Promise<void> {
     const newWhitelist = whitelist.filter(r => r.pattern !== pattern);
     await saveSettings({ whitelist: newWhitelist });
 
-    // 通知白名单已更新
+    // Notify that the whitelist has been updated
     chrome.runtime.sendMessage({ type: 'WHITELIST_UPDATED' });
   }
 }
 
 /**
- * 更新白名单规则
- * @param oldPattern 要更新的规则模式
- * @param update 更新内容（可以是新的启用状态或新的模式）
+ * Update a whitelist rule
+ * @param oldPattern The rule pattern to update
+ * @param update The update (either a new enabled state or a new pattern)
  */
 export async function updateWhitelistRule(oldPattern: string, update: boolean | string): Promise<void> {
   const { whitelist } = await getSettings();
@@ -107,22 +107,22 @@ export async function updateWhitelistRule(oldPattern: string, update: boolean | 
     const ruleIndex = whitelist.findIndex(r => r.pattern === oldPattern);
     if (ruleIndex !== -1) {
       if (typeof update === 'boolean') {
-        // 更新启用状态
+        // Update enabled state
         whitelist[ruleIndex].enabled = update;
       } else {
-        // 更新模式字符串
+        // Update pattern string
         whitelist[ruleIndex].pattern = update;
       }
       await saveSettings({ whitelist });
 
-      // 通知白名单已更新
+      // Notify that the whitelist has been updated
       chrome.runtime.sendMessage({ type: 'WHITELIST_UPDATED' });
     }
   }
 }
 
 /**
- * 获取当前所有白名单规则
+ * Get all current whitelist rules
  */
 export async function getWhitelistRules(): Promise<WhitelistRule[]> {
   const settings = await getSettings();
@@ -130,7 +130,7 @@ export async function getWhitelistRules(): Promise<WhitelistRule[]> {
 }
 
 /**
- * 设置默认白名单规则
+ * Set default whitelist rules
  */
 export async function setDefaultWhitelist(): Promise<void> {
   const defaultRules = [

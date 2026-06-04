@@ -1,6 +1,6 @@
 # Anime4K WebExtension
 
-[中文](./README.md) | [English](./README.en.md) | 日本語 | [Русский](./README.ru.md)
+[中文](./README.zh.md) | [English](./README.md) | 日本語 | [Русский](./README.ru.md)
 
 [![Edge Store Users](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fffopffngebibpmeodlhhkdlaejnmdlam&query=%24.activeInstallCount&style=flat-square&label=Edge%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC)](https://microsoftedge.microsoft.com/addons/detail/anime4k-webextension/ffopffngebibpmeodlhhkdlaejnmdlam) [![Chrome Web Store Users](https://img.shields.io/chrome-web-store/users/hpmbccepehpoanjpjkamfdpdkbmfmhek?style=flat-square&label=Chrome%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC)](https://chromewebstore.google.com/detail/anime4k-webextension/hpmbccepehpoanjpjkamfdpdkbmfmhek) [![Mozilla Add-on Users](https://img.shields.io/amo/users/anime4k-webextension?style=flat-square&label=Firefox%20%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC)](https://addons.mozilla.org/firefox/addon/anime4k-webextension/)
  [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/chenmozhijin/Anime4K-WebExtension/total?style=flat-square&label=GitHub%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89)](https://github.com/chenmozhijin/Anime4K-WebExtension/releases/latest)

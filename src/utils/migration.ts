@@ -1,12 +1,12 @@
 /**
- * 配置迁移模块
- * 处理从 v1 配置格式到 v2 配置格式的迁移
+ * Configuration migration module
+ * Handles migration from v1 config format to v2 config format
  */
 
 import type { CustomMode, EnhancementEffect, PerformanceTier } from '../types';
 import { AVAILABLE_EFFECTS } from './effects-map';
 
-// v1 版本的模式定义（旧格式）
+// v1 mode definitions (legacy format)
 interface V1EnhancementMode {
     id: string;
     name: string;
@@ -14,21 +14,21 @@ interface V1EnhancementMode {
     effects: EnhancementEffect[];
 }
 
-// 配置版本
+// Config version
 const CURRENT_CONFIG_VERSION = 2;
 
 /**
- * 检查是否需要迁移
+ * Check if migration is needed
  */
 export async function needsMigration(): Promise<boolean> {
     const data = await chrome.storage.sync.get(['_configVersion', 'enhancementModes']);
 
-    // 如果已经是新版本，不需要迁移
+    // If already on the new version, no migration needed
     if (data._configVersion >= CURRENT_CONFIG_VERSION) {
         return false;
     }
 
-    // 如果有旧的 enhancementModes 数据，需要迁移
+    // If old enhancementModes data exists, migration is needed
     if (data.enhancementModes) {
         return true;
     }
@@ -37,7 +37,7 @@ export async function needsMigration(): Promise<boolean> {
 }
 
 /**
- * 执行从 v1 到 v2 的迁移
+ * Execute migration from v1 to v2
  */
 export async function migrateV1ToV2(): Promise<void> {
     console.log('[Migration] Starting v1 to v2 migration...');
@@ -53,12 +53,12 @@ export async function migrateV1ToV2(): Promise<void> {
 
     const oldModes = syncData.enhancementModes as V1EnhancementMode[] | undefined;
 
-    // 提取用户自定义模式（保留完整效果链）
+    // Extract user custom modes (preserve full effect chains)
     const customModes: CustomMode[] = [];
     if (oldModes) {
         for (const mode of oldModes) {
             if (!mode.isBuiltIn) {
-                // 同步效果定义，移除不再存在的效果
+                // Sync effect definitions, removing effects that no longer exist
                 const syncedEffects = mode.effects
                     .map(e => AVAILABLE_EFFECTS.find(ae => ae.id === e.id))
                     .filter((e): e is EnhancementEffect => !!e);
@@ -73,10 +73,10 @@ export async function migrateV1ToV2(): Promise<void> {
         }
     }
 
-    // 确定选中的模式 ID
+    // Determine the selected mode ID
     let selectedModeId = syncData.selectedModeId || 'builtin-mode-a';
 
-    // 如果选中的是旧的内置模式，映射到新的 ID
+    // If the selected mode is an old built-in mode, map to the new ID
     const builtInModeMap: Record<string, string> = {
         'builtin-mode-a': 'builtin-mode-a',
         'builtin-mode-b': 'builtin-mode-b',
@@ -90,7 +90,7 @@ export async function migrateV1ToV2(): Promise<void> {
         selectedModeId = builtInModeMap[selectedModeId];
     }
 
-    // 保存迁移后的数据
+    // Save migrated data
     await chrome.storage.sync.set({
         customModes,
         selectedModeId,
@@ -101,10 +101,10 @@ export async function migrateV1ToV2(): Promise<void> {
         _configVersion: CURRENT_CONFIG_VERSION,
     });
 
-    // 清理旧数据
+    // Clean up old data
     await chrome.storage.sync.remove('enhancementModes');
 
-    // 设置默认本地设置
+    // Set default local settings
     const localData = await chrome.storage.local.get(['performanceTier']);
     if (!localData.performanceTier) {
         await chrome.storage.local.set({
@@ -120,14 +120,14 @@ export async function migrateV1ToV2(): Promise<void> {
 }
 
 /**
- * 确保配置是最新版本
+ * Ensure the config is on the latest version
  */
 export async function ensureLatestConfig(): Promise<void> {
     const needs = await needsMigration();
     if (needs) {
         await migrateV1ToV2();
     } else {
-        // 确保新字段存在（用于全新安装）
+        // Ensure new fields exist (for fresh installs)
         const syncData = await chrome.storage.sync.get(['_configVersion']);
         if (!syncData._configVersion) {
             await chrome.storage.sync.set({

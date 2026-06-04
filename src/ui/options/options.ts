@@ -11,11 +11,11 @@ import { runGPUBenchmark } from '../../core/gpu-benchmark';
 
 import { Anime4KWebExtSettings } from '../../types';
 
-// --- 全局状态 ---
+// --- Global State ---
 let settingsState: Anime4KWebExtSettings;
-let currentTier: PerformanceTier = 'balanced'; // 当前性能档位
+let currentTier: PerformanceTier = 'balanced'; // Current performance tier
 
-// --- UI 元素 ---
+// --- UI Elements ---
 const modesContainer = document.getElementById('modes-container') as HTMLElement;
 const addModeBtn = document.getElementById('add-mode-btn') as HTMLButtonElement;
 const importModesBtn = document.getElementById('import-modes-btn') as HTMLButtonElement;
@@ -28,17 +28,17 @@ const crossOriginFixToggle = document.getElementById('cross-origin-fix-toggle') 
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
 const versionNumberSpan = document.getElementById('version-number') as HTMLSpanElement;
 
-// --- 智能功能 UI 元素 ---
+// --- Smart Features UI Elements ---
 const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButtonElement;
 const gpuTierDisplay = document.getElementById('gpu-tier-display') as HTMLSpanElement;
 const warmupBatchSizeInput = document.getElementById('warmup-batch-size') as HTMLInputElement;
 
-// --- 拖放状态 ---
+// --- Drag and Drop State ---
 let draggedElement: HTMLElement | null = null;
 let draggedModeId: string | null = null;
 let draggedEffectIndex: number | null = null;
 
-// --- 文件助手函数 ---
+// --- File Helper Functions ---
 const downloadJSON = (data: unknown, filename: string) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -76,17 +76,17 @@ const openFile = (): Promise<string> => {
 };
 
 /**
- * 根据当前的 settingsState 渲染增强模式 UI。
+ * Renders the enhancement mode UI based on the current settingsState.
  */
 const renderModesUI = () => {
-  // 1. 重新渲染前保留展开状态
+  // 1. Preserve expanded state before re-rendering
   const expandedModeIds = new Set<string>();
   modesContainer.querySelectorAll('.mode-card:not(.collapsed)').forEach(card => {
     const modeId = (card as HTMLElement).dataset.modeId;
     if (modeId) expandedModeIds.add(modeId);
   });
 
-  modesContainer.textContent = ''; // 清除现有卡片
+  modesContainer.textContent = ''; // Clear existing cards
 
   settingsState.enhancementModes.forEach(mode => {
     const card = document.createElement('div');
@@ -94,7 +94,7 @@ const renderModesUI = () => {
     card.dataset.modeId = mode.id;
     card.draggable = true;
 
-    // --- 模式排序的拖放功能 ---
+    // --- Drag and drop for mode reordering ---
     card.addEventListener('dragstart', (e) => {
       if (!card.classList.contains('collapsed')) {
         e.preventDefault();
@@ -135,13 +135,13 @@ const renderModesUI = () => {
         const [movedMode] = settingsState.enhancementModes.splice(fromIndex, 1);
         settingsState.enhancementModes.splice(toIndex, 0, movedMode);
 
-        renderModesUI(); // 从状态重新渲染
-        await saveSettings({ enhancementModes: settingsState.enhancementModes }); // 持久化更改
+        renderModesUI(); // Re-render from state
+        await saveSettings({ enhancementModes: settingsState.enhancementModes }); // Persist changes
         notifyUpdate();
       }
     });
 
-    // --- 卡片头部 ---
+    // --- Card Header ---
     const cardHeader = document.createElement('div');
     cardHeader.className = 'mode-card-header';
 
@@ -181,7 +181,7 @@ const renderModesUI = () => {
       const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
       if (targetMode && newName && newName !== targetMode.name) {
         targetMode.name = newName;
-        mode.name = newName; // 更新本地对象以保持一致性
+        mode.name = newName; // Update local object for consistency
         await saveSettings({ enhancementModes: settingsState.enhancementModes });
         notifyUpdate(mode.id);
       } else {
@@ -198,7 +198,7 @@ const renderModesUI = () => {
         const deletedModeId = mode.id;
         settingsState.enhancementModes = settingsState.enhancementModes.filter(m => m.id !== deletedModeId);
         if (settingsState.selectedModeId === deletedModeId) {
-          settingsState.selectedModeId = 'builtin-mode-a'; // 回退到默认模式
+          settingsState.selectedModeId = 'builtin-mode-a'; // Fall back to default mode
         }
         renderModesUI();
         await saveSettings({
@@ -214,15 +214,15 @@ const renderModesUI = () => {
     cardHeader.appendChild(deleteBtn);
     card.appendChild(cardHeader);
 
-    // --- 摘要（折叠时显示）---
+    // --- Summary (shown when collapsed) ---
     const summary = document.createElement('div');
     summary.className = 'mode-summary';
-    // 根据模式类型获取效果链
+    // Get effect chain based on mode type
     const modeEffects = getEffectsForMode(mode, currentTier);
     summary.textContent = modeEffects.map((e: EnhancementEffect) => e.name.split('/').pop()).join(' > ') || (chrome.i18n.getMessage('noEffects') || 'No effects');
     card.appendChild(summary);
 
-    // --- 卡片内容（展开时显示）---
+    // --- Card Content (shown when expanded) ---
     const cardContent = document.createElement('div');
     cardContent.className = 'mode-card-content';
     const effectsList = document.createElement('ul');
@@ -238,7 +238,7 @@ const renderModesUI = () => {
       if (!mode.isBuiltIn) {
         effectItem.draggable = true;
 
-        // --- 效果排序的拖放功能 ---
+        // --- Drag and drop for effect reordering ---
         effectItem.addEventListener('dragstart', (e) => {
           e.stopPropagation();
           draggedElement = effectItem;
@@ -285,7 +285,7 @@ const renderModesUI = () => {
           }
         });
 
-        // --- 效果操作按钮 ---
+        // --- Effect Action Buttons ---
         const effectActions = document.createElement('div');
         effectActions.className = 'effect-actions';
 
@@ -350,7 +350,7 @@ const renderModesUI = () => {
     });
     cardContent.appendChild(effectsList);
 
-    // --- 添加效果下拉菜单（用于自定义模式）---
+    // --- Add Effect Dropdown (for custom modes) ---
     if (!mode.isBuiltIn) {
       const addEffectContainer = document.createElement('div');
       addEffectContainer.className = 'add-effect-container';
@@ -379,7 +379,7 @@ const renderModesUI = () => {
           await saveSettings({ enhancementModes: settingsState.enhancementModes });
           notifyUpdate(mode.id);
         }
-        (e.target as HTMLSelectElement).value = defaultOption.value; // 重置下拉菜单
+        (e.target as HTMLSelectElement).value = defaultOption.value; // Reset dropdown
       };
       addEffectContainer.appendChild(effectSelect);
       cardContent.appendChild(addEffectContainer);
@@ -387,7 +387,7 @@ const renderModesUI = () => {
 
     card.appendChild(cardContent);
 
-    // 2. 渲染后恢复展开状态
+    // 2. Restore expanded state after rendering
     if (expandedModeIds.has(mode.id)) {
       card.classList.remove('collapsed');
     }
@@ -397,10 +397,10 @@ const renderModesUI = () => {
 };
 
 /**
- * 根据当前的 settingsState 渲染白名单规则 UI。
+ * Renders the whitelist rules UI based on the current settingsState.
  */
 const renderRulesUI = () => {
-  rulesContainer.textContent = ''; // 清除现有规则
+  rulesContainer.textContent = ''; // Clear existing rules
   settingsState.whitelist.forEach((rule) => {
     const row = document.createElement('tr');
 
@@ -413,7 +413,7 @@ const renderRulesUI = () => {
       const newPattern = (e.target as HTMLInputElement).value;
       if (validateRulePattern(newPattern)) {
         await updateWhitelistRule(rule.pattern, newPattern);
-        rule.pattern = newPattern; // 更新状态
+        rule.pattern = newPattern; // Update state
       } else {
         alert(chrome.i18n.getMessage('invalidPattern') || 'Invalid pattern format');
         (e.target as HTMLInputElement).value = rule.pattern;
@@ -431,7 +431,7 @@ const renderRulesUI = () => {
     enabledCheckbox.addEventListener('change', async (e) => {
       const enabled = (e.target as HTMLInputElement).checked;
       await updateWhitelistRule(rule.pattern, enabled);
-      rule.enabled = enabled; // 更新状态
+      rule.enabled = enabled; // Update state
     });
     const sliderSpan = document.createElement('span');
     sliderSpan.className = 'slider round';
@@ -479,10 +479,10 @@ const renderGeneralSettingsUI = async () => {
   themeSelect.value = themeManager.getTheme();
 
 
-  // 智能功能 UI
+  // Smart features UI
   const localSettings = await getLocalSettings();
 
-  // 档位显示
+  // Tier display
   const tierIcons: Record<PerformanceTier, string> = {
     performance: chrome.i18n.getMessage('tierPerformance') ? `🚀 ${chrome.i18n.getMessage('tierPerformance')}` : '🚀 Fast',
     balanced: chrome.i18n.getMessage('tierBalanced') ? `⚖️ ${chrome.i18n.getMessage('tierBalanced')}` : '⚖️ Balanced',
@@ -493,7 +493,7 @@ const renderGeneralSettingsUI = async () => {
     gpuTierDisplay.textContent = tierIcons[localSettings.performanceTier];
   }
 
-  // 预热批次大小
+  // Warmup batch size
   if (warmupBatchSizeInput) {
     warmupBatchSizeInput.value = String(settingsState.warmupBatchSize ?? 3);
   }
@@ -507,7 +507,7 @@ const renderAboutSectionUI = () => {
 }
 
 const setupEventListeners = () => {
-  // --- 常规设置监听器 ---
+  // --- General Settings Listeners ---
   crossOriginFixToggle.addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;
     settingsState.enableCrossOriginFix = enabled;
@@ -515,13 +515,13 @@ const setupEventListeners = () => {
     notifyUpdate();
   });
 
-  // --- 主题切换监听器 ---
+  // --- Theme Switch Listener ---
   themeSelect.addEventListener('change', (e) => {
     const selectedTheme = (e.target as HTMLSelectElement).value as 'light' | 'dark' | 'auto';
     themeManager.setTheme(selectedTheme);
   });
 
-  // --- 智能功能监听器 ---
+  // --- Smart Features Listeners ---
   if (warmupBatchSizeInput) {
     warmupBatchSizeInput.addEventListener('change', async (e) => {
       const value = Math.max(1, Math.min(10, parseInt((e.target as HTMLInputElement).value, 10) || 3));
@@ -537,7 +537,7 @@ const setupEventListeners = () => {
       runBenchmarkBtn.disabled = true;
       runBenchmarkBtn.textContent = chrome.i18n.getMessage('testing') || 'Testing...';
 
-      // 显示进度条
+      // Show progress bar
       const progressContainer = document.getElementById('benchmark-progress');
       const progressFill = document.getElementById('benchmark-progress-fill');
       const progressText = document.getElementById('benchmark-progress-text');
@@ -545,13 +545,13 @@ const setupEventListeners = () => {
 
       try {
         const result = await runGPUBenchmark((progress) => {
-          // 更新进度条
+          // Update progress bar
           if (progressFill) progressFill.style.width = `${progress.progress * 100}%`;
           if (progressText) {
             if (progress.completed) {
               progressText.textContent = chrome.i18n.getMessage('testComplete') || 'Test complete!';
             } else {
-              // 将 tier 键名转换为国际化文本
+              // Convert tier key to internationalized text
               const tierKey = `tier${progress.tier.charAt(0).toUpperCase()}${progress.tier.slice(1)}` as const;
               const tierName = chrome.i18n.getMessage(tierKey) || progress.tier;
               progressText.textContent = chrome.i18n.getMessage('testingTier', [tierName]) || `Testing ${tierName}...`;
@@ -559,7 +559,7 @@ const setupEventListeners = () => {
           }
         });
 
-        // 询问用户是否应用推荐档位
+        // Ask user whether to apply the recommended tier
         const tierNames: Record<PerformanceTier, string> = {
           performance: chrome.i18n.getMessage('tierPerformance') ? `🚀 ${chrome.i18n.getMessage('tierPerformance')}` : '🚀 Fast',
           balanced: chrome.i18n.getMessage('tierBalanced') ? `⚖️ ${chrome.i18n.getMessage('tierBalanced')}` : '⚖️ Balanced',
@@ -577,7 +577,7 @@ const setupEventListeners = () => {
           currentTier = result.tier;
           renderGeneralSettingsUI();
           renderModesUI();
-          notifyUpdate(); // 通知所有渲染器更新
+          notifyUpdate(); // Notify all renderers to update
         }
       } catch (error) {
         console.error('Benchmark failed:', error);
@@ -585,14 +585,14 @@ const setupEventListeners = () => {
         alert((chrome.i18n.getMessage('testFailed') || 'Test failed') + ': ' + errorMsg);
       }
 
-      // 隐藏进度条
+      // Hide progress bar
       if (progressContainer) progressContainer.style.display = 'none';
       runBenchmarkBtn.disabled = false;
       runBenchmarkBtn.textContent = chrome.i18n.getMessage('runTest') || 'Run Test';
     });
   }
 
-  // --- 模式监听器 ---
+  // --- Mode Listeners ---
   addModeBtn.addEventListener('click', async () => {
     const newMode: EnhancementMode = {
       id: `custom-${Date.now()}`,
@@ -605,21 +605,21 @@ const setupEventListeners = () => {
     await saveSettings({ enhancementModes: settingsState.enhancementModes });
   });
 
-  // --- 白名单监听器 ---
+  // --- Whitelist Listeners ---
   addRuleBtn.addEventListener('click', async () => {
     const newPattern = '*.example.com/*';
-    // 从 UI 端防止重复添加
+    // Prevent duplicate additions from the UI
     if (settingsState.whitelist.some(r => r.pattern === newPattern)) {
       alert(chrome.i18n.getMessage('ruleAlreadyExists') || 'This rule already exists.');
       return;
     }
     await addWhitelistRule(newPattern, true);
-    // 重新获取状态以反映更改
+    // Re-fetch state to reflect changes
     settingsState.whitelist = (await getSettings()).whitelist;
     renderRulesUI();
   });
 
-  // --- 模式导入/导出监听器 ---
+  // --- Mode Import/Export Listeners ---
   exportModesBtn.addEventListener('click', () => {
     const customModes = settingsState.enhancementModes.filter(mode => !mode.isBuiltIn);
     downloadJSON(customModes, 'anime4k-modes.json');
@@ -648,7 +648,7 @@ const setupEventListeners = () => {
         newModes.push(newMode);
       }
 
-      // 同步自定义模式的效果
+      // Synchronize effects for custom modes
       const syncedNewModes = synchronizeEffectsForCustomModes(newModes);
       const allCustomModes = [...settingsState.customModes, ...syncedNewModes];
       settingsState.customModes = allCustomModes;
@@ -667,7 +667,7 @@ const setupEventListeners = () => {
     }
   });
 
-  // --- 白名单导入/导出监听器 ---
+  // --- Whitelist Import/Export Listeners ---
   exportBtn.addEventListener('click', () => {
     downloadJSON(settingsState.whitelist, 'anime4k-whitelist.json');
   });
@@ -701,14 +701,14 @@ const setupEventListeners = () => {
     }
   });
 
-  // --- 消息监听器 ---
+  // --- Message Listeners ---
   chrome.runtime.onMessage.addListener(async (message) => {
     if (message.type === 'WHITELIST_UPDATED') {
-      // 重新获取设置以从扩展的其他部分获取最新的白名单
+      // Re-fetch settings to get the latest whitelist from other parts of the extension
       settingsState = await getSettings();
       renderRulesUI();
     } else if (message.type === 'SETTINGS_UPDATED') {
-      // 重新获取设置和本地设置以更新档位和效果链显示
+      // Re-fetch settings and local settings to update tier and effect chain display
       settingsState = await getSettings();
       const localSettings = await getLocalSettings();
       currentTier = localSettings.performanceTier;
@@ -719,15 +719,15 @@ const setupEventListeners = () => {
 };
 
 /**
- * 主初始化函数。
+ * Main initialization function.
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  // 初始化主题
-  themeManager.getTheme(); // 这会自动应用保存的主题
+  // Initialize theme
+  themeManager.getTheme(); // This will automatically apply the saved theme
 
   setupInternationalization();
 
-  // 初始化侧边栏
+  // Initialize sidebar
   try {
     const sidebar = new Sidebar();
     sidebar.initialize();
@@ -740,19 +740,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // 从存储加载初始状态
+  // Load initial state from storage
   settingsState = await getSettings();
 
-  // 读取本地设置获取当前档位
+  // Read local settings to get current tier
   const localSettings = await getLocalSettings();
   currentTier = localSettings.performanceTier;
 
-  // 从状态进行初始 UI 渲染
+  // Initial UI rendering from state
   renderModesUI();
   renderRulesUI();
   renderGeneralSettingsUI();
   renderAboutSectionUI();
 
-  // 附加所有事件监听器
+  // Attach all event listeners
   setupEventListeners();
 });

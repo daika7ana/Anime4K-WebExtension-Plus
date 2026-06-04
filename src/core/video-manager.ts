@@ -5,16 +5,16 @@ import { Anime4KWebExtSettings } from '../types';
 import { stashEnhancer, findAndunstashEnhancer } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
 
-// 使用 Set 跟踪已处理的文档或 ShadowRoot，以便能够移除监听器
+// Use a Set to track processed documents or ShadowRoots so listeners can be removed
 const processedDocs = new Set<Document | ShadowRoot>();
-// 定义需要监听的核心媒体事件，以最优化性能
+// Define the core media events to watch for optimal performance
 const mediaEventsToWatch: ReadonlyArray<string> = ['loadedmetadata', 'play', 'playing'];
 
 let domObserver: MutationObserver | null = null;
 
 /**
- * 清理视频元素的增强器资源
- * @param video 视频元素
+ * Cleans up the enhancer resources for a video element
+ * @param video The video element
  */
 function cleanupVideoEnhancer(video: HTMLVideoElement): void {
   const enhancer = EnhancerMap.getEnhancer(video);
@@ -30,25 +30,25 @@ function cleanupVideoEnhancer(video: HTMLVideoElement): void {
 }
 
 /**
- * 处理单个视频元素，为其添加增强器。
- * 这是所有视频发现途径（事件、DOM变动）的最终处理入口。
- * @param videoEl 要处理的视频元素
+ * Processes a single video element by adding an enhancer.
+ * This is the final processing entry point for all video discovery paths (events, DOM changes).
+ * @param videoEl The video element to process
  */
 export function processVideoElement(videoEl: HTMLVideoElement, source: string): void {
   console.log(`[Anime4KWebExt] processVideoElement called from: ${source}`);
-  // 1. 状态检查 (防竞争条件的关键)
+  // 1. State check (critical for preventing race conditions)
   if (EnhancerMap.hasEnhancer(videoEl)) {
     console.log(`[Anime4KWebExt] Enhancer already exists for this video. Skipping. Source: ${source}`);
     return;
   }
 
-  // 2. 检查视频是否在 DOM 中 (UI 附加的前提)
+  // 2. Check if the video is in the DOM (prerequisite for UI attachment)
   if (!videoEl.parentElement) {
     console.log('[Anime4KWebExt] Video is not in the DOM, skipping enhancer creation for now.', videoEl);
     return;
   }
 
-  // 3. 优先从 Stash 中恢复
+  // 3. Prefer restoring from stash
   const stashedEnhancer = findAndunstashEnhancer(videoEl);
   if (stashedEnhancer) {
     console.log('[Anime4KWebExt] Re-attaching stashed enhancer.');
@@ -61,11 +61,11 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
     return;
   }
 
-  // 4. 创建新的 Enhancer 实例 (同步)
+  // 4. Create a new Enhancer instance (synchronous)
   console.log('[Anime4KWebExt] Creating new enhancer for video:', videoEl);
   try {
     const enhancer = VideoEnhancer.create(videoEl);
-    // 立即在 Map 中注册，建立“锁”
+    // Register in the Map immediately to establish a "lock"
     EnhancerMap.associateEnhancer(videoEl, enhancer);
     console.log('[Anime4KWebExt] Associated new enhancer to video:', videoEl);
   } catch (error) {
@@ -74,56 +74,56 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
 }
 
 /**
- * 媒体事件的统一回调处理函数。
- * 使用事件委托模式，在根节点捕获事件。
- * @param event 媒体事件
+ * Unified callback handler for media events.
+ * Uses event delegation pattern to capture events at the root node.
+ * @param event The media event
  */
 function handleMediaEvent(event: Event): void {
   const target = event.target;
-  // 确认事件源是视频元素
+  // Confirm the event source is a video element
   if (target instanceof HTMLVideoElement) {
     processVideoElement(target, `handleMediaEvent:${event.type}`);
   }
 }
 
 /**
- * 为指定的文档或 ShadowRoot 节点添加媒体事件监听器。
- * 这是实现对 Shadow DOM 内视频进行监听的关键。
- * @param doc Document 或 ShadowRoot
+ * Adds media event listeners to a specified document or ShadowRoot node.
+ * This is the key to monitoring videos inside Shadow DOM.
+ * @param doc Document or ShadowRoot
  */
 function processDoc(doc: Document | ShadowRoot): void {
   if (processedDocs.has(doc)) {
-    return; // 避免重复处理
+    return; // Avoid duplicate processing
   }
 
   console.log('[Anime4KWebExt] Processing document/shadowRoot for media events:', doc);
   for (const eventName of mediaEventsToWatch) {
-    // 使用捕获模式，尽早发现视频
+    // Use capture mode to detect videos early
     doc.addEventListener(eventName, handleMediaEvent, { capture: true, passive: true });
   }
   processedDocs.add(doc);
 }
 
 /**
- * 初始化页面，设置事件监听和 DOM 观察器
+ * Initialize the page, set up event listeners and DOM observer
  */
 export function initializeOnPage(): void {
   if (domObserver) {
     console.warn('[Anime4KWebExt] initializeOnPage called while already initialized. Ignoring.');
     return;
   }
-  // 1. 处理主文档
+  // 1. Process the main document
   processDoc(document);
   
-  // 2. 初始扫描页面上已存在的视频，以处理静态加载的视频
+  // 2. Initial scan of existing videos on the page to handle statically loaded videos
   document.querySelectorAll('video').forEach(video => processVideoElement(video, 'initial-scan'));
 
-  // 3. 设置DOM观察器以处理动态加载的视频和Shadow DOM
+  // 3. Set up DOM observer to handle dynamically loaded videos and Shadow DOM
   domObserver = setupDOMObserver();
 }
 
 /**
- * 设置DOM观察器，以监听新添加的视频元素和 Shadow DOM 的创建
+ * Set up DOM observer to watch for newly added video elements and Shadow DOM creation
  */
 export function setupDOMObserver(): MutationObserver {
   let pendingAddedNodes: Node[] = [];
@@ -135,28 +135,28 @@ export function setupDOMObserver(): MutationObserver {
     mutationDebounceTimer = null;
 
     for (const node of nodes) {
-      // 快速检查：跳过不可能包含视频的节点
+      // Quick check: skip nodes that cannot contain videos
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
       const element = node as Element;
       const tagName = element.tagName;
 
-      // 快速路径：节点本身就是 video
+      // Fast path: the node itself is a video
       if (tagName === 'VIDEO') {
         processVideoElement(element as HTMLVideoElement, 'mutation-observer:added-video-node');
         continue;
       }
 
-      // 快速跳过已知不含视频的常见标签
+      // Quickly skip common tags known to not contain videos
       if (tagName === 'SCRIPT' || tagName === 'STYLE' || tagName === 'LINK' ||
           tagName === 'META' || tagName === 'BR' || tagName === 'HR') continue;
 
-      // 处理 Shadow DOM
+      // Handle Shadow DOM
       if (element.shadowRoot) {
         processDoc(element.shadowRoot);
         element.shadowRoot.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:shadow-dom-scan'));
       }
 
-      // 深度扫描：仅对非叶节点执行 querySelectorAll
+      // Deep scan: only execute querySelectorAll on non-leaf nodes
       if (element.querySelector('video')) {
         element.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
       }
@@ -165,13 +165,13 @@ export function setupDOMObserver(): MutationObserver {
 
   const handleMutations = (mutationsList: MutationRecord[]) => {
     for (const mutation of mutationsList) {
-      // A. 收集新增节点（批量处理，减少 querySelectorAll 调用）
+      // A. Collect added nodes (batch processing to reduce querySelectorAll calls)
       mutation.addedNodes.forEach(node => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
         pendingAddedNodes.push(node);
       });
 
-      // B. 立即处理移除的节点（不能延迟，否则资源泄漏）
+      // B. Immediately process removed nodes (cannot delay, otherwise resource leak)
       mutation.removedNodes.forEach(node => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
         const element = node as Element;
@@ -183,7 +183,7 @@ export function setupDOMObserver(): MutationObserver {
       });
     }
 
-    // 批量处理新增节点（防抖：合并同一事件循环内的多次 DOM 变动）
+    // Batch process added nodes (debounce: merge multiple DOM changes within the same event loop)
     if (mutationDebounceTimer !== null) {
       clearTimeout(mutationDebounceTimer);
     }
@@ -193,7 +193,7 @@ export function setupDOMObserver(): MutationObserver {
   const observer = new MutationObserver(handleMutations);
   observer.observe(document.body, { childList: true, subtree: true });
   
-  // 添加页面卸载时的全局清理，确保不会有内存泄漏
+  // Add global cleanup on page unload to prevent memory leaks
   window.addEventListener('beforeunload', () => {
     document.querySelectorAll('video').forEach(cleanupVideoEnhancer);
   });
@@ -202,9 +202,9 @@ export function setupDOMObserver(): MutationObserver {
 }
 
 /**
- * 处理设置更新事件
- * @param settings 新的设置
- * @param sendResponse 响应回调函数
+ * Handle settings update event
+ * @param settings The new settings
+ * @param sendResponse The response callback function
  */
 export async function handleSettingsUpdate(
   message: { type: string, modifiedModeId?: string },
@@ -215,7 +215,7 @@ export async function handleSettingsUpdate(
   const newSettings = await getSettings();
   const videos = EnhancerMap.getAllManagedVideos();
 
-  // 并行更新所有视频的设置，而非逐个等待
+  // Update all video settings in parallel instead of waiting one by one
   let updatedCount = 0;
   const updatePromises: Promise<void>[] = [];
 
@@ -241,17 +241,17 @@ export async function handleSettingsUpdate(
 }
 
 /**
- * 反初始化页面，彻底清理所有资源
+ * De-initialize the page, thoroughly clean up all resources
  */
 export function deinitializeOnPage(): void {
-  // 1. 断开并清除 DOM 观察器
+  // 1. Disconnect and clear the DOM observer
   if (domObserver) {
     domObserver.disconnect();
     domObserver = null;
     console.log('[Anime4KWebExt] DOM Observer disconnected.');
   }
 
-  // 2. 移除所有媒体事件监听器
+  // 2. Remove all media event listeners
   processedDocs.forEach(doc => {
     for (const eventName of mediaEventsToWatch) {
       doc.removeEventListener(eventName, handleMediaEvent, { capture: true });
@@ -260,7 +260,7 @@ export function deinitializeOnPage(): void {
   processedDocs.clear();
   console.log('[Anime4KWebExt] All media event listeners removed.');
 
-  // 3. 销毁所有增强器实例
+  // 3. Destroy all enhancer instances
   const videos = EnhancerMap.getAllManagedVideos();
   console.log(`[Anime4KWebExt] De-initializing and cleaning up ${videos.length} videos.`);
   videos.forEach(video => {

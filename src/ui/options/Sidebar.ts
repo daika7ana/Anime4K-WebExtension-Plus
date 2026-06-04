@@ -46,11 +46,11 @@ export class Sidebar {
 
     e.preventDefault();
 
-    // 更新菜单项的 active 状态
+    // Update active state of menu items
     this.menu.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
     menuItem.classList.add('active');
 
-    // 显示对应的内容区域
+    // Show the corresponding content section
     const sectionName = menuItem.getAttribute('data-section');
     this.contentSections.forEach(section => section.classList.remove('active'));
     const targetSection = document.getElementById(`${sectionName}-section`);
@@ -58,7 +58,7 @@ export class Sidebar {
       targetSection.classList.add('active');
     }
 
-    // 在小屏幕上，点击后关闭侧边栏
+    // On small screens, close sidebar after click
     if (window.innerWidth <= 900) {
       this.close();
     }

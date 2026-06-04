@@ -1,56 +1,56 @@
 /**
- * 内容脚本主入口
- * 负责在页面视频元素上添加增强按钮并管理增强器实例
+ * Content script main entry point
+ * Responsible for adding enhancement buttons to page video elements and managing enhancer instances
  */
 import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate } from './core/video-manager';
 import { isUrlWhitelisted, getWhitelistRules } from './utils/whitelist';
 
-// 子帧中无视频时提前退出，避免不必要的存储读取和初始化
+// Exit early in sub-frames without video to avoid unnecessary storage reads and initialization
 if (window !== window.top && !document.querySelector('video')) {
-  // 静默退出 — 无需清理
+  // Silent exit — no cleanup needed
 } else {
 
-let isCurrentlyActive = false; // 跟踪当前页面的增强状态
+let isCurrentlyActive = false; // Track enhancement state for the current page
 
-// 检查当前页面是否在白名单中
+// Check if the current page is on the whitelist
 async function shouldInitialize(): Promise<boolean> {
   const settings = await chrome.storage.sync.get(['whitelistEnabled']);
-  if (!settings.whitelistEnabled) return true; // 白名单未启用时始终初始化
+  if (!settings.whitelistEnabled) return true; // Always initialize when whitelist is disabled
   
   const rules = await getWhitelistRules();
   return isUrlWhitelisted(window.location.href, rules);
 }
 
-// 根据白名单状态评估并应用更改
+// Evaluate and apply changes based on whitelist state
 async function evaluateAndApplyWhitelistState() {
   const shouldBeActive = await shouldInitialize();
 
   if (shouldBeActive && !isCurrentlyActive) {
-    // Case: 需要激活 (例如从非白名单页导航到白名单页)
+    // Case: needs activation (e.g. navigated from non-whitelisted to whitelisted page)
     console.log('[Anime4KWebExt] Whitelist match found. Initializing features...');
     initializeOnPage();
     isCurrentlyActive = true;
   } else if (!shouldBeActive && isCurrentlyActive) {
-    // Case: 需要反激活 (例如从白名单页导航到非白名单页)
+    // Case: needs deactivation (e.g. navigated from whitelisted to non-whitelisted page)
     console.log('[Anime4KWebExt] No longer on a whitelisted page. De-initializing features...');
     deinitializeOnPage();
     isCurrentlyActive = false;
   } else {
-    // Case: 状态无需改变
+    // Case: state unchanged
     console.log(`[Anime4KWebExt] Whitelist state unchanged (shouldBeActive: ${shouldBeActive}, isCurrentlyActive: ${isCurrentlyActive}). No action needed.`);
   }
 }
 
-// 初始化页面
+// Initialize the page
 evaluateAndApplyWhitelistState();
 
-// 监听来自后台的设置更新消息
+// Listen for settings update messages from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SETTINGS_UPDATED') {
     handleSettingsUpdate(request.settings, sendResponse);
-    return true; // 表示异步响应
+    return true; // Indicates async response
   } else if (request.type === 'URL_UPDATED') {
-    // URL 变化时重新检查白名单
+    // Re-check whitelist when URL changes
     console.log('[Anime4KWebExt] URL changed, re-evaluating whitelist...');
     evaluateAndApplyWhitelistState();
   }

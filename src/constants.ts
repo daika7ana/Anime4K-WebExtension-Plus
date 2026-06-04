@@ -1,6 +1,6 @@
 /**
- * 增强模式常量
- * 定义可用的Anime4K增强模式及其标识符
+ * Enhancement mode constants
+ * Defines available Anime4K enhancement modes and their identifiers
  */
 export const MODES = {
   ModeA: 'ModeA',
@@ -12,29 +12,29 @@ export const MODES = {
 } as const;
 
 /**
- * 分辨率设置常量
- * 定义所有可用的分辨率选项及其标识符
+ * Resolution setting constants
+ * Defines all available resolution options and their identifiers
  */
 export const RESOLUTIONS = {
-  DEFAULT: 'x2',    // 默认分辨率设置
-  x2: 'x2',         // 2倍放大
-  x4: 'x4',         // 4倍放大
-  x8: 'x8',         // 8倍放大
-  '720p': '720p',   // 720p固定分辨率
-  '1080p': '1080p', // 1080p固定分辨率
-  '2k': '2k',       // 2K分辨率
-  '4k': '4k',       // 4K分辨率
-  native: 'native'  // 原始分辨率
+  DEFAULT: 'x2',    // Default resolution setting
+  x2: 'x2',         // 2x upscale
+  x4: 'x4',         // 4x upscale
+  x8: 'x8',         // 8x upscale
+  '720p': '720p',   // 720p fixed resolution
+  '1080p': '1080p', // 1080p fixed resolution
+  '2k': '2k',       // 2K resolution
+  '4k': '4k',       // 4K resolution
+  native: 'native'  // Native resolution
 } as const;
 
 /**
- * 初始化属性标识
- * 用于标记已初始化的视频元素
+ * Initialization attribute marker
+ * Used to mark video elements that have been initialized
  */
 export const ANIME4K_APPLIED_ATTR = 'data-anime4k-applied';
 
 /**
- * 按钮类名
- * 用于标识增强按钮的CSS类名
+ * Button class name
+ * CSS class name used to identify the enhancement button
  */
 export const ANIME4K_BUTTON_CLASS = 'anime4k-button';

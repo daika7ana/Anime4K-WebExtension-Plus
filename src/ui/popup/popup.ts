@@ -6,24 +6,24 @@ import { addWhitelistRule, setDefaultWhitelist } from '../../utils/whitelist';
 import { themeManager } from '../theme-manager';
 import type { PerformanceTier, EnhancementMode, CustomMode } from '../../types';
 
-// 当前档位状态
+// Current tier state
 let currentTier: PerformanceTier = 'balanced';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // 初始化主题
-  themeManager.getTheme(); // 这会自动应用保存的主题
+  // Initialize theme
+  themeManager.getTheme(); // This will automatically apply the saved theme
 
-  // 设置文档语言
+  // Set document language
   document.documentElement.setAttribute('lang', chrome.i18n.getMessage('@@ui_locale') || 'en');
 
-  // 设置版本信息
+  // Set version info
   const versionInfo = document.getElementById('version-info');
   if (versionInfo) {
     const manifest = chrome.runtime.getManifest();
     versionInfo.textContent = manifest.version;
   }
 
-  // 应用国际化
+  // Apply internationalization
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(element => {
     const key = element.getAttribute('data-i18n');
     if (key) {
@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 应用 title 国际化
+  // Apply title internationalization
   document.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach(element => {
     const key = element.getAttribute('data-i18n-title');
     if (key) {
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 获取 DOM 元素
+  // Get DOM elements
   const tierButtons = document.querySelectorAll<HTMLButtonElement>('.tier-btn');
   const modeSelect = document.getElementById('mode-select') as HTMLSelectElement;
   const resolutionSelect = document.getElementById('resolution-select') as HTMLSelectElement;
@@ -62,11 +62,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // 渲染模式下拉菜单
+  // Render mode dropdown
   const renderModeSelect = (settings: { enhancementModes: EnhancementMode[], customModes: CustomMode[], selectedModeId: string }) => {
     modeSelect.innerHTML = '';
 
-    // 内置模式组
+    // Built-in modes group
     const builtInGroup = document.createElement('optgroup');
     builtInGroup.label = chrome.i18n.getMessage('builtInModes') || 'Built-in Modes';
     BUILTIN_MODES.forEach(mode => {
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     modeSelect.appendChild(builtInGroup);
 
-    // 自定义模式组（如果有）
+    // Custom modes group (if any)
     if (settings.customModes && settings.customModes.length > 0) {
       const customGroup = document.createElement('optgroup');
       customGroup.label = chrome.i18n.getMessage('customModes') || 'Custom Modes';
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modeSelect.value = settings.selectedModeId;
   };
 
-  // 更新档位按钮状态
+  // Update tier button states
   const updateTierButtons = (tier: PerformanceTier) => {
     tierButtons.forEach(btn => {
       const btnTier = btn.getAttribute('data-tier') as PerformanceTier;
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   };
 
-  // 更新档位选择器的禁用状态（自定义模式时禁用）
+  // Update tier button disabled state (disabled for custom modes)
   const updateTierButtonsDisabled = (isCustomMode: boolean) => {
     tierButtons.forEach(btn => {
       btn.disabled = isCustomMode;
@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   };
 
-  // 加载设置
+  // Load settings
   let currentSettings;
   let localSettings;
   try {
@@ -124,11 +124,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     resolutionSelect.value = currentSettings.targetResolutionSetting;
     whitelistToggle.checked = currentSettings.whitelistEnabled;
 
-    // 检查是否选择了自定义模式
+    // Check if a custom mode is selected
     const isCustomMode = currentSettings.selectedModeId.startsWith('custom-');
     updateTierButtonsDisabled(isCustomMode);
 
-    // 如果白名单为空，则设置默认规则
+    // If whitelist is empty, set default rules
     if (currentSettings.whitelist.length === 0) {
       await setDefaultWhitelist();
       currentSettings = await getSettings();
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     whitelistToggle.checked = false;
   }
 
-  // 档位按钮点击事件（只更新 UI 状态，保存在点击保存按钮时执行）
+  // Tier button click handler (only updates UI state, saving happens on save button click)
   tierButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const tier = btn.getAttribute('data-tier') as PerformanceTier;
@@ -152,13 +152,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // 模式选择变化时更新档位按钮状态
+  // Update tier button state when mode selection changes
   modeSelect.addEventListener('change', () => {
     const isCustomMode = modeSelect.value.startsWith('custom-');
     updateTierButtonsDisabled(isCustomMode);
   });
 
-  // "保存"按钮点击事件
+  // "Save" button click handler
   saveButton.addEventListener('click', async () => {
     const selectedModeId = modeSelect.value;
     const selectedResolution = resolutionSelect.value;
@@ -170,24 +170,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       await saveSettings(updatedSettings);
 
-      // 保存档位
+      // Save tier
       await saveLocalSettings({ performanceTier: currentTier });
 
       console.log('Settings saved:', { ...updatedSettings, performanceTier: currentTier });
 
-      // 移除已存在的状态消息（避免叠加）
+      // Remove existing status message (to avoid stacking)
       const existingStatus = document.querySelector('.save-status');
       if (existingStatus) {
         existingStatus.remove();
       }
 
-      // 显示保存成功的状态消息
+      // Show save success status message
       const status = document.createElement('div');
       status.className = 'save-status';
       status.textContent = chrome.i18n.getMessage('settingsSaved') || 'Settings saved!';
       saveButton.parentElement?.appendChild(status);
 
-      // 通知当前活动标签页的内容脚本设置已更新
+      // Notify content script in the active tab that settings have been updated
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
           chrome.tabs.sendMessage(tabs[0].id, {
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
 
-      // 状态消息显示后关闭弹窗
+      // Close popup after status message is shown
       setTimeout(() => {
         status.remove();
         window.close();
@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 白名单启用/禁用开关的更改事件
+  // Whitelist enable/disable toggle change handler
   whitelistToggle.addEventListener('change', async () => {
     try {
       await saveSettings({ whitelistEnabled: whitelistToggle.checked });
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // "添加到白名单"按钮的事件处理
+  // "Add to whitelist" button event handlers
   addCurrentPageBtn.addEventListener('click', async () => {
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });

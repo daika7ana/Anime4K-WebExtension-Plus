@@ -1,6 +1,6 @@
 /**
- * Material Design 主题管理器
- * 负责主题切换和持久化
+ * Material Design Theme Manager
+ * Handles theme switching and persistence
  */
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -22,7 +22,7 @@ export class ThemeManager {
   }
 
   /**
-   * 设置主题模式
+   * Set the theme mode
    */
   public setTheme(theme: ThemeMode): void {
     this.currentTheme = theme;
@@ -31,23 +31,23 @@ export class ThemeManager {
   }
 
   /**
-   * 获取当前主题模式
+   * Get the current theme mode
    */
   public getTheme(): ThemeMode {
     return this.currentTheme;
   }
 
   /**
-   * 应用主题到 DOM
+   * Apply theme to the DOM
    */
   private applyTheme(): void {
     const root = document.documentElement;
     
-    // 移除现有主题类
+    // Remove existing theme classes
     root.classList.remove('light', 'dark');
     
     if (this.currentTheme === 'auto') {
-      // 自动模式：根据系统偏好设置
+      // Auto mode: follow system preference
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       if (prefersDark) {
         root.classList.add('dark');
@@ -55,13 +55,13 @@ export class ThemeManager {
         root.classList.add('light');
       }
     } else {
-      // 手动模式：直接应用选择的主题
+      // Manual mode: apply the selected theme directly
       root.classList.add(this.currentTheme);
     }
   }
 
   /**
-   * 从存储加载主题设置
+   * Load theme settings from storage
    */
   private async loadTheme(): Promise<void> {
     try {
@@ -77,7 +77,7 @@ export class ThemeManager {
   }
 
   /**
-   * 保存主题设置到存储
+   * Save theme settings to storage
    */
   private async saveTheme(): Promise<void> {
     try {
@@ -88,7 +88,7 @@ export class ThemeManager {
   }
 
   /**
-   * 监听系统主题变化
+   * Listen for system theme changes
    */
   private setupSystemThemeListener(): void {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -100,7 +100,7 @@ export class ThemeManager {
   }
 
   /**
-   * 获取当前实际应用的主题（解析 auto 模式）
+   * Get the currently applied theme (resolves auto mode)
    */
   public getEffectiveTheme(): 'light' | 'dark' {
     if (this.currentTheme === 'auto') {
@@ -110,7 +110,7 @@ export class ThemeManager {
   }
 
   /**
-   * 切换到下一个主题
+   * Switch to the next theme
    */
   public toggleTheme(): void {
     const themes: ThemeMode[] = ['light', 'dark', 'auto'];
@@ -120,5 +120,5 @@ export class ThemeManager {
   }
 }
 
-// 导出单例实例
+// Export singleton instance
 export const themeManager = ThemeManager.getInstance();

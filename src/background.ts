@@ -4,7 +4,7 @@ import { ensureLatestConfig } from './utils/migration';
 const RULESET_ID = 'ruleset_1';
 
 /**
- * 根据当前设置更新 declarativeNetRequest 规则集。
+ * Update declarativeNetRequest ruleset based on current settings.
  */
 async function updateDNRuleset() {
   const { enableCrossOriginFix } = await getSettings();
@@ -22,12 +22,12 @@ async function updateDNRuleset() {
 }
 
 /**
- * 检查是否需要打开引导页面
+ * Check if the onboarding page should be opened
  */
 async function checkOnboarding(): Promise<boolean> {
   const local = await getLocalSettings();
 
-  // 如果未完成引导，打开引导页
+  // If onboarding not completed, open onboarding page
   if (!local.hasCompletedOnboarding) {
     console.log('[Background] Opening onboarding page...');
     chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
@@ -38,7 +38,7 @@ async function checkOnboarding(): Promise<boolean> {
 }
 
 /**
- * 检查上次测试是否崩溃
+ * Check if the previous benchmark crashed
  */
 async function checkBenchmarkCrash(): Promise<void> {
   const local = await chrome.storage.local.get(['_benchmarkInProgress']);
@@ -54,9 +54,9 @@ async function checkBenchmarkCrash(): Promise<void> {
   }
 }
 
-// 后台服务脚本
+// Background service worker
 
-// 在启动时检查 DNR 规则
+// Check DNR rules on startup
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[Background] Browser startup');
 
@@ -64,23 +64,23 @@ chrome.runtime.onStartup.addListener(async () => {
   await updateDNRuleset();
 });
 
-// 安装或更新时初始化
+// Initialize on install or update
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[Background] Extension installed/updated:', details.reason);
 
-  // 确保配置是最新版本（处理迁移）
+  // Ensure config is on the latest version (handle migration)
   await ensureLatestConfig();
 
   await checkBenchmarkCrash();
   await updateDNRuleset();
 
-  // 新安装或更新时，如果未完成引导则打开引导页
+  // Open onboarding page on fresh install or update if not completed
   if (details.reason === 'install' || details.reason === 'update') {
     await checkOnboarding();
   }
 });
 
-// 监听标签页更新
+// Listen for tab updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     chrome.tabs.sendMessage(tabId, {
@@ -94,7 +94,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// 监听来自内容脚本/popup/options 的请求
+// Listen for requests from content scripts/popup/options
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SETTINGS_UPDATED') {
     console.log('[Background] Settings updated, checking DNR rules...');

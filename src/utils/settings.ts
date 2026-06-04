@@ -1,6 +1,6 @@
 /**
- * 设置管理模块
- * 处理 storage.sync（跨设备同步）和 storage.local（本地存储）的读写
+ * Settings management module
+ * Handles read/write operations for storage.sync (cross-device sync) and storage.local (local storage)
  */
 
 import type {
@@ -17,17 +17,17 @@ import type {
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { resolveEffectChain } from './effect-chain-templates';
 
-// ===== 设置缓存 =====
+// ===== Settings Cache =====
 let cachedSettings: Anime4KWebExtSettings | null = null;
 let cacheTimestamp = 0;
-const SETTINGS_CACHE_TTL = 2000; // 2 秒 TTL
+const SETTINGS_CACHE_TTL = 2000; // 2-second TTL
 
-// 当 storage 发生变化时自动失效缓存
+// Automatically invalidate cache when storage changes
 chrome.storage.onChanged.addListener(() => {
   cachedSettings = null;
 });
 
-// ===== 内置模式定义 =====
+// ===== Built-in Mode Definitions =====
 export const BUILTIN_MODES: BuiltInMode[] = [
   { id: 'builtin-mode-a', baseMode: 'A', name: 'Mode A', isBuiltIn: true },
   { id: 'builtin-mode-b', baseMode: 'B', name: 'Mode B', isBuiltIn: true },
@@ -37,7 +37,7 @@ export const BUILTIN_MODES: BuiltInMode[] = [
   { id: 'builtin-mode-ca', baseMode: 'C+A', name: 'Mode C+A', isBuiltIn: true },
 ];
 
-// ===== 默认设置 =====
+// ===== Default Settings =====
 const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
   selectedModeId: 'builtin-mode-a',
   targetResolutionSetting: 'x2',
@@ -55,7 +55,7 @@ const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
 };
 
 /**
- * 确保自定义模式中的效果与 AVAILABLE_EFFECTS 保持一致
+ * Ensure effects in custom modes stay in sync with AVAILABLE_EFFECTS
  */
 export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMode[] {
   const availableEffectsMap = new Map(
@@ -72,7 +72,7 @@ export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMod
 }
 
 /**
- * 获取同步设置（storage.sync）
+ * Get synced settings (storage.sync)
  */
 export async function getSyncedSettings(): Promise<SyncedSettings> {
   return new Promise(resolve => {
@@ -99,7 +99,7 @@ export async function getSyncedSettings(): Promise<SyncedSettings> {
 }
 
 /**
- * 获取本地设置（storage.local）
+ * Get local settings (storage.local)
  */
 export async function getLocalSettings(): Promise<LocalSettings> {
   return new Promise(resolve => {
@@ -119,9 +119,9 @@ export async function getLocalSettings(): Promise<LocalSettings> {
 }
 
 /**
- * 获取完整设置（合并 sync 和 local）
- * 内置模式会根据当前档位动态解析效果链
- * 使用 TTL 缓存避免重复的 chrome.storage IPC 调用
+ * Get full settings (merged sync and local)
+ * Built-in modes dynamically resolve effect chains based on the current tier
+ * Uses a TTL cache to avoid redundant chrome.storage IPC calls
  */
 export async function getSettings(): Promise<Anime4KWebExtSettings> {
   if (cachedSettings && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
@@ -133,10 +133,10 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
     getLocalSettings(),
   ]);
 
-  // 同步自定义模式的效果
+  // Sync effects for custom modes
   const syncedCustomModes = synchronizeEffectsForCustomModes(synced.customModes);
 
-  // 合并内置模式和自定义模式
+  // Merge built-in modes and custom modes
   const enhancementModes: EnhancementMode[] = [
     ...BUILTIN_MODES,
     ...syncedCustomModes,
@@ -155,7 +155,7 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
 }
 
 /**
- * 保存同步设置
+ * Save synced settings
  */
 export async function saveSyncedSettings(settings: Partial<SyncedSettings>): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -170,7 +170,7 @@ export async function saveSyncedSettings(settings: Partial<SyncedSettings>): Pro
 }
 
 /**
- * 保存本地设置
+ * Save local settings
  */
 export async function saveLocalSettings(settings: Partial<LocalSettings>): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -185,7 +185,7 @@ export async function saveLocalSettings(settings: Partial<LocalSettings>): Promi
 }
 
 /**
- * 保存设置（兼容旧 API，自动分离 sync 和 local）
+ * Save settings (legacy API compatible, automatically splits into sync and local)
  */
 export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Promise<void> {
   const syncKeys: (keyof SyncedSettings)[] = [
@@ -231,23 +231,23 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
 }
 
 /**
- * 根据模式和档位获取实际效果链
+ * Get the actual effect chain for a given mode and tier
  */
 export function getEffectsForMode(
   mode: EnhancementMode,
   tier: PerformanceTier
 ): EnhancementEffect[] {
   if (mode.isBuiltIn) {
-    // 内置模式：根据档位动态解析
+    // Built-in mode: dynamically resolve based on tier
     return resolveEffectChain((mode as BuiltInMode).baseMode, tier);
   } else {
-    // 自定义模式：使用用户定义的效果链
+    // Custom mode: use the user-defined effect chain
     return (mode as CustomMode).effects;
   }
 }
 
 /**
- * 根据 ID 查找模式
+ * Find a mode by its ID
  */
 export function findModeById(
   modes: EnhancementMode[],

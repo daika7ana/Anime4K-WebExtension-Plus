@@ -1,5 +1,5 @@
 /**
- * 基础渲染器错误类，所有与渲染器相关的特定错误都应继承自此类。
+ * Base renderer error class. All renderer-specific errors should inherit from this class.
  */
 export class RendererError extends Error {
   public cause?: Error;
@@ -14,8 +14,8 @@ export class RendererError extends Error {
 }
 
 /**
- * 表示在渲染器初始化阶段发生的错误。
- * 例如：获取GPU设备失败、WebGPU功能不支持等。
+ * Represents an error that occurs during the renderer initialization phase.
+ * Examples: GPU device acquisition failure, unsupported WebGPU features, etc.
  */
 export class RendererInitializationError extends RendererError {
   constructor(message: string, options?: ErrorOptions) {
@@ -25,7 +25,7 @@ export class RendererInitializationError extends RendererError {
 }
 
 /**
- * 表示在渲染循环（运行时）发生的错误。
+ * Represents an error that occurs during the render loop (runtime).
  */
 export class RendererRuntimeError extends RendererError {
   public recoverable: boolean;

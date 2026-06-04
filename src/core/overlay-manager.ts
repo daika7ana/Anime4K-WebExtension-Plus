@@ -2,8 +2,8 @@ import { ANIME4K_BUTTON_CLASS } from '../constants';
 
 /**
  * OverlayManager
- * 唯一负责创建、管理和销毁所有与特定视频关联的UI元素的模块。
- * 这包括UI覆盖层 (Host + Shadow DOM + Button) 和渲染目标 Canvas。
+ * Module solely responsible for creating, managing, and destroying all UI elements associated with a specific video.
+ * This includes the UI overlay (Host + Shadow DOM + Button) and the rendering target Canvas.
  */
 export class OverlayManager {
   private video: HTMLVideoElement;
@@ -21,16 +21,16 @@ export class OverlayManager {
   private mutationObserver: MutationObserver;
   private updatePositionRafId: number | null = null;
 
-  // 用于标识 overlay host 元素的属性名
+  // Attribute name used to identify overlay host elements
   private static readonly HOST_MARKER_ATTR = 'data-anime4k-overlay-host';
 
   /**
-   * 创建并返回一个 OverlayManager 实例。
-   * 包含防御性检查，防止同一视频出现重复的 overlay。
-   * @param video 目标视频元素
+   * Creates and returns an OverlayManager instance.
+   * Includes defensive checks to prevent duplicate overlays for the same video.
+   * @param video The target video element
    */
   public static create(video: HTMLVideoElement): OverlayManager {
-    // 防御性检查：清理可能存在的旧 overlay host
+    // Defensive check: clean up potentially existing old overlay hosts
     const parent = video.parentElement;
     if (parent) {
       const existingHosts = parent.querySelectorAll(`[${OverlayManager.HOST_MARKER_ATTR}]`);
@@ -39,7 +39,7 @@ export class OverlayManager {
         host.remove();
       });
     }
-    // 同时检查 body 上可能残留的使用 'body' 策略的 host
+    // Also check for residual hosts using 'body' strategy on body
     document.querySelectorAll(`body > [${OverlayManager.HOST_MARKER_ATTR}]`).forEach(host => {
       console.warn('[Anime4KWebExt] Detected orphaned overlay host on body, removing:', host);
       host.remove();
@@ -51,42 +51,42 @@ export class OverlayManager {
   private constructor(video: HTMLVideoElement) {
     this.video = video;
 
-    // 1. 创建 Host 元素并插入为视频的兄弟节点
+    // 1. Create Host element and insert as sibling of the video
     this.host = document.createElement('div');
-    this.host.setAttribute(OverlayManager.HOST_MARKER_ATTR, ''); // 添加标记属性用于防御性检查
+    this.host.setAttribute(OverlayManager.HOST_MARKER_ATTR, ''); // Add marker attribute for defensive checks
     this.host.style.position = 'absolute';
-    this.host.style.pointerEvents = 'none'; // 默认不拦截事件
-    this.host.style.zIndex = '2147483646'; // 略低于按钮
+    this.host.style.pointerEvents = 'none'; // Don't intercept events by default
+    this.host.style.zIndex = '2147483646'; // Slightly lower than the button
     this.video.parentElement?.insertBefore(this.host, this.video);
 
-    // 2. 创建 Shadow DOM
+    // 2. Create Shadow DOM
     this.shadowRoot = this.host.attachShadow({ mode: 'closed' });
 
-    // 3. 在 Shadow DOM 内创建按钮和样式
+    // 3. Create button and styles inside Shadow DOM
     this.button = this.createButtonInShadow();
     this.injectStyles();
 
-    // 4. 初始化监听器（使用 rAF 防抖避免布局抖动）
+    // 4. Initialize listeners (using rAF debounce to avoid layout thrashing)
     this.resizeObserver = new ResizeObserver(() => this.scheduleUpdatePosition());
     this.resizeObserver.observe(this.video);
 
-    // 监听样式变化
+    // Watch for style changes
     this.mutationObserver = new MutationObserver(() => this.scheduleUpdatePosition());
     this.mutationObserver.observe(this.video, {
       attributes: true,
       attributeFilter: ['style', 'class'],
     });
 
-    // 立即执行一次以确定初始位置
+    // Execute immediately to determine initial position
     this.updatePosition();
 
-    // 延迟检测，确保初始渲染完成
+    // Delayed detection to ensure initial rendering is complete
     setTimeout(() => this.detectAndSwitchStrategy(), 100);
   }
 
   /**
-   * 使用 requestAnimationFrame 防抖调度位置更新，
-   * 避免 ResizeObserver/MutationObserver 高频触发导致布局抖动。
+   * Uses requestAnimationFrame debouncing to schedule position updates,
+   * avoiding layout thrashing caused by high-frequency ResizeObserver/MutationObserver triggers.
    */
   private scheduleUpdatePosition(): void {
     if (this.updatePositionRafId !== null) return;
@@ -97,21 +97,21 @@ export class OverlayManager {
   }
 
   /**
-   * 统一更新 Host 和 Canvas 的位置
+   * Uniformly update Host and Canvas positions
    */
   private updatePosition(): void {
-    // 当视频从 DOM 中移除或不可见时，隐藏覆盖层
+    // Hide overlay when video is removed from DOM or not visible
     if (!this.video.isConnected || (this.video.offsetWidth === 0 && this.video.offsetHeight === 0)) {
       this.host.style.display = 'none';
       return;
     }
-    this.host.style.display = ''; // 确保可见
+    this.host.style.display = ''; // Ensure visible
 
     const videoStyle = window.getComputedStyle(this.video);
     let hostStyles: any;
 
     if (this.attachmentStrategy === 'body') {
-      // Body 策略：使用 getBoundingClientRect 获取相对于视口的位置
+      // Body strategy: use getBoundingClientRect for viewport-relative position
       const rect = this.video.getBoundingClientRect();
       hostStyles = {
         top: `${rect.top + window.scrollY}px`,
@@ -122,7 +122,7 @@ export class OverlayManager {
         transformOrigin: videoStyle.transformOrigin,
       };
     } else {
-      // Sibling 策略：使用 offsetTop/Left 获取相对于父元素的位置
+      // Sibling strategy: use offsetTop/Left for parent-relative position
       hostStyles = {
         top: `${this.video.offsetTop}px`,
         left: `${this.video.offsetLeft}px`,
@@ -133,12 +133,12 @@ export class OverlayManager {
       };
     }
 
-    // 更新 Host
+    // Update Host
     Object.assign(this.host.style, hostStyles);
 
-    // 如果 Canvas 存在，同步更新
+    // If Canvas exists, update it synchronously
     if (this.canvas) {
-      // Canvas 总是视频的兄弟节点，所以其定位方式不变
+      // Canvas is always a sibling of the video, so its positioning remains the same
       Object.assign(this.canvas.style, {
         top: `${this.video.offsetTop}px`,
         left: `${this.video.offsetLeft}px`,
@@ -153,7 +153,7 @@ export class OverlayManager {
       });
     }
 
-    // 每次位置更新时，都短暂显示按钮
+    // Briefly show the button on each position update
     if (this.hideButtonTimeout) {
       clearTimeout(this.hideButtonTimeout);
     }
@@ -164,10 +164,10 @@ export class OverlayManager {
   }
 
   /**
-   * 检测按钮是否被遮挡，并根据结果决定是否切换到 'body' 附加策略。
+   * Detect if the button is obscured and decide whether to switch to 'body' attachment strategy based on the result.
    */
   private detectAndSwitchStrategy(): void {
-    // 确保按钮是可见的才能进行检测
+    // Ensure button is visible for detection
     const initialOpacity = this.button.style.opacity;
     this.button.style.opacity = '1';
 
@@ -176,7 +176,7 @@ export class OverlayManager {
     const centerY = rect.top + rect.height / 2;
     const elementAtPoint = document.elementFromPoint(centerX, centerY);
 
-    // 恢复原始透明度
+    // Restore original opacity
     this.button.style.opacity = initialOpacity;
 
     const isButtonOrChild = this.button.contains(elementAtPoint) || this.button === elementAtPoint;
@@ -185,46 +185,46 @@ export class OverlayManager {
       console.log('Anime4K button is obscured. Switching to body attachment strategy.');
       this.attachmentStrategy = 'body';
 
-      // 切换 Host 到 body
+      // Move Host to body
       document.body.appendChild(this.host);
 
-      // 绑定上下文并添加全局事件监听器
+      // Bind context and add global event listeners
       this.boundUpdatePosition = this.updatePosition.bind(this);
       this.boundHandleFullscreenChange = this.handleFullscreenChange.bind(this);
       window.addEventListener('resize', this.boundUpdatePosition);
       window.addEventListener('scroll', this.boundUpdatePosition, true);
       document.addEventListener('fullscreenchange', this.boundHandleFullscreenChange);
 
-      // 立即重新计算位置
+      // Immediately recalculate position
       this.updatePosition();
     }
   }
 
   private handleFullscreenChange(): void {
     const fullscreenElement = document.fullscreenElement;
-    // 当视频进入全屏时，将 Host 移动到全屏元素内以确保其可见
+    // When video enters fullscreen, move Host into the fullscreen element to ensure it's visible
     if (fullscreenElement && fullscreenElement.contains(this.video)) {
       fullscreenElement.appendChild(this.host);
     } else {
-      // 退出全屏或视频不再全屏时，将 Host 移回 body
-      // 仅当策略为 'body' 时才移回 body
+      // When exiting fullscreen or video is no longer fullscreen, move Host back to body
+      // Only move back to body when strategy is 'body'
       if (this.attachmentStrategy === 'body' && this.host.parentElement !== document.body) {
         document.body.appendChild(this.host);
       }
     }
-    // DOM 结构变化后，立即更新位置
+    // Update position immediately after DOM structure changes
     this.updatePosition();
   }
 
   /**
-   * 返回 Shadow DOM 中的按钮元素
+   * Returns the button element in the Shadow DOM
    */
   public getButton(): HTMLButtonElement {
     return this.button;
   }
 
   /**
-   * 创建（如果不存在）并返回 Canvas 元素，但不将其附加到 DOM。
+   * Creates (if not exists) and returns a Canvas element without attaching it to the DOM.
    * @returns {HTMLCanvasElement}
    */
   public getCanvas(): HTMLCanvasElement {
@@ -236,43 +236,43 @@ export class OverlayManager {
     this.canvas.width = this.video.videoWidth;
     this.canvas.height = this.video.videoHeight;
     this.canvas.style.pointerEvents = 'none';
-    // 初始时不可见，由 showCanvas 负责显示
+    // Initially invisible, showCanvas is responsible for displaying
     this.canvas.style.visibility = 'hidden';
     return this.canvas;
   }
 
   /**
-   * 将已创建的 Canvas 附加到 DOM 并使其可见。
+   * Attaches the created Canvas to the DOM and makes it visible.
    */
   public showCanvas(): void {
     if (!this.canvas) {
-      // 理论上 getCanvas 应该先被调用，但作为安全措施我们在这里也创建它
+      // In theory getCanvas should be called first, but as a safety measure we also create it here
       this.getCanvas();
     }
 
-    // 确保 canvas 在 DOM 中
+    // Ensure canvas is in the DOM
     if (!this.canvas!.parentElement) {
       this.video.parentElement?.insertBefore(this.canvas!, this.video);
     }
 
-    this.updatePosition(); // 更新位置和尺寸
-    this.canvas!.style.visibility = 'visible'; // 设为可见
-    this.video.style.opacity = '0'; // 隐藏原视频
+    this.updatePosition(); // Update position and size
+    this.canvas!.style.visibility = 'visible'; // Make visible
+    this.video.style.opacity = '0'; // Hide original video
   }
 
   /**
-   * 隐藏并销毁 Canvas。
+   * Hide and destroy the Canvas.
    */
   public hideCanvas(): void {
     this.canvas?.remove();
     this.canvas = undefined;
-    this.video.style.opacity = ''; // 恢复原视频
+    this.video.style.opacity = ''; // Restore original video
   }
 
   /**
-   * 分离UI
-   * 从 DOM 中移除所有UI元素，但保留其实例以便后续 reattach。
-   * 这样可以防止 body 策略下 host 残留导致多个 overlay 的问题。
+   * Detach UI
+   * Remove all UI elements from the DOM but keep their instances for subsequent reattachment.
+   * This prevents the issue of multiple overlays caused by residual hosts under the body strategy.
    */
   public detach(): void {
     this.host.remove();
@@ -282,8 +282,8 @@ export class OverlayManager {
   }
 
   /**
-   * 重新附加到新的视频元素
-   * @param newVideo 新的视频元素
+   * Reattach to a new video element
+   * @param newVideo The new video element
    */
   public reattach(newVideo: HTMLVideoElement): void {
     this.resizeObserver.disconnect();
@@ -291,11 +291,11 @@ export class OverlayManager {
 
     this.video = newVideo;
 
-    // 根据附加策略重新插入 host（detach 时已从 DOM 移除）
+    // Re-insert host according to attachment strategy (removed from DOM during detach)
     if (this.attachmentStrategy === 'sibling') {
       newVideo.parentElement?.insertBefore(this.host, newVideo);
     } else {
-      // body 策略：重新附加到 body
+      // Body strategy: reattach to body
       document.body.appendChild(this.host);
     }
 
@@ -313,7 +313,7 @@ export class OverlayManager {
   }
 
   /**
-   * 销毁实例，清理所有资源。
+   * Destroy instance and clean up all resources.
    */
   public destroy(): void {
     this.resizeObserver.disconnect();
@@ -325,7 +325,7 @@ export class OverlayManager {
     this.host.remove();
     this.hideCanvas();
 
-    // 如果切换到了 body 策略，移除额外的监听器
+    // If switched to body strategy, remove additional listeners
     if (this.attachmentStrategy === 'body') {
       window.removeEventListener('resize', this.boundUpdatePosition!);
       window.removeEventListener('scroll', this.boundUpdatePosition!, true);
@@ -337,13 +337,13 @@ export class OverlayManager {
     }
   }
 
-  // --- 私有辅助方法 ---
+  // --- Private helper methods ---
 
   private createButtonInShadow(): HTMLButtonElement {
     const button = document.createElement('button');
     button.innerText = chrome.i18n.getMessage('enhanceButton');
     button.classList.add(ANIME4K_BUTTON_CLASS);
-    button.part = 'button'; // 暴露给外部样式 (如果需要)
+    button.part = 'button'; // Expose to external styles (if needed)
     this.shadowRoot.appendChild(button);
     return button;
   }
@@ -371,7 +371,7 @@ export class OverlayManager {
         cursor: pointer;
         font-size: 14px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        pointer-events: auto; /* 使按钮可点击 */
+        pointer-events: auto; /* Make the button clickable */
         isolation: isolate;
       }
 

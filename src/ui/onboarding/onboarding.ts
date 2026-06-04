@@ -5,7 +5,7 @@ import { runGPUBenchmark, BenchmarkProgress } from '../../core/gpu-benchmark';
 import { themeManager } from '../theme-manager';
 import type { PerformanceTier, GPUBenchmarkResult } from '../../types';
 
-// 档位显示名称
+// Tier display names
 const TIER_DISPLAY: Record<PerformanceTier, { icon: string; name: string }> = {
     performance: { icon: '🚀', name: chrome.i18n.getMessage('tierPerformance') || 'Fast' },
     balanced: { icon: '⚖️', name: chrome.i18n.getMessage('tierBalanced') || 'Balanced' },
@@ -18,13 +18,13 @@ let selectedTier: PerformanceTier = 'balanced';
 let benchmarkResult: GPUBenchmarkResult | null = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 初始化主题
+    // Initialize theme
     themeManager.getTheme();
 
-    // 应用国际化
+    // Apply internationalization
     applyI18n();
 
-    // 获取元素
+    // Get elements
     const startTestBtn = document.getElementById('start-test') as HTMLButtonElement;
     const skipTestBtn = document.getElementById('skip-test') as HTMLButtonElement;
     const confirmTierBtn = document.getElementById('confirm-tier') as HTMLButtonElement;
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const openOptionsBtn = document.getElementById('open-options') as HTMLButtonElement;
     const tierButtons = document.querySelectorAll<HTMLButtonElement>('.tier-btn');
 
-    // 步骤 1: GPU 测试
+    // Step 1: GPU Test
     startTestBtn.addEventListener('click', async () => {
         startTestBtn.disabled = true;
         skipTestBtn.style.display = 'none';
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (progress.completed) {
                     progressText.textContent = chrome.i18n.getMessage('testComplete') || 'Test complete!';
                 } else {
-                    // 将 tier 键名转换为国际化文本
+                    // Convert tier key to internationalized text
                     const tierKey = `tier${progress.tier.charAt(0).toUpperCase()}${progress.tier.slice(1)}` as const;
                     const tierName = chrome.i18n.getMessage(tierKey) || progress.tier;
                     progressText.textContent = chrome.i18n.getMessage('testingTier', [tierName]) || `Testing ${tierName}...`;
@@ -60,16 +60,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             selectedTier = benchmarkResult.tier;
 
-            // 保存结果
+            // Save results
             await saveLocalSettings({
                 performanceTier: selectedTier,
                 gpuBenchmarkResult: benchmarkResult,
             });
 
-            // 更新结果显示
+            // Update result display
             updateResultDisplay();
 
-            // 跳到步骤 2
+            // Jump to step 2
             goToStep(2);
         } catch (error) {
             console.error('Benchmark failed:', error);
@@ -82,14 +82,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 跳过测试
+    // Skip test
     skipTestBtn.addEventListener('click', async () => {
         selectedTier = 'balanced';
         await saveLocalSettings({ performanceTier: selectedTier });
         goToStep(2);
     });
 
-    // 档位选择
+    // Tier selection
     tierButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const tier = btn.getAttribute('data-tier') as PerformanceTier;
@@ -98,18 +98,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // 确认档位
+    // Confirm tier
     confirmTierBtn.addEventListener('click', async () => {
         await saveLocalSettings({
             performanceTier: selectedTier,
             hasCompletedOnboarding: true,
         });
-        // 通知所有渲染器更新
+        // Notify all renderers to update
         chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED' });
         goToStep(3);
     });
 
-    // 完成
+    // Finish
     finishBtn.addEventListener('click', () => {
         window.close();
     });
@@ -131,14 +131,14 @@ function applyI18n(): void {
 }
 
 function goToStep(step: number): void {
-    // 更新步骤指示器
+    // Update step indicators
     document.querySelectorAll('.step').forEach((el, i) => {
         el.classList.remove('active', 'completed');
         if (i + 1 < step) el.classList.add('completed');
         if (i + 1 === step) el.classList.add('active');
     });
 
-    // 更新内容
+    // Update content
     document.querySelectorAll('.step-content').forEach((el, i) => {
         el.classList.toggle('active', i + 1 === step);
     });
@@ -157,16 +157,16 @@ function updateResultDisplay(): void {
     const display = TIER_DISPLAY[selectedTier];
     resultTier.textContent = `${display.icon} ${display.name}`;
 
-    // 只有当选择的档位与测试推荐的档位一致时才显示推荐文本
+    // Only show recommendation text if the selected tier matches the benchmark-recommended tier
     if (benchmarkResult && selectedTier === benchmarkResult.tier) {
         resultDesc.textContent = chrome.i18n.getMessage('resultDesc') || 'This tier is recommended based on your hardware.';
         resultDesc.style.display = 'block';
     } else if (benchmarkResult) {
-        // 用户选择了不同档位
+        // User selected a different tier
         resultDesc.textContent = chrome.i18n.getMessage('manuallySelected') || 'You have selected a different tier.';
         resultDesc.style.display = 'block';
     } else {
-        // 跳过了测试
+        // Test was skipped
         resultDesc.textContent = chrome.i18n.getMessage('defaultTier') || 'Default tier selected.';
         resultDesc.style.display = 'block';
     }
