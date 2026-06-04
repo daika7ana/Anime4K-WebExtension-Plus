@@ -209,8 +209,28 @@ const renderModesUI = () => {
       }
     };
 
+    // Clone button — creates a custom copy of a built-in mode
+    const cloneBtn = document.createElement('button');
+    cloneBtn.textContent = chrome.i18n.getMessage('clone') || 'Clone';
+    cloneBtn.className = 'btn btn-outline';
+    cloneBtn.style.display = mode.isBuiltIn ? 'block' : 'none';
+    cloneBtn.onclick = async () => {
+      const effectsToClone = getEffectsForMode(mode, currentTier);
+      const clonedMode: CustomMode = {
+        id: `custom-${Date.now()}`,
+        name: `${mode.name} (Copy)`,
+        isBuiltIn: false,
+        effects: effectsToClone.map(e => ({ ...e, params: e.params ? { ...e.params } : undefined })),
+      };
+      settingsState.enhancementModes.unshift(clonedMode);
+      renderModesUI();
+      await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+      notifyUpdate(clonedMode.id);
+    };
+
     cardHeader.appendChild(toggleBtn);
     cardHeader.appendChild(modeName);
+    cardHeader.appendChild(cloneBtn);
     cardHeader.appendChild(deleteBtn);
     card.appendChild(cardHeader);
 
@@ -238,6 +258,63 @@ const renderModesUI = () => {
       const effectName = document.createElement('span');
       effectName.textContent = effect.name;
       effectItem.appendChild(effectName);
+
+      // --- Configurable parameters (e.g. CAS sharpness) ---
+      if (effect.params && 'sharpness' in effect.params && !mode.isBuiltIn) {
+        const paramContainer = document.createElement('div');
+        paramContainer.className = 'effect-param-container';
+
+        const label = document.createElement('label');
+        label.textContent = chrome.i18n.getMessage('sharpness') || 'Sharpness:';
+        label.className = 'effect-param-label';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '100';
+        slider.value = String(Math.round((effect.params.sharpness ?? 0.5) * 100));
+        slider.className = 'effect-param-slider';
+
+        const valueDisplay = document.createElement('span');
+        valueDisplay.textContent = slider.value + '%';
+        valueDisplay.className = 'effect-param-value';
+
+        slider.addEventListener('input', () => {
+          valueDisplay.textContent = slider.value + '%';
+        });
+
+        // Save on change (mouse release). Use a debounce so rapid changes batch.
+        let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+        slider.addEventListener('change', async () => {
+          const newValue = parseInt(slider.value) / 100;
+          const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
+          if (targetMode && !targetMode.isBuiltIn) {
+            const targetEffect = targetMode.effects[index];
+            if (targetEffect && targetEffect.params) {
+              targetEffect.params.sharpness = newValue;
+              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+              notifyUpdate(mode.id);
+            }
+          }
+        });
+
+        // Prevent slider interactions from triggering drag on the parent effect item.
+        // Temporarily disable draggable while interacting with the slider.
+        slider.addEventListener('pointerdown', () => {
+          effectItem.draggable = false;
+        });
+        slider.addEventListener('pointerup', () => {
+          effectItem.draggable = !mode.isBuiltIn;
+        });
+        slider.addEventListener('pointerleave', () => {
+          effectItem.draggable = !mode.isBuiltIn;
+        });
+
+        paramContainer.appendChild(label);
+        paramContainer.appendChild(slider);
+        paramContainer.appendChild(valueDisplay);
+        effectItem.appendChild(paramContainer);
+      }
 
       if (!mode.isBuiltIn) {
         effectItem.draggable = true;

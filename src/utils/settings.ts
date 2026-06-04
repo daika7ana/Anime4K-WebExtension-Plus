@@ -64,7 +64,15 @@ export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMod
 
   return modes.map(mode => {
     const synchronizedEffects = mode.effects
-      .map(effectInMode => availableEffectsMap.get(effectInMode.id))
+      .map(effectInMode => {
+        const catalogEffect = availableEffectsMap.get(effectInMode.id);
+        if (!catalogEffect) return null;
+        // Preserve user-customized params (e.g. CAS sharpness) over catalog defaults
+        if (effectInMode.params && Object.keys(effectInMode.params).length > 0) {
+          return { ...catalogEffect, params: { ...catalogEffect.params, ...effectInMode.params } };
+        }
+        return catalogEffect;
+      })
       .filter((effect): effect is EnhancementEffect => !!effect);
 
     return { ...mode, effects: synchronizedEffects };

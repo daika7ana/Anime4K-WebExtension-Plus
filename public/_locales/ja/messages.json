@@ -101,6 +101,9 @@
   "delete": {
     "message": "削除"
   },
+  "clone": {
+    "message": "複製"
+  },
   "importSuccess": {
     "message": "インポート成功"
   },
@@ -283,6 +286,9 @@
   },
   "noEffects": {
     "message": "エフェクトなし"
+  },
+  "sharpness": {
+    "message": "シャープネス:"
   },
   "moveUp": {
     "message": "上へ移動"

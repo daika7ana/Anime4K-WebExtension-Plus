@@ -101,6 +101,9 @@
   "delete": {
     "message": "Удалить"
   },
+  "clone": {
+    "message": "Копировать"
+  },
   "importSuccess": {
     "message": "Успешный импорт"
   },
@@ -283,6 +286,9 @@
   },
   "noEffects": {
     "message": "Нет эффектов"
+  },
+  "sharpness": {
+    "message": "Резкость:"
   },
   "moveUp": {
     "message": "Переместить вверх"

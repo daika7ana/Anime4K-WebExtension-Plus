@@ -1,6 +1,7 @@
 import type { Anime4KPipeline } from 'anime4k-webgpu';
 import type { Dimensions, EnhancementEffect } from '../types';
 import { RendererInitializationError, RendererRuntimeError } from './errors';
+import { CAS } from './cas';
 
 /**
  * Full-screen textured quad vertex shader
@@ -344,17 +345,32 @@ export class Renderer {
       this.onProgress?.(loadingMsg, i + 1, this.effects.length);
 
       const effect = this.effects[i];
-      const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
+      let pipeline: Anime4KPipeline | null = null;
 
-      if (EffectClass) {
-        const pipeline = new EffectClass({
+      // Check for custom effects first (not from anime4k-webgpu library)
+      if (effect.className === 'CAS') {
+        pipeline = new CAS({
           device: this.device,
           inputTexture: currentTexture,
-          nativeDimensions: { width: curWidth, height: curHeight },
-          targetDimensions: this.targetDimensions,
-        });
-        pipelines.push(pipeline);
+          sharpness: effect.params?.sharpness ?? 0.5,
+        }) as unknown as Anime4KPipeline;
+      } else {
+        const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
 
+        if (EffectClass) {
+          pipeline = new EffectClass({
+            device: this.device,
+            inputTexture: currentTexture,
+            nativeDimensions: { width: curWidth, height: curHeight },
+            targetDimensions: this.targetDimensions,
+          });
+        } else {
+          console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
+        }
+      }
+
+      if (pipeline) {
+        pipelines.push(pipeline);
         currentTexture = pipeline.getOutputTexture();
 
         if (effect.upscaleFactor) {
@@ -383,8 +399,6 @@ export class Renderer {
             }
           }
         }
-      } else {
-        console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
       }
 
       // Yield via rAF to let the browser repaint between synchronous GPU operations.

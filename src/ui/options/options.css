@@ -423,6 +423,50 @@ h1 {
   background: linear-gradient(90deg, transparent, var(--secondary), transparent);
 }
 
+/* Effect parameter controls (e.g. CAS sharpness slider) */
+.effect-param-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.effect-param-label {
+  font-size: 0.8125rem;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.effect-param-slider {
+  width: 100px;
+  height: 4px;
+  appearance: none;
+  background: var(--outline-variant);
+  border-radius: 2px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.effect-param-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.effect-param-value {
+  font-size: 0.8125rem;
+  color: var(--on-surface);
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-remove-effect {
   background: none;
   border: none;

@@ -101,6 +101,9 @@
   "delete": {
     "message": "Delete"
   },
+  "clone": {
+    "message": "Clone"
+  },
   "importSuccess": {
     "message": "Import successful"
   },
@@ -289,6 +292,9 @@
   },
   "noEffects": {
     "message": "No effects"
+  },
+  "sharpness": {
+    "message": "Sharpness:"
   },
   "moveUp": {
     "message": "Move Up"

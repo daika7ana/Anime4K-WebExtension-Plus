@@ -101,4 +101,12 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     name: 'Clamp Highlights',
     className: 'ClampHighlights',
   },
+
+  // Sharpen Effects
+  {
+    id: 'anime4k/Sharpen/CAS',
+    name: 'Contrast Adaptive Sharpening (CAS)',
+    className: 'CAS',
+    params: { sharpness: 0.5 },
+  },
 ];

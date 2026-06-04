@@ -101,6 +101,9 @@
   "delete": {
     "message": "刪除"
   },
+  "clone": {
+    "message": "克隆"
+  },
   "importSuccess": {
     "message": "匯入成功"
   },
@@ -283,6 +286,9 @@
   },
   "noEffects": {
     "message": "無效果"
+  },
+  "sharpness": {
+    "message": "銳度:"
   },
   "moveUp": {
     "message": "上移"
