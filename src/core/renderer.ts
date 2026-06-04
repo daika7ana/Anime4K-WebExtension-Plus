@@ -98,6 +98,10 @@ export class Renderer {
   private lastError: Error | null = null;
   /** 是否正在恢复设备（设备丢失后的自动恢复） */
   private isRecovering = false;
+  /** 防止渲染循环中的重叠帧处理 */
+  private frameInFlight = false;
+  /** ImageBitmap 回退方案中，待关闭的上一帧 bitmap */
+  private pendingBitmap: ImageBitmap | null = null;
 
   // --- WebGPU 对象 ---
   private device!: GPUDevice;
@@ -114,9 +118,7 @@ export class Renderer {
   private sampler!: GPUSampler;
   private renderBindGroup!: GPUBindGroup;
 
-  // --- 静态属性，用于确保只检测一次 ---
-  private static hasCheckedWebGPUFeatures = false;
-  private static webgpuFeatureCheckPromise: Promise<boolean> | null = null;
+  // --- 静态属性 ---
   /** 缓存的 anime4k-webgpu 模块（避免重复动态导入） */
   private static cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
 
@@ -194,9 +196,8 @@ export class Renderer {
         }
       });
 
-      // 检查是否需要使用 ImageBitmap 回退方案
-      const supportsVideoTexture = await Renderer.detectWebGPUFeatures();
-      this.useImageBitmapFallback = !supportsVideoTexture;
+      // 检测是否支持直接从 VideoFrame 复制纹理（在当前设备上测试，避免创建冗余设备）
+      this.useImageBitmapFallback = !await this.detectVideoFrameSupport();
       if (this.useImageBitmapFallback) {
         console.log('[Anime4KWebExt] Renderer: Using ImageBitmap fallback for copying video frames.');
       }
@@ -288,17 +289,19 @@ export class Renderer {
       upscaleFactors.slice(i + 1).reduce((acc, val) => acc * val, 1)
     );
 
+    // --- Phase 1: 创建所有管线实例（无 GPU 提交） ---
     for (let i = 0; i < this.effects.length; i++) {
-      // 报告预热进度
+      // 报告进度
       const loadingMsg = chrome.i18n.getMessage('loadingEffect', [String(i + 1), String(this.effects.length)])
         || `⏳ Loading effect ${i + 1}/${this.effects.length}...`;
       this.onProgress?.(loadingMsg, i + 1, this.effects.length);
 
-      // 让出主线程，避免界面冻结
-      await new Promise(resolve => setTimeout(resolve, 0));
+      // 每 3 个效果让出主线程一次，避免界面冻结（而非每个效果都让出）
+      if (i > 0 && i % 3 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
 
       const effect = this.effects[i];
-      // 从缓存的模块获取效果类
       const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
 
       if (EffectClass) {
@@ -309,16 +312,6 @@ export class Renderer {
           targetDimensions: this.targetDimensions,
         });
         pipelines.push(pipeline);
-
-        // === 逐个效果预热：编译着色器并运行一帧 ===
-        try {
-          const commandEncoder = this.device.createCommandEncoder();
-          pipeline.pass(commandEncoder);
-          this.device.queue.submit([commandEncoder.finish()]);
-          await this.device.queue.onSubmittedWorkDone();
-        } catch (e) {
-          console.warn(`[Anime4KWebExt] Failed to warmup effect ${effect.className}:`, e);
-        }
 
         currentTexture = pipeline.getOutputTexture();
 
@@ -332,9 +325,6 @@ export class Renderer {
             const idealIntermediateHeight = this.targetDimensions.height / remainingFactor;
 
             if (curWidth > idealIntermediateWidth * 1.1) {
-              // 再次让出主线程
-              await new Promise(resolve => setTimeout(resolve, 0));
-
               const intermediateDownscale = new DownscaleClass({
                 device: this.device,
                 inputTexture: currentTexture,
@@ -345,16 +335,6 @@ export class Renderer {
               });
               pipelines.push(intermediateDownscale);
 
-              // 预热 Downscale 效果
-              try {
-                const commandEncoder = this.device.createCommandEncoder();
-                intermediateDownscale.pass(commandEncoder);
-                this.device.queue.submit([commandEncoder.finish()]);
-                await this.device.queue.onSubmittedWorkDone();
-              } catch (e) {
-                console.warn('[Anime4KWebExt] Failed to warmup Downscale:', e);
-              }
-
               currentTexture = intermediateDownscale.getOutputTexture();
               curWidth = Math.ceil(idealIntermediateWidth);
               curHeight = Math.ceil(idealIntermediateHeight);
@@ -364,6 +344,19 @@ export class Renderer {
       } else {
         console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
       }
+    }
+
+    // --- Phase 2: 批量预热 — 用单个命令编码器提交所有管线的着色器编译 ---
+    // 单次提交+同步代替逐个效果的同步，大幅减少 GPU 排空等待
+    try {
+      const warmupEncoder = this.device.createCommandEncoder();
+      for (const pipeline of pipelines) {
+        pipeline.pass(warmupEncoder);
+      }
+      this.device.queue.submit([warmupEncoder.finish()]);
+      await this.device.queue.onSubmittedWorkDone();
+    } catch (e) {
+      console.warn('[Anime4KWebExt] Batch warmup failed, shaders will compile on first frame:', e);
     }
 
     if (pipelines.length === 0) {
@@ -383,68 +376,30 @@ export class Renderer {
   }
 
   /**
-   * 检测当前环境的 WebGPU 实现是否支持直接从 VideoFrame 复制纹理。
+   * 在当前 GPU 设备上检测是否支持直接从 VideoFrame 复制纹理。
+   * 复用已创建的设备，避免创建冗余的 GPU 适配器/设备。
    */
-  public static async detectWebGPUFeatures(): Promise<boolean> {
-    // 如果已经检测过，直接返回结果
-    if (Renderer.hasCheckedWebGPUFeatures) {
-      return Renderer.webgpuFeatureCheckPromise ?? false;
+  private async detectVideoFrameSupport(): Promise<boolean> {
+    try {
+      const offscreenCanvas = new OffscreenCanvas(1, 1);
+      const ctx = offscreenCanvas.getContext('2d');
+      if (!ctx) return false;
+      ctx.fillRect(0, 0, 1, 1);
+      const frame = new VideoFrame(offscreenCanvas, { timestamp: 0 });
+      const testTexture = this.device.createTexture({
+        size: [1, 1],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.device.queue.copyExternalImageToTexture({ source: frame }, { texture: testTexture }, [1, 1]);
+      frame.close();
+      testTexture.destroy();
+      console.log('[Anime4KWebExt] VideoFrame as texture source is SUPPORTED.');
+      return true;
+    } catch {
+      console.log('[Anime4KWebExt] VideoFrame as texture source is NOT SUPPORTED, using ImageBitmap fallback.');
+      return false;
     }
-
-    // 如果正在检测中，等待检测完成
-    if (Renderer.webgpuFeatureCheckPromise) {
-      return Renderer.webgpuFeatureCheckPromise;
-    }
-
-    // 开始检测
-    Renderer.webgpuFeatureCheckPromise = (async () => {
-      try {
-        // 在 initialize() 中已经检测了基本的 WebGPU 支持，这里只需要检测 VideoFrame 支持
-
-        const adapter = await navigator.gpu.requestAdapter();
-        const device = await adapter?.requestDevice();
-        if (!device) {
-          throw new Error('Failed to get GPU device.');
-        }
-
-        // 创建一个 OffscreenCanvas
-        const offscreenCanvas = new OffscreenCanvas(1, 1);
-        // 获取 2D 上下文
-        const context = offscreenCanvas.getContext('2d');
-        if (!context) {
-          throw new Error('Failed to get 2d context from OffscreenCanvas');
-        }
-        // context.fillStyle = 'black';
-        context.fillRect(0, 0, 1, 1);
-        // 创建一个最小化的 VideoFrame 和 GPUTexture 用于测试
-        const frame = new VideoFrame(offscreenCanvas, { timestamp: 0 });
-        const texture = device.createTexture({
-          size: [1, 1],
-          format: 'rgba8unorm',
-          usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-        });
-
-        // 核心测试：此操作如果不支持会抛出异常
-        device.queue.copyExternalImageToTexture({ source: frame }, { texture }, [1, 1]);
-
-        // 清理资源
-        frame.close();
-        texture.destroy();
-        device.destroy();
-
-        // 如果成功，则说明支持
-        console.log('[Anime4KWebExt] WebGPU feature detection: VideoFrame as texture source is SUPPORTED.');
-        Renderer.hasCheckedWebGPUFeatures = true;
-        return true;
-      } catch (error) {
-        // 任何步骤失败都意味着不支持
-        console.log('[Anime4KWebExt] WebGPU feature detection: VideoFrame as texture source is NOT SUPPORTED.', error);
-        Renderer.hasCheckedWebGPUFeatures = true;
-        return false;
-      }
-    })();
-
-    return Renderer.webgpuFeatureCheckPromise;
   }
 
   /**
@@ -513,13 +468,18 @@ export class Renderer {
       // 将视频帧复制到纹理
       if (this.useImageBitmapFallback) {
         // 使用 ImageBitmap 回退方案（用于兼容 Firefox 等不支持直接从 video 复制的浏览器）
-        const bitmap = await createImageBitmap(this.video);
+        // 关闭上一帧的 bitmap（当前帧的 GPU 拷贝已完成）
+        if (this.pendingBitmap) {
+          this.pendingBitmap.close();
+          this.pendingBitmap = null;
+        }
+        this.pendingBitmap = await createImageBitmap(this.video);
         this.device.queue.copyExternalImageToTexture(
-          { source: bitmap },
+          { source: this.pendingBitmap },
           { texture: this.videoFrameTexture },
           [this.video.videoWidth, this.video.videoHeight]
         );
-        bitmap.close(); // 复制完成后立即关闭，无需缓存
+        // 不立即关闭 — 等到下一帧再关闭，确保 GPU 已完成读取
       } else {
         this.device.queue.copyExternalImageToTexture(
           { source: this.video },
@@ -611,30 +571,42 @@ export class Renderer {
 
   /**
    * 常规渲染循环，处理第一帧之后的所有帧。
+   * 使用 frameInFlight 守卫防止重叠帧处理，避免帧级联丢失。
    */
   private renderLoop = async (): Promise<void> => {
     if (this.destroyed) return;
 
-    if (await this.processFrame()) {
-      // 帧渲染成功
-      this.fixAttempted = false;
-      this.lastError = null;
-    } else {
-      // 帧渲染失败或被跳过
-      const error = this.lastError;
-      if (error) {
-        // 这是一个真正的错误
-        if (error instanceof RendererRuntimeError && error.recoverable && !this.fixAttempted) {
-          this.fixAttempted = true; // 标记已尝试修复，下一帧将是第二次尝试
-          console.log('[Anime4KWebExt] Retrying frame render after recovery attempt...');
-        } else {
-          console.error(`[Anime4KWebExt] Unrecoverable error in render loop. Destroying renderer. Error: ${error.message}`);
-          if (this.onError) this.onError(error);
-          this.destroy();
-          return; // 停止循环
+    // 防止重叠：如果上一帧还在处理中，跳过当前帧
+    if (this.frameInFlight) {
+      this.animationFrameId = this.video.requestVideoFrameCallback(this.renderLoop);
+      return;
+    }
+
+    this.frameInFlight = true;
+    try {
+      if (await this.processFrame()) {
+        // 帧渲染成功
+        this.fixAttempted = false;
+        this.lastError = null;
+      } else {
+        // 帧渲染失败或被跳过
+        const error = this.lastError;
+        if (error) {
+          // 这是一个真正的错误
+          if (error instanceof RendererRuntimeError && error.recoverable && !this.fixAttempted) {
+            this.fixAttempted = true; // 标记已尝试修复，下一帧将是第二次尝试
+            console.log('[Anime4KWebExt] Retrying frame render after recovery attempt...');
+          } else {
+            console.error(`[Anime4KWebExt] Unrecoverable error in render loop. Destroying renderer. Error: ${error.message}`);
+            if (this.onError) this.onError(error);
+            this.destroy();
+            return; // 停止循环
+          }
         }
+        // 如果没有错误，说明是良性跳帧（如分辨率调整），则什么都不做，等待下一帧
       }
-      // 如果没有错误，说明是良性跳帧（如分辨率调整），则什么都不做，等待下一帧
+    } finally {
+      this.frameInFlight = false;
     }
 
     // 持续调度自身
@@ -743,7 +715,8 @@ export class Renderer {
         }
       });
 
-      // 重新配置上下文
+      // 重新配置上下文（先 unconfigure 再 configure，严格实现要求）
+      this.context.unconfigure();
       this.context.configure({
         device: this.device,
         format: this.presentationFormat,
@@ -792,6 +765,8 @@ export class Renderer {
           (pipeline as any).destroy();
         }
       });
+      this.pendingBitmap?.close();
+      this.pendingBitmap = null;
       this.videoFrameTexture?.destroy();
       // 解除画布与GPU设备的关联，这对于后续重新初始化至关重要
       this.context?.unconfigure();
