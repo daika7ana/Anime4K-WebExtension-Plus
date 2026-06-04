@@ -5,6 +5,11 @@
 import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate } from './core/video-manager';
 import { isUrlWhitelisted, getWhitelistRules } from './utils/whitelist';
 
+// 子帧中无视频时提前退出，避免不必要的存储读取和初始化
+if (window !== window.top && !document.querySelector('video')) {
+  // 静默退出 — 无需清理
+} else {
+
 let isCurrentlyActive = false; // 跟踪当前页面的增强状态
 
 // 检查当前页面是否在白名单中
@@ -51,3 +56,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   return false;
 });
+
+} // end early-exit guard

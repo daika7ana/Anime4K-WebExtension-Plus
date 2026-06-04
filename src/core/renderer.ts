@@ -237,7 +237,7 @@ export class Renderer {
     this.videoFrameTexture?.destroy(); // 销毁旧纹理
     this.videoFrameTexture = this.device.createTexture({
       size: [this.video.videoWidth, this.video.videoHeight, 1],
-      format: 'rgba16float', // 使用 float 格式以获得更高精度
+      format: 'rgba8unorm', // 8-bit 无归一化格式，与视频帧精度匹配且节省带宽
       usage:
         GPUTextureUsage.TEXTURE_BINDING | // 可以作为着色器输入
         GPUTextureUsage.COPY_DST |        // 可以作为拷贝目的地

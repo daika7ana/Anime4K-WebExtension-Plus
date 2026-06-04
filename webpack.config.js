@@ -5,6 +5,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const ExtensionManifestPlugin = require('webpack-extension-manifest-plugin');
 const WebExtensionPlugin = require('webpack-target-webextension');
+const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === 'development';
@@ -104,5 +105,22 @@ module.exports = (env, argv) => {
     ].filter(Boolean),
     devtool: isDevelopment ? 'inline-source-map' : false,
     watch: isDevelopment,
+    optimization: {
+      minimize: !isDevelopment,
+      minimizer: [
+        new TerserPlugin({
+          terserOptions: {
+            compress: {
+              // 生产环境下移除 console.log 和 console.warn（保留 console.error）
+              pure_funcs: ['console.log', 'console.warn'],
+            },
+          },
+        }),
+      ],
+      splitChunks: {
+        chunks: 'async',
+        minSize: 20000,
+      },
+    },
   };
 };

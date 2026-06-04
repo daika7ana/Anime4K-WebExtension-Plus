@@ -262,9 +262,12 @@ export class VideoEnhancer {
   }
 
   /**
-   * 计算目标渲染尺寸
+   * 计算目标渲染尺寸（上限 8K，防止 OOM）
    */
   private calculateTargetDimensions(videoWidth: number, videoHeight: number, resolutionSetting: string): Dimensions {
+    const MAX_WIDTH = 7680;
+    const MAX_HEIGHT = 4320;
+
     const multipliers: Record<string, number> = { 'x2': 2, 'x4': 4, 'x8': 8 };
     const fixedResolutions: Record<string, Dimensions> = {
       '720p': { width: 1280, height: 720 },
@@ -273,12 +276,26 @@ export class VideoEnhancer {
       '4k': { width: 3840, height: 2160 },
     };
 
+    let width: number;
+    let height: number;
+
     if (multipliers[resolutionSetting]) {
-      return { width: videoWidth * multipliers[resolutionSetting], height: videoHeight * multipliers[resolutionSetting] };
+      width = videoWidth * multipliers[resolutionSetting];
+      height = videoHeight * multipliers[resolutionSetting];
     } else if (fixedResolutions[resolutionSetting]) {
       return fixedResolutions[resolutionSetting];
+    } else {
+      return { width: videoWidth, height: videoHeight };
     }
-    return { width: videoWidth, height: videoHeight };
+
+    // 限制最大分辨率，防止纹理过大导致 OOM
+    if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+      const scale = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+      width = Math.floor(width * scale);
+      height = Math.floor(height * scale);
+    }
+
+    return { width, height };
   }
 
   /**
