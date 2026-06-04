@@ -19,6 +19,7 @@ export class OverlayManager {
 
   private resizeObserver: ResizeObserver;
   private mutationObserver: MutationObserver;
+  private updatePositionRafId: number | null = null;
 
   // 用于标识 overlay host 元素的属性名
   private static readonly HOST_MARKER_ATTR = 'data-anime4k-overlay-host';
@@ -65,12 +66,12 @@ export class OverlayManager {
     this.button = this.createButtonInShadow();
     this.injectStyles();
 
-    // 4. 初始化监听器
-    this.resizeObserver = new ResizeObserver(() => this.updatePosition());
+    // 4. 初始化监听器（使用 rAF 防抖避免布局抖动）
+    this.resizeObserver = new ResizeObserver(() => this.scheduleUpdatePosition());
     this.resizeObserver.observe(this.video);
 
     // 监听样式变化
-    this.mutationObserver = new MutationObserver(() => this.updatePosition());
+    this.mutationObserver = new MutationObserver(() => this.scheduleUpdatePosition());
     this.mutationObserver.observe(this.video, {
       attributes: true,
       attributeFilter: ['style', 'class'],
@@ -81,6 +82,18 @@ export class OverlayManager {
 
     // 延迟检测，确保初始渲染完成
     setTimeout(() => this.detectAndSwitchStrategy(), 100);
+  }
+
+  /**
+   * 使用 requestAnimationFrame 防抖调度位置更新，
+   * 避免 ResizeObserver/MutationObserver 高频触发导致布局抖动。
+   */
+  private scheduleUpdatePosition(): void {
+    if (this.updatePositionRafId !== null) return;
+    this.updatePositionRafId = requestAnimationFrame(() => {
+      this.updatePositionRafId = null;
+      this.updatePosition();
+    });
   }
 
   /**
@@ -305,6 +318,10 @@ export class OverlayManager {
   public destroy(): void {
     this.resizeObserver.disconnect();
     this.mutationObserver.disconnect();
+    if (this.updatePositionRafId !== null) {
+      cancelAnimationFrame(this.updatePositionRafId);
+      this.updatePositionRafId = null;
+    }
     this.host.remove();
     this.hideCanvas();
 

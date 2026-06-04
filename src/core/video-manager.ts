@@ -126,29 +126,52 @@ export function initializeOnPage(): void {
  * 设置DOM观察器，以监听新添加的视频元素和 Shadow DOM 的创建
  */
 export function setupDOMObserver(): MutationObserver {
+  let pendingAddedNodes: Node[] = [];
+  let mutationDebounceTimer: number | null = null;
+
+  const processBatchedMutations = () => {
+    const nodes = pendingAddedNodes;
+    pendingAddedNodes = [];
+    mutationDebounceTimer = null;
+
+    for (const node of nodes) {
+      // 快速检查：跳过不可能包含视频的节点
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      const element = node as Element;
+      const tagName = element.tagName;
+
+      // 快速路径：节点本身就是 video
+      if (tagName === 'VIDEO') {
+        processVideoElement(element as HTMLVideoElement, 'mutation-observer:added-video-node');
+        continue;
+      }
+
+      // 快速跳过已知不含视频的常见标签
+      if (tagName === 'SCRIPT' || tagName === 'STYLE' || tagName === 'LINK' ||
+          tagName === 'META' || tagName === 'BR' || tagName === 'HR') continue;
+
+      // 处理 Shadow DOM
+      if (element.shadowRoot) {
+        processDoc(element.shadowRoot);
+        element.shadowRoot.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:shadow-dom-scan'));
+      }
+
+      // 深度扫描：仅对非叶节点执行 querySelectorAll
+      if (element.querySelector('video')) {
+        element.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
+      }
+    }
+  };
+
   const handleMutations = (mutationsList: MutationRecord[]) => {
     for (const mutation of mutationsList) {
-      // A. 处理新增的节点
+      // A. 收集新增节点（批量处理，减少 querySelectorAll 调用）
       mutation.addedNodes.forEach(node => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
-        
-        const element = node as Element;
-
-        // Case 1: 新增节点本身就是 video
-        if (element.tagName === 'VIDEO') {
-          processVideoElement(element as HTMLVideoElement, 'mutation-observer:added-video-node');
-        }
-        // Case 2: 新增节点包含 Shadow DOM
-        if (element.shadowRoot) {
-          processDoc(element.shadowRoot);
-          // 立即扫描这个新的 Shadow DOM 内部可能已存在的 video
-          element.shadowRoot.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:added-shadow-dom-scan'));
-        }
-        // Case 3: 扫描新增节点内部的常规 video 元素
-        element.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:added-node-subtree-scan'));
+        pendingAddedNodes.push(node);
       });
-      
-      // B. 处理被移除的节点，进行资源清理
+
+      // B. 立即处理移除的节点（不能延迟，否则资源泄漏）
       mutation.removedNodes.forEach(node => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
         const element = node as Element;
@@ -159,6 +182,12 @@ export function setupDOMObserver(): MutationObserver {
         }
       });
     }
+
+    // 批量处理新增节点（防抖：合并同一事件循环内的多次 DOM 变动）
+    if (mutationDebounceTimer !== null) {
+      clearTimeout(mutationDebounceTimer);
+    }
+    mutationDebounceTimer = window.setTimeout(processBatchedMutations, 100);
   };
 
   const observer = new MutationObserver(handleMutations);
@@ -184,24 +213,25 @@ export async function handleSettingsUpdate(
   console.log('Received settings update:', message);
 
   const newSettings = await getSettings();
-  let updatedCount = 0;
   const videos = EnhancerMap.getAllManagedVideos();
+
+  // 并行更新所有视频的设置，而非逐个等待
+  let updatedCount = 0;
+  const updatePromises: Promise<void>[] = [];
 
   for (const videoElement of videos) {
     const enhancer = EnhancerMap.getEnhancer(videoElement);
     if (enhancer && videoElement.getAttribute(ANIME4K_APPLIED_ATTR) === 'true') {
       const shouldUpdate = !message.modifiedModeId || enhancer.getCurrentModeId() === message.modifiedModeId;
-
       if (shouldUpdate) {
-        try {
-          await enhancer.updateSettings(newSettings);
-          updatedCount++;
-        } catch (error) {
-          console.error('Error updating video settings:', error, videoElement);
-        }
+        updatePromises.push(
+          enhancer.updateSettings(newSettings).then(() => { updatedCount++; })
+        );
       }
     }
   }
+
+  await Promise.allSettled(updatePromises);
 
   if (updatedCount > 0) {
     sendResponse({ status: 'SUCCESS', message: `Updated ${updatedCount} videos.` });

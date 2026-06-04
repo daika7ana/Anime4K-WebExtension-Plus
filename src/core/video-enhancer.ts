@@ -366,9 +366,22 @@ export class VideoEnhancer {
   }
 
   /**
-   * 显示错误提示框
+   * 显示错误提示框（使用单例通知元素，避免重复创建 DOM）
    */
+  private static activeNotification: HTMLElement | null = null;
+  private static notificationTimeout: number | null = null;
+
   private showErrorModal(message: string, showOptionsLink = false): void {
+    // 复用已有通知元素
+    if (VideoEnhancer.activeNotification) {
+      VideoEnhancer.activeNotification.remove();
+      VideoEnhancer.activeNotification = null;
+    }
+    if (VideoEnhancer.notificationTimeout !== null) {
+      clearTimeout(VideoEnhancer.notificationTimeout);
+      VideoEnhancer.notificationTimeout = null;
+    }
+
     const notification = document.createElement('div');
     Object.assign(notification.style, {
       position: 'fixed', top: '20px', right: '20px',
@@ -398,7 +411,14 @@ export class VideoEnhancer {
     }
 
     document.body.appendChild(notification);
+    VideoEnhancer.activeNotification = notification;
 
-    setTimeout(() => notification.remove(), 8000);
+    VideoEnhancer.notificationTimeout = window.setTimeout(() => {
+      notification.remove();
+      if (VideoEnhancer.activeNotification === notification) {
+        VideoEnhancer.activeNotification = null;
+      }
+      VideoEnhancer.notificationTimeout = null;
+    }, 8000);
   }
 }

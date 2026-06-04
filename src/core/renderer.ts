@@ -637,8 +637,9 @@ export class Renderer {
 
     const { effects, targetDimensions } = options;
 
-    // 使用JSON字符串比较来检测效果数组是否有实质性变化
-    const effectsChanged = JSON.stringify(this.effects) !== JSON.stringify(effects);
+    // 使用 ID 数组比较来检测效果数组是否有实质性变化（比 JSON.stringify 更可靠、更高效）
+    const effectsChanged = this.effects.length !== effects.length ||
+      this.effects.some((e, i) => e.id !== effects[i].id);
     const dimensionsChanged = this.targetDimensions.width !== targetDimensions.width || this.targetDimensions.height !== targetDimensions.height;
 
     if (!effectsChanged && !dimensionsChanged) {

@@ -17,6 +17,16 @@ import type {
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { resolveEffectChain } from './effect-chain-templates';
 
+// ===== 设置缓存 =====
+let cachedSettings: Anime4KWebExtSettings | null = null;
+let cacheTimestamp = 0;
+const SETTINGS_CACHE_TTL = 2000; // 2 秒 TTL
+
+// 当 storage 发生变化时自动失效缓存
+chrome.storage.onChanged.addListener(() => {
+  cachedSettings = null;
+});
+
 // ===== 内置模式定义 =====
 export const BUILTIN_MODES: BuiltInMode[] = [
   { id: 'builtin-mode-a', baseMode: 'A', name: 'Mode A', isBuiltIn: true },
@@ -108,8 +118,13 @@ export async function getLocalSettings(): Promise<LocalSettings> {
 /**
  * 获取完整设置（合并 sync 和 local）
  * 内置模式会根据当前档位动态解析效果链
+ * 使用 TTL 缓存避免重复的 chrome.storage IPC 调用
  */
 export async function getSettings(): Promise<Anime4KWebExtSettings> {
+  if (cachedSettings && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
+    return cachedSettings;
+  }
+
   const [synced, local] = await Promise.all([
     getSyncedSettings(),
     getLocalSettings(),
@@ -124,12 +139,16 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
     ...syncedCustomModes,
   ];
 
-  return {
+  const result: Anime4KWebExtSettings = {
     ...synced,
     customModes: syncedCustomModes,
     performanceTier: local.performanceTier,
     enhancementModes,
   };
+
+  cachedSettings = result;
+  cacheTimestamp = Date.now();
+  return result;
 }
 
 /**
