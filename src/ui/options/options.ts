@@ -136,7 +136,7 @@ const renderModesUI = () => {
         settingsState.enhancementModes.splice(toIndex, 0, movedMode);
 
         renderModesUI(); // Re-render from state
-        await saveSettings({ enhancementModes: settingsState.enhancementModes }); // Persist changes
+        await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] }); // Persist changes
         notifyUpdate();
       }
     });
@@ -182,7 +182,7 @@ const renderModesUI = () => {
       if (targetMode && newName && newName !== targetMode.name) {
         targetMode.name = newName;
         mode.name = newName; // Update local object for consistency
-        await saveSettings({ enhancementModes: settingsState.enhancementModes });
+        await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
         notifyUpdate(mode.id);
       } else {
         (e.target as HTMLElement).textContent = mode.name;
@@ -202,7 +202,7 @@ const renderModesUI = () => {
         }
         renderModesUI();
         await saveSettings({
-          enhancementModes: settingsState.enhancementModes,
+          customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
           selectedModeId: settingsState.selectedModeId
         });
         notifyUpdate(deletedModeId);
@@ -284,7 +284,7 @@ const renderModesUI = () => {
             const [movedEffect] = targetMode.effects.splice(draggedEffectIndex, 1);
             targetMode.effects.splice(index, 0, movedEffect);
             renderModesUI();
-            await saveSettings({ enhancementModes: settingsState.enhancementModes });
+            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
             notifyUpdate(mode.id);
           }
         });
@@ -324,7 +324,7 @@ const renderModesUI = () => {
               const [movedEffect] = targetMode.effects.splice(index, 1);
               targetMode.effects.splice(newIndex, 0, movedEffect);
               renderModesUI();
-              await saveSettings({ enhancementModes: settingsState.enhancementModes });
+              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
               notifyUpdate(mode.id);
             }
           };
@@ -340,7 +340,7 @@ const renderModesUI = () => {
           if (targetMode && !targetMode.isBuiltIn) {
             targetMode.effects.splice(index, 1);
             renderModesUI();
-            await saveSettings({ enhancementModes: settingsState.enhancementModes });
+            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
             notifyUpdate(mode.id);
           }
         };
@@ -380,7 +380,7 @@ const renderModesUI = () => {
         if (targetMode && !targetMode.isBuiltIn && effectToAdd) {
           targetMode.effects.push(effectToAdd);
           renderModesUI();
-          await saveSettings({ enhancementModes: settingsState.enhancementModes });
+          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
           notifyUpdate(mode.id);
         }
         (e.target as HTMLSelectElement).value = defaultOption.value; // Reset dropdown
@@ -606,7 +606,7 @@ const setupEventListeners = () => {
     };
     settingsState.enhancementModes.unshift(newMode);
     renderModesUI();
-    await saveSettings({ enhancementModes: settingsState.enhancementModes });
+    await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
   });
 
   // --- Whitelist Listeners ---

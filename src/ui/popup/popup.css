@@ -86,14 +86,8 @@ body {
 .header-icon {
   width: 28px;
   height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-  border-radius: var(--border-radius-sm);
-  font-size: 14px;
-  line-height: 1;
   flex-shrink: 0;
+  border-radius: var(--border-radius-sm);
   box-shadow: 0 2px 6px rgba(137, 180, 250, 0.3);
 }
 

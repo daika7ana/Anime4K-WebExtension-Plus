@@ -155,8 +155,11 @@
   "about": {
     "message": "About"
   },
-  "author": {
-    "message": "Author"
+  "originalAuthor": {
+    "message": "Original Author"
+  },
+  "forkAuthor": {
+    "message": "Fork Author"
   },
   "license": {
     "message": "License"

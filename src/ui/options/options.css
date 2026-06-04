@@ -68,12 +68,14 @@ body {
   letter-spacing: 0.15px;
   display: flex;
   align-items: center;
-  gap: var(--spacing-2);
+  gap: var(--spacing-4);
+  line-height: 1.25;
 }
 
-.logo::before {
-  content: '✨';
-  font-size: 1.25rem;
+.logo-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .menu ul {

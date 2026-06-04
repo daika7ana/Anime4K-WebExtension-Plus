@@ -155,8 +155,11 @@
   "about": {
     "message": "關於"
   },
-  "author": {
-    "message": "作者"
+  "originalAuthor": {
+    "message": "原作者"
+  },
+  "forkAuthor": {
+    "message": "Fork 作者"
   },
   "license": {
     "message": "授權條款"

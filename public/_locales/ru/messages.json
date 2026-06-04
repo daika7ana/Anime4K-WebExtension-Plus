@@ -155,8 +155,11 @@
   "about": {
     "message": "О программе"
   },
-  "author": {
-    "message": "Автор"
+  "originalAuthor": {
+    "message": "Оригинальный автор"
+  },
+  "forkAuthor": {
+    "message": "Автор форка"
   },
   "license": {
     "message": "Лицензия"

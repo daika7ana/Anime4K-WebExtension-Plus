@@ -65,7 +65,7 @@ module.exports = (env, argv) => {
       new CleanWebpackPlugin(),
       new CopyWebpackPlugin({
         patterns: [
-          { from: '*.png', context: 'public/icons', to: 'icons' },
+          { from: '*.{png,svg}', context: 'public/icons', to: 'icons' },
           { from: 'public/_locales', to: '_locales' },
           { from: 'rules.json' },
         ],
