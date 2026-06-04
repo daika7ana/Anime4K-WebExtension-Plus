@@ -12,7 +12,7 @@
     "message": "🔄 Попробовать ещё раз"
   },
   "extensionName": {
-    "message": "Настройки улучшения Anime4K"
+    "message": "Улучшение Anime4K"
   },
   "performanceTierLabel": {
     "message": "Уровень производительности:"
@@ -24,7 +24,7 @@
     "message": "Выходное разрешение:"
   },
   "saveAndApply": {
-    "message": "Сохранить и применить настройки"
+    "message": "Сохранить настройки"
   },
   "nativeResolution": {
     "message": "Нативное (без улучшения)"
@@ -45,13 +45,13 @@
     "message": "Включить белый список"
   },
   "addCurrentPage": {
-    "message": "Добавить текущую страницу"
+    "message": "Страница"
   },
   "addCurrentDomain": {
-    "message": "Добавить текущий домен"
+    "message": "Домен"
   },
   "addParentPath": {
-    "message": "Добавить родительский путь"
+    "message": "Путь"
   },
   "openSettings": {
     "message": "Настройки"

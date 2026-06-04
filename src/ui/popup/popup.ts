@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const addCurrentDomainBtn = document.getElementById('add-current-domain') as HTMLButtonElement;
   const addParentPathBtn = document.getElementById('add-parent-path') as HTMLButtonElement;
   const openSettingsBtn = document.getElementById('open-settings') as HTMLButtonElement;
+  const statusBadge = document.getElementById('status-badge') as HTMLSpanElement;
 
   if (!modeSelect || !resolutionSelect || !saveButton || !whitelistToggle ||
     !addCurrentPageBtn || !addCurrentDomainBtn || !addParentPathBtn || !openSettingsBtn) {
@@ -93,6 +94,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     modeSelect.value = settings.selectedModeId;
   };
 
+  // Update status badge
+  const updateStatusBadge = (text: string, active = false) => {
+    if (statusBadge) {
+      statusBadge.textContent = text;
+      statusBadge.classList.toggle('active', active);
+    }
+  };
+
   // Update tier button states
   const updateTierButtons = (tier: PerformanceTier) => {
     tierButtons.forEach(btn => {
@@ -123,6 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderModeSelect(currentSettings);
     resolutionSelect.value = currentSettings.targetResolutionSetting;
     whitelistToggle.checked = currentSettings.whitelistEnabled;
+    updateStatusBadge('Ready');
 
     // Check if a custom mode is selected
     const isCustomMode = currentSettings.selectedModeId.startsWith('custom-');
@@ -180,6 +190,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (existingStatus) {
         existingStatus.remove();
       }
+
+      // Update status badge
+      updateStatusBadge('Applied', true);
 
       // Show save success status message
       const status = document.createElement('div');

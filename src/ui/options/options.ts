@@ -219,7 +219,11 @@ const renderModesUI = () => {
     summary.className = 'mode-summary';
     // Get effect chain based on mode type
     const modeEffects = getEffectsForMode(mode, currentTier);
-    summary.textContent = modeEffects.map((e: EnhancementEffect) => e.name.split('/').pop()).join(' > ') || (chrome.i18n.getMessage('noEffects') || 'No effects');
+    const effectNames = modeEffects.map((e: EnhancementEffect) => e.name.split('/').pop());
+    const summaryText = effectNames.length > 3
+      ? effectNames.slice(0, 3).join(' > ') + ' ...'
+      : effectNames.join(' > ');
+    summary.textContent = summaryText || (chrome.i18n.getMessage('noEffects') || 'No effects');
     card.appendChild(summary);
 
     // --- Card Content (shown when expanded) ---
@@ -450,8 +454,8 @@ const renderRulesUI = () => {
     });
     actionsCell.appendChild(deleteBtn);
 
-    row.appendChild(patternCell);
     row.appendChild(enabledCell);
+    row.appendChild(patternCell);
     row.appendChild(actionsCell);
     rulesContainer.appendChild(row);
   });

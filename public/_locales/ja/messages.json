@@ -12,7 +12,7 @@
     "message": "🔄 超解像を再試行"
   },
   "extensionName": {
-    "message": "Anime4K超解像設定"
+    "message": "Anime4K超解像"
   },
   "performanceTierLabel": {
     "message": "パフォーマンス段階："
@@ -24,7 +24,7 @@
     "message": "目標解像度："
   },
   "saveAndApply": {
-    "message": "超解像設定を保存して適用"
+    "message": "設定を保存"
   },
   "nativeResolution": {
     "message": "オリジナル解像度 (超解像なし)"
@@ -45,13 +45,13 @@
     "message": "ホワイトリストを有効化"
   },
   "addCurrentPage": {
-    "message": "現在のページを追加"
+    "message": "ページ"
   },
   "addCurrentDomain": {
-    "message": "現在のドメインを追加"
+    "message": "ドメイン"
   },
   "addParentPath": {
-    "message": "親パスを追加"
+    "message": "パス"
   },
   "openSettings": {
     "message": "設定"

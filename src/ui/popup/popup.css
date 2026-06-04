@@ -2,9 +2,10 @@
 
 body {
   font-family: var(--font-family);
-  background-color: var(--surface);
+  background: var(--surface);
+  background-image: radial-gradient(ellipse at 50% -20%, rgba(137, 180, 250, 0.06) 0%, transparent 60%);
   margin: 0;
-  padding: var(--spacing-2) var(--spacing-3);
+  padding: var(--spacing-2);
   color: var(--on-surface);
   min-width: 320px;
   max-width: 320px;
@@ -21,25 +22,132 @@ body {
   border: 1px solid var(--outline-variant);
 }
 
+/* ===== Header ===== */
 .card-header {
   padding: var(--spacing-3) var(--spacing-4);
-  background: var(--primary-container);
+  background: linear-gradient(135deg, var(--primary-container) 0%, var(--surface-container-high) 100%);
   color: var(--on-primary-container);
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 
-.card-body {
-  padding: var(--spacing-2) var(--spacing-3);
+.card-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(137, 180, 250, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.card-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  opacity: 0.3;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-width: 0;
+}
+
+.header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-primary-container);
+  letter-spacing: 0.15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(137, 180, 250, 0.3);
 }
 
 h3 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   letter-spacing: 0.15px;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  border: 1px solid var(--outline-variant);
+  transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
+  flex-shrink: 0;
+}
+
+.status-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 4px var(--primary);
+  transition: all 0.3s ease;
+}
+
+.status-badge.active {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--secondary);
+  border-color: rgba(166, 227, 161, 0.3);
+}
+
+.status-badge.active::before {
+  background: var(--secondary);
+  box-shadow: 0 0 6px var(--secondary);
+}
+
+.card-body {
+  padding: var(--spacing-3);
+}
+
+/* ===== Setting Groups ===== */
 .setting-group {
-  margin-bottom: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
 }
 
 .setting-group:last-child {
@@ -48,11 +156,12 @@ h3 {
 
 .setting-group>label {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-weight: 500;
-  font-size: 13px;
-  color: var(--on-surface);
-  letter-spacing: 0.1px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
 }
 
 /* 并排布局 */
@@ -75,6 +184,7 @@ h3 {
   color: var(--on-surface-variant);
 }
 
+/* ===== Form Controls ===== */
 select,
 button {
   width: 100%;
@@ -85,12 +195,12 @@ button {
   color: var(--on-surface);
   font-size: 13px;
   font-family: var(--font-family);
-  transition: all 0.2s cubic-bezier(0.2, 0.0, 0, 1.0);
+  transition: all 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
   box-sizing: border-box;
 }
 
 select {
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2389b4fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right var(--spacing-2) center;
   background-size: 14px;
@@ -98,13 +208,14 @@ select {
   -moz-appearance: none;
   -webkit-appearance: none;
   appearance: none;
+  cursor: pointer;
 }
 
 select:focus,
 button:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-container);
+  box-shadow: 0 0 0 3px var(--primary-container);
 }
 
 select:hover {
@@ -153,7 +264,7 @@ button {
   font-weight: 500;
   cursor: pointer;
   margin-bottom: var(--spacing-2);
-  border-radius: var(--border-radius-xl);
+  border-radius: var(--border-radius);
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -179,50 +290,82 @@ button:active {
   gap: 4px;
   padding: 4px;
   background: var(--surface-container-low);
-  border-radius: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--outline-variant);
 }
 
 .tier-btn {
   flex: 1;
-  padding: 6px 2px;
+  padding: 5px 2px;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s;
-  min-height: 42px;
+  transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
+  min-height: 40px;
   margin: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.tier-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(137, 180, 250, 0.15) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .tier-btn .tier-icon {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  z-index: 1;
 }
 
 .tier-btn .tier-label {
   font-size: 9px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  position: relative;
+  z-index: 1;
 }
 
-.tier-btn:hover:not(.disabled) {
+.tier-btn:hover:not(.disabled):not(.active) {
   background: var(--surface-container);
   transform: none;
   box-shadow: none;
 }
 
+.tier-btn:hover:not(.disabled):not(.active) .tier-icon {
+  transform: scale(1.15);
+}
+
 .tier-btn.active {
-  background: var(--primary-container);
+  background: linear-gradient(135deg, var(--primary-container) 0%, rgba(137, 180, 250, 0.2) 100%);
   color: var(--on-primary-container);
+  box-shadow: 0 2px 8px rgba(137, 180, 250, 0.25);
+}
+
+.tier-btn.active::before {
+  opacity: 1;
+}
+
+.tier-btn.active .tier-icon {
+  transform: scale(1.1);
 }
 
 .tier-btn.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  filter: grayscale(0.5);
 }
 
 /* ===== 主按钮样式 ===== */
@@ -230,32 +373,49 @@ button:active {
   width: 100%;
   margin-top: var(--spacing-2);
   margin-bottom: 0;
-  background-color: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, #7aa2f7 100%);
   color: var(--on-primary);
-  transition: all 0.2s cubic-bezier(0.2, 0.0, 0, 1.0);
+  transition: all 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
+  position: relative;
+  overflow: hidden;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  transition: left 0.5s ease;
 }
 
 .btn-primary:hover {
-  /* 必须显式设置背景色以覆盖通用的 button:hover 样式 */
-  background-color: var(--primary);
-  /* 使用半透明白色叠加层来提亮背景，避免使用 filter 导致文字也变色 */
-  background-image: linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15));
+  background: linear-gradient(135deg, var(--primary) 0%, #7aa2f7 100%);
   color: var(--on-primary) !important;
-  box-shadow: var(--shadow-1);
+  box-shadow: 0 4px 12px rgba(137, 180, 250, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:hover::after {
+  left: 100%;
 }
 
 .btn-primary:active {
   transform: translateY(0);
-  /* 使用半透明黑色叠加层来压暗 */
-  background-image: linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15));
-  box-shadow: none;
+  box-shadow: 0 2px 6px rgba(137, 180, 250, 0.2);
 }
 
 /* ===== 白名单区域 ===== */
 .whitelist-section {
-  margin-top: var(--spacing-2);
-  padding-top: var(--spacing-2);
-  border-top: 1px solid var(--outline-variant);
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--surface-container-low);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--outline-variant);
 }
 
 .whitelist-toggle {
@@ -263,20 +423,21 @@ button:active {
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-2);
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .whitelist-toggle>label {
   font-size: 13px;
   font-weight: 500;
   margin: 0;
+  color: var(--on-surface);
 }
 
 .switch {
   position: relative;
   display: inline-block;
-  width: 44px;
-  height: 24px;
+  width: 52px;
+  height: 32px;
 }
 
 .switch input {
@@ -294,20 +455,21 @@ button:active {
   bottom: 0;
   background-color: var(--surface-variant);
   transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
-  border-radius: 12px;
+  border-radius: 16px;
   border: 2px solid var(--outline);
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 16px;
-  width: 16px;
+  height: 24px;
+  width: 24px;
   left: 2px;
   bottom: 2px;
   background-color: var(--outline);
   transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
   border-radius: 50%;
+  box-shadow: var(--shadow-1);
 }
 
 input:checked+.slider {
@@ -321,7 +483,11 @@ input:checked+.slider:before {
 }
 
 .slider:hover {
-  box-shadow: 0 0 0 6px rgba(103, 80, 164, 0.08);
+  box-shadow: 0 0 0 8px rgba(137, 180, 250, 0.08);
+}
+
+input:focus+.slider {
+  box-shadow: 0 0 0 8px rgba(137, 180, 250, 0.12);
 }
 
 /* ===== 白名单按钮 ===== */
@@ -334,39 +500,56 @@ input:checked+.slider:before {
   flex: 1;
   margin-bottom: 0;
   font-size: 11px;
-  padding: 6px 8px;
+  padding: 6px 6px;
   background-color: var(--surface-container);
   color: var(--on-surface);
   border: 1px solid var(--outline);
-  /* 增加边框对比度 */
   border-radius: var(--border-radius);
   min-height: 32px;
+  transition: all 0.2s cubic-bezier(0.2, 0.0, 0, 1.0);
+  white-space: nowrap;
 }
 
 .whitelist-buttons button:hover {
   background-color: var(--surface-container-high);
   border-color: var(--primary);
-  /* Hover 时边框变色 */
   color: var(--primary);
   box-shadow: none;
-  transform: none;
+  transform: translateY(-1px);
+}
+
+.whitelist-buttons button:active {
+  transform: translateY(0);
 }
 
 .whitelist-buttons .btn-icon {
   font-size: 13px;
-  /* 稍微调大图表 */
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.whitelist-buttons button:hover .btn-icon {
+  transform: scale(1.2);
 }
 
 /* ===== 设置按钮 ===== */
 #open-settings {
-  margin-top: var(--spacing-2);
+  margin-top: var(--spacing-3);
   width: 100%;
   background-color: transparent;
   color: var(--primary);
   border: 1px solid var(--outline);
   border-radius: var(--border-radius);
-  /* 与其他按钮统一圆角 */
   font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
+}
+
+#open-settings::after {
+  content: '→';
+  margin-left: 4px;
+  transition: transform 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
+  display: inline-block;
 }
 
 #open-settings:hover {
@@ -377,41 +560,103 @@ input:checked+.slider:before {
   transform: none;
 }
 
+#open-settings:hover::after {
+  transform: translateX(3px);
+}
+
+#open-settings:active {
+  background-color: var(--surface-container-low);
+}
+
+/* ===== Footer ===== */
 #extension-footer {
   text-align: center;
   margin-top: var(--spacing-2);
   font-size: 11px;
   color: var(--on-surface-variant);
   padding: var(--spacing-1) 0;
+  position: relative;
+}
+
+#extension-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--outline-variant), transparent);
 }
 
 #extension-footer a {
   color: var(--primary);
   text-decoration: none;
   font-weight: 500;
+  transition: opacity 0.2s ease;
 }
 
 #extension-footer a:hover {
-  text-decoration: underline;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+#extension-footer span {
+  opacity: 0.5;
 }
 
 /* ===== 保存状态消息 ===== */
 .save-status {
-  color: var(--primary);
+  color: var(--secondary);
   text-align: center;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12px;
-  animation: fadeIn 0.2s ease-out;
+  font-weight: 500;
+  animation: fadeInSlide 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
-@keyframes fadeIn {
+.save-status::before {
+  content: '✓';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: var(--secondary);
+  color: var(--surface);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@keyframes fadeInSlide {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-6px);
   }
 
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ===== Subtle entrance animation for card ===== */
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card {
+  animation: cardEnter 0.35s cubic-bezier(0.2, 0.0, 0, 1.0);
 }

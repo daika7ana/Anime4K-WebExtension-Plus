@@ -12,7 +12,7 @@
     "message": "🔄 重试超分"
   },
   "extensionName": {
-    "message": "Anime4K超分辨率设置"
+    "message": "Anime4K超分辨率"
   },
   "performanceTierLabel": {
     "message": "性能档位："
@@ -24,7 +24,7 @@
     "message": "目标分辨率："
   },
   "saveAndApply": {
-    "message": "保存并应用超分辨率设置"
+    "message": "保存设置"
   },
   "nativeResolution": {
     "message": "原始分辨率 (不超分)"
@@ -45,13 +45,13 @@
     "message": "启用白名单"
   },
   "addCurrentPage": {
-    "message": "添加当前页面"
+    "message": "页面"
   },
   "addCurrentDomain": {
-    "message": "添加当前域名"
+    "message": "域名"
   },
   "addParentPath": {
-    "message": "添加父路径"
+    "message": "路径"
   },
   "openSettings": {
     "message": "设置"

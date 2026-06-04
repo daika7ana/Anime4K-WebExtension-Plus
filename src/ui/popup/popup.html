@@ -10,7 +10,13 @@
 <body>
   <div class="card">
     <div class="card-header">
-      <h3 data-i18n="extensionName"></h3>
+      <div class="header-content">
+        <div class="header-left">
+          <div class="header-icon">✨</div>
+          <span class="header-title" data-i18n="extensionName">Anime4K</span>
+        </div>
+        <span id="status-badge" class="status-badge">Ready</span>
+      </div>
     </div>
 
     <div class="card-body">
@@ -74,15 +80,15 @@
         </div>
 
         <div class="whitelist-buttons">
-          <button id="add-current-page">
+          <button id="add-current-page" title="Add current page to whitelist">
             <span class="btn-icon">📄</span>
             <span data-i18n="addCurrentPage">Page</span>
           </button>
-          <button id="add-current-domain">
+          <button id="add-current-domain" title="Add current domain to whitelist">
             <span class="btn-icon">🌐</span>
             <span data-i18n="addCurrentDomain">Domain</span>
           </button>
-          <button id="add-parent-path">
+          <button id="add-parent-path" title="Add parent path to whitelist">
             <span class="btn-icon">📁</span>
             <span data-i18n="addParentPath">Path</span>
           </button>

@@ -12,7 +12,7 @@
     "message": "🔄 重試超解析"
   },
   "extensionName": {
-    "message": "Anime4K超解析設定"
+    "message": "Anime4K超解析"
   },
   "performanceTierLabel": {
     "message": "效能檔位："
@@ -24,7 +24,7 @@
     "message": "目標解析度："
   },
   "saveAndApply": {
-    "message": "儲存並套用超解析設定"
+    "message": "儲存設定"
   },
   "nativeResolution": {
     "message": "原始解析度 (不超解析)"
@@ -45,13 +45,13 @@
     "message": "啟用白名單"
   },
   "addCurrentPage": {
-    "message": "加入目前頁面"
+    "message": "頁面"
   },
   "addCurrentDomain": {
-    "message": "加入目前網域"
+    "message": "網域"
   },
   "addParentPath": {
-    "message": "加入父路徑"
+    "message": "路徑"
   },
   "openSettings": {
     "message": "設定"

@@ -12,7 +12,7 @@
     "message": "🔄 Retry Enhancement"
   },
   "extensionName": {
-    "message": "Anime4K Enhancement Settings"
+    "message": "Anime4K Enhancement"
   },
   "performanceTierLabel": {
     "message": "Performance Tier:"
@@ -24,7 +24,7 @@
     "message": "Target Resolution:"
   },
   "saveAndApply": {
-    "message": "Save and Apply Enhancement Settings"
+    "message": "Save Settings"
   },
   "nativeResolution": {
     "message": "Native Resolution (No Enhancement)"
@@ -45,13 +45,13 @@
     "message": "Enable Whitelist"
   },
   "addCurrentPage": {
-    "message": "Add Current Page"
+    "message": "Page"
   },
   "addCurrentDomain": {
-    "message": "Add Current Domain"
+    "message": "Domain"
   },
   "addParentPath": {
-    "message": "Add Parent Path"
+    "message": "Path"
   },
   "openSettings": {
     "message": "Settings"
