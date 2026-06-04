@@ -114,11 +114,10 @@ export async function runGPUBenchmark(
 
     // 预先生成测试数据（复用于所有档位）
     const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
-    for (let j = 0; j < testData.length; j += 4) {
-        testData[j] = Math.random() * 255;     // R
-        testData[j + 1] = Math.random() * 255; // G
-        testData[j + 2] = Math.random() * 255; // B
-        testData[j + 3] = 255;                 // A
+    crypto.getRandomValues(testData);
+    // 确保 alpha 通道为 255
+    for (let j = 3; j < testData.length; j += 4) {
+        testData[j] = 255;
     }
 
     let recommendedTier: PerformanceTier = 'performance';

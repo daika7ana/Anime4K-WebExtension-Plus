@@ -155,8 +155,8 @@ export class Renderer {
     try {
       // 等待视频数据加载完成
       if (this.video.readyState < this.video.HAVE_FUTURE_DATA) {
-        await new Promise((resolve) => {
-          this.video.onloadeddata = resolve;
+        await new Promise<void>((resolve) => {
+          this.video.addEventListener('loadeddata', () => resolve(), { once: true });
         });
       }
 
@@ -669,11 +669,12 @@ export class Renderer {
    */
   public async updateVideoSource(newVideo: HTMLVideoElement): Promise<void> {
     console.log('[Anime4KWebExt] Renderer video source updated.');
+    // 先更新视频引用，确保后续 resize 操作基于正确的视频元素
+    this.video = newVideo;
     if (newVideo.videoWidth !== this.videoFrameTexture.width || newVideo.videoHeight !== this.videoFrameTexture.height) {
       console.log('[Anime4KWebExt] Video dimensions changed on reattach. Updating renderer.');
       await this.handleSourceResize();
     }
-    this.video = newVideo;
   }
 
   /**
