@@ -72,6 +72,8 @@ export interface RendererOptions {
   onFirstFrameRendered?: () => void;
   /** 初始化进度回调函数 */
   onProgress?: (stage: string, current?: number, total?: number) => void;
+  /** 预热批次大小：每次提交到 GPU 的管线数量 */
+  warmupBatchSize?: number;
 }
 
 /**
@@ -122,6 +124,9 @@ export class Renderer {
   /** 缓存的 anime4k-webgpu 模块（避免重复动态导入） */
   private static cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
 
+  /** 预热批次大小 */
+  private warmupBatchSize: number;
+
   /**
    * Renderer 的构造函数是私有的，请使用 `Renderer.create()` 静态方法来创建实例。
    * @param options - 初始化渲染器所需的配置
@@ -134,6 +139,7 @@ export class Renderer {
     this.onError = options.onError;
     this.onFirstFrameRendered = options.onFirstFrameRendered;
     this.onProgress = options.onProgress;
+    this.warmupBatchSize = options.warmupBatchSize ?? 3;
   }
 
   /**
@@ -348,11 +354,10 @@ export class Renderer {
 
     // --- Phase 2: 分批预热 — 小批量提交着色器编译，每批之间让出主线程 ---
     // 首次运行时着色器编译可能需要数秒，分批可让 UI 在各批次之间保持响应。
-    const WARMUP_BATCH_SIZE = 2;
-    for (let i = 0; i < pipelines.length; i += WARMUP_BATCH_SIZE) {
+    for (let i = 0; i < pipelines.length; i += this.warmupBatchSize) {
       try {
         const warmupEncoder = this.device.createCommandEncoder();
-        const batchEnd = Math.min(i + WARMUP_BATCH_SIZE, pipelines.length);
+        const batchEnd = Math.min(i + this.warmupBatchSize, pipelines.length);
         for (let j = i; j < batchEnd; j++) {
           pipelines[j].pass(warmupEncoder);
         }
@@ -362,7 +367,7 @@ export class Renderer {
         console.warn('[Anime4KWebExt] Warmup batch failed, shaders will compile on first frame:', e);
       }
       // 让出主线程，使 UI 可以处理输入事件和更新进度
-      if (i + WARMUP_BATCH_SIZE < pipelines.length) {
+      if (i + this.warmupBatchSize < pipelines.length) {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }

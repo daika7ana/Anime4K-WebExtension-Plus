@@ -217,6 +217,7 @@ export class VideoEnhancer {
           this.button.innerText = stage;
         }
       },
+      warmupBatchSize: settings.warmupBatchSize,
     });
 
     console.log(`[Anime4KWebExt] Renderer initialized with mode: ${selectedMode.name}`);

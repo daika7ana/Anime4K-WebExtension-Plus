@@ -31,6 +31,7 @@ const versionNumberSpan = document.getElementById('version-number') as HTMLSpanE
 // --- 智能功能 UI 元素 ---
 const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButtonElement;
 const gpuTierDisplay = document.getElementById('gpu-tier-display') as HTMLSpanElement;
+const warmupBatchSizeInput = document.getElementById('warmup-batch-size') as HTMLInputElement;
 
 // --- 拖放状态 ---
 let draggedElement: HTMLElement | null = null;
@@ -491,6 +492,11 @@ const renderGeneralSettingsUI = async () => {
   if (gpuTierDisplay) {
     gpuTierDisplay.textContent = tierIcons[localSettings.performanceTier];
   }
+
+  // 预热批次大小
+  if (warmupBatchSizeInput) {
+    warmupBatchSizeInput.value = String(settingsState.warmupBatchSize ?? 3);
+  }
 };
 
 const renderAboutSectionUI = () => {
@@ -516,6 +522,16 @@ const setupEventListeners = () => {
   });
 
   // --- 智能功能监听器 ---
+  if (warmupBatchSizeInput) {
+    warmupBatchSizeInput.addEventListener('change', async (e) => {
+      const value = Math.max(1, Math.min(10, parseInt((e.target as HTMLInputElement).value, 10) || 3));
+      (e.target as HTMLInputElement).value = String(value);
+      settingsState.warmupBatchSize = value;
+      await saveSettings({ warmupBatchSize: value });
+      notifyUpdate();
+    });
+  }
+
   if (runBenchmarkBtn) {
     runBenchmarkBtn.addEventListener('click', async () => {
       runBenchmarkBtn.disabled = true;

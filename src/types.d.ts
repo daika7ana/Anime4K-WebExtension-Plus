@@ -66,6 +66,7 @@ interface SyncedSettings {
   whitelist: WhitelistRule[];
   customModes: CustomMode[];
   enableCrossOriginFix: boolean;
+  warmupBatchSize: number;
 }
 
 // ===== 仅本地存储的设置 (storage.local) =====

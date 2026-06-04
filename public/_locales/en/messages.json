@@ -200,6 +200,12 @@
   "runTest": {
     "message": "Run Test"
   },
+  "warmupBatchSize": {
+    "message": "Warmup Batch Size"
+  },
+  "warmupBatchSizeDesc": {
+    "message": "Number of effects warmed up per GPU batch during initialization. Lower values keep the UI more responsive; higher values may speed up initialization."
+  },
   "currentTier": {
     "message": "Current tier:"
   },
