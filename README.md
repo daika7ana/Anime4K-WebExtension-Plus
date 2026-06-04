@@ -1,6 +1,11 @@
 # Anime4K WebExtension Plus
 
-[中文](./README.zh.md) | English | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
+[![GitHub Stars](https://img.shields.io/github/stars/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/stargazers)
+[![License](https://img.shields.io/github/license/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](./LICENSE)
+
+English | [中文](./README.zh.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
 
 Significantly improve the image quality of anime videos with the Anime4K real-time super-resolution algorithm, delivering a clearer and sharper visual experience frame by frame!
 
@@ -22,18 +27,6 @@ Significantly improve the image quality of anime videos with the Anime4K real-ti
 ## User Guide
 
 ### Install the Extension
-
-#### From App Store (Recommended)
-
-- [![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square&label=Latest%20Version)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
-- [![Edge Store Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fffopffngebibpmeodlhhkdlaejnmdlam&query=%24.version&style=flat-square&label=Edge%20Add-ons)](https://microsoftedge.microsoft.com/addons/detail/anime4k-webextension/ffopffngebibpmeodlhhkdlaejnmdlam)
-- [![Chrome Web Store Version](https://img.shields.io/chrome-web-store/v/hpmbccepehpoanjpjkamfdpdkbmfmhek?style=flat-square&label=Chrome%20Web%20Store)](https://chromewebstore.google.com/detail/anime4k-webextension/hpmbccepehpoanjpjkamfdpdkbmfmhek)
-- [![Mozilla Add-on Version](https://img.shields.io/amo/v/anime4k-webextension?style=flat-square&label=Firefox%20Add-on)](https://addons.mozilla.org/firefox/addon/anime4k-webextension/)
-
-> [!NOTE]
->
-> 1. Click the badges above to go to the store page.
-> 2. Due to the review process, the version in the store may not be the latest. For the latest version, please use the pre-built package or build from source.
 
 #### Using Pre-built Packages
 
@@ -108,5 +101,6 @@ Click the **"Settings"** button at the bottom of the panel to access the detaile
 
 ## Acknowledgments
 
+- [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — Original repository this project is forked from
 - [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
 - [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)

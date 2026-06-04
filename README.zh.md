@@ -1,6 +1,11 @@
 # Anime4K WebExtension Plus
 
-中文 | [English](./README.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
+[![GitHub Stars](https://img.shields.io/github/stars/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/stargazers)
+[![License](https://img.shields.io/github/license/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](./LICENSE)
+
+[English](./README.md) | 中文 | [日本語](./README.ja.md) | [Русский](./README.ru.md)
 
 利用Anime4K实时超分辨率算法显著提升动漫视频画质，逐帧呈现更清晰锐利的视觉体验！
 
@@ -22,18 +27,6 @@
 ## 使用指南
 
 ### 安装扩展
-
-#### 从应用商店安装（推荐）
-
-- [![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
-- [![Edge Store Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fffopffngebibpmeodlhhkdlaejnmdlam&query=%24.version&style=flat-square&label=Edge%E6%89%A9%E5%B1%95%E5%95%86%E5%BA%97)](https://microsoftedge.microsoft.com/addons/detail/anime4k-webextension/ffopffngebibpmeodlhhkdlaejnmdlam)
-- [![Chrome Web Store Version](https://img.shields.io/chrome-web-store/v/hpmbccepehpoanjpjkamfdpdkbmfmhek?style=flat-square&label=Chrome%E5%BA%94%E7%94%A8%E5%95%86%E5%BA%97)](https://chromewebstore.google.com/detail/anime4k-webextension/hpmbccepehpoanjpjkamfdpdkbmfmhek)
-- [![Mozilla Add-on Version](https://img.shields.io/amo/v/anime4k-webextension?style=flat-square&label=Firefox%E9%99%84%E5%8A%A0%E7%BB%84%E4%BB%B6)](https://addons.mozilla.org/firefox/addon/anime4k-webextension/)
-
-> [!NOTE]
->
-> 1. 点击上面的徽章跳转到商店页面
-> 2. 由于审核流程，商店中的版本可能不是最新版。如需最新版，请使用预构建包或从源码构建。
 
 #### 使用预构建包
 
@@ -109,5 +102,6 @@
 
 ## 致谢
 
+- [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — 本项目 fork 自此仓库
 - [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
 - [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)

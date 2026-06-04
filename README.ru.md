@@ -1,6 +1,11 @@
 # Anime4K WebExtension Plus
 
-[中文](./README.zh.md) | [English](./README.md) | [日本語](./README.ja.md) | Русский
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
+[![GitHub Stars](https://img.shields.io/github/stars/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/stargazers)
+[![License](https://img.shields.io/github/license/daika7ana/Anime4K-WebExtension-Plus?style=flat-square)](./LICENSE)
+
+[English](./README.md) | [中文](./README.zh.md) | [日本語](./README.ja.md) | Русский
 
 Значительно улучшите качество изображения аниме-видео с помощью алгоритма супер-разрешения Anime4K в реальном времени, обеспечивая более четкое и резкое визуальное восприятие кадр за кадром!
 
@@ -22,18 +27,6 @@
 ## Руководство пользователя
 
 ### Установка расширения
-
-#### Из магазина приложений (рекомендуется)
-
-- [![GitHub Release](https://img.shields.io/github/v/release/daika7ana/Anime4K-WebExtension-Plus?style=flat-square&label=%D0%9F%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8F%D1%8F%20%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F)](https://github.com/daika7ana/Anime4K-WebExtension-Plus/releases/latest)
-- [![Edge Store Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fffopffngebibpmeodlhhkdlaejnmdlam&query=%24.version&style=flat-square&label=%D0%9C%D0%B0%D0%B3%D0%B0%D0%B7%D0%B8%D0%BD%20Edge)](https://microsoftedge.microsoft.com/addons/detail/anime4k-webextension/ffopffngebibpmeodlhhkdlaejnmdlam)
-- [![Chrome Web Store Version](https://img.shields.io/chrome-web-store/v/hpmbccepehpoanjpjkamfdpdkbmfmhek?style=flat-square&label=%D0%9C%D0%B0%D0%B3%D0%B0%D0%B7%D0%B8%D0%BD%20Chrome)](https://chromewebstore.google.com/detail/anime4k-webextension/hpmbccepehpoanjpjkamfdpdkbmfmhek)
-- [![Mozilla Add-on Version](https://img.shields.io/amo/v/anime4k-webextension?style=flat-square&label=%D0%94%D0%BE%D0%BF%D0%BE%D0%BB%D0%BD%D0%B5%D0%BD%D0%B8%D1%8F%20Firefox)](https://addons.mozilla.org/firefox/addon/anime4k-webextension/)
-
-> [!NOTE]
->
-> 1. Нажмите на значки выше, чтобы перейти на страницу магазина.
-> 2. Из-за процесса проверки версия в магазине может быть не самой последней. Для получения последней версии используйте готовый пакет или соберите из исходного кода.
 
 #### Использование готового пакета
 
@@ -108,5 +101,6 @@
 
 ## Благодарности
 
+- [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — Оригинальный репозиторий, от которого сделан этот форк
 - [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
 - [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)
