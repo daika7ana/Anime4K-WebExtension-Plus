@@ -118,6 +118,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   };
 
+  // Dirty state tracking
+  let initialModeId: string;
+  let initialResolution: string;
+  let initialTier: PerformanceTier;
+
+  const updateSaveButtonState = () => {
+    const isDirty = modeSelect.value !== initialModeId ||
+                    resolutionSelect.value !== initialResolution ||
+                    currentTier !== initialTier;
+    saveButton.disabled = !isDirty;
+  };
+
   // Load settings
   let currentSettings;
   let localSettings;
@@ -128,11 +140,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
 
     currentTier = localSettings.performanceTier;
+    initialModeId = currentSettings.selectedModeId;
+    initialResolution = currentSettings.targetResolutionSetting;
+    initialTier = localSettings.performanceTier;
+
     updateTierButtons(currentTier);
     renderModeSelect(currentSettings);
     resolutionSelect.value = currentSettings.targetResolutionSetting;
     whitelistToggle.checked = currentSettings.whitelistEnabled;
     updateStatusBadge('Ready');
+    updateSaveButtonState();
 
     // Check if a custom mode is selected
     const isCustomMode = currentSettings.selectedModeId.startsWith('custom-');
@@ -157,6 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tier && tier !== currentTier) {
         currentTier = tier;
         updateTierButtons(tier);
+        updateSaveButtonState();
         console.log('Performance tier selected:', tier);
       }
     });
@@ -166,12 +184,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   modeSelect.addEventListener('change', () => {
     const isCustomMode = modeSelect.value.startsWith('custom-');
     updateTierButtonsDisabled(isCustomMode);
+    updateSaveButtonState();
+  });
+
+  // Update save button when resolution changes
+  resolutionSelect.addEventListener('change', () => {
+    updateSaveButtonState();
   });
 
   // "Save" button click handler
   saveButton.addEventListener('click', async () => {
     const selectedModeId = modeSelect.value;
     const selectedResolution = resolutionSelect.value;
+
+    // Disable button during save to prevent spamming
+    saveButton.disabled = true;
 
     try {
       const updatedSettings = {
@@ -193,6 +220,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Update status badge
       updateStatusBadge('Applied', true);
+
+      // Update initial values so dirty tracking reflects the new baseline
+      initialModeId = selectedModeId;
+      initialResolution = selectedResolution;
+      initialTier = currentTier;
 
       // Show save success status message
       const status = document.createElement('div');
@@ -220,15 +252,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
 
-      // Close popup after status message is shown
-      setTimeout(() => {
-        status.remove();
-        window.close();
-      }, 1500);
+      // Re-enable button after save completes (disabled state tracks dirty state)
+      updateSaveButtonState();
 
     } catch (error) {
       console.error('Error saving settings:', error);
       alert('Failed to save settings');
+      // Re-enable button on error so user can retry
+      updateSaveButtonState();
     }
   });
 

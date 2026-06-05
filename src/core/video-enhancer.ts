@@ -267,6 +267,18 @@ export class VideoEnhancer {
   }
 
   /**
+   * Reapplies enhancement with fresh settings.
+   * Performs a clean disable-then-enable cycle to ensure all old filters are removed and new ones applied.
+   */
+  public async reapply(): Promise<void> {
+    if (!this.renderer) return;
+
+    console.log('[Anime4KWebExt] Reapplying enhancement with fresh settings...');
+    this.disableEnhancement();
+    await this.toggleEnhancement();
+  }
+
+  /**
    * Calculates the target rendering dimensions (capped at 8K to prevent OOM)
    */
   private calculateTargetDimensions(videoWidth: number, videoHeight: number, resolutionSetting: string): Dimensions {

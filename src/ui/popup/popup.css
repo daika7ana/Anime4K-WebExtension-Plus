@@ -403,6 +403,18 @@ button:active {
   box-shadow: 0 2px 6px rgba(137, 180, 250, 0.2);
 }
 
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  background: linear-gradient(135deg, var(--primary) 0%, #7aa2f7 100%);
+}
+
+.btn-primary:disabled:hover::after {
+  left: -100%;
+}
+
 /* ===== 白名单区域 ===== */
 .whitelist-section {
   margin-top: var(--spacing-3);

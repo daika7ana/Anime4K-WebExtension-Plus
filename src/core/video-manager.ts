@@ -226,10 +226,17 @@ export async function handleSettingsUpdate(
   for (const videoElement of videos) {
     const enhancer = EnhancerMap.getEnhancer(videoElement);
     if (enhancer && videoElement.getAttribute(ANIME4K_APPLIED_ATTR) === 'true') {
-      const shouldUpdate = !message.modifiedModeId || enhancer.getCurrentModeId() === message.modifiedModeId;
-      if (shouldUpdate) {
+      if (message.modifiedModeId) {
+        // Options page edit: only update videos using the modified mode (hot-swap)
+        if (enhancer.getCurrentModeId() === message.modifiedModeId) {
+          updatePromises.push(
+            enhancer.updateSettings(newSettings).then(() => { updatedCount++; })
+          );
+        }
+      } else {
+        // Popup save: full reapply to ensure old filters are removed and new ones applied
         updatePromises.push(
-          enhancer.updateSettings(newSettings).then(() => { updatedCount++; })
+          enhancer.reapply().then(() => { updatedCount++; })
         );
       }
     }
