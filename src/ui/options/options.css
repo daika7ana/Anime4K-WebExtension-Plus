@@ -95,6 +95,7 @@ body {
   border-radius: var(--border-radius);
   text-decoration: none;
   color: var(--on-surface);
+  cursor: pointer;
   transition: all 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
   font-weight: 500;
   font-size: 14px;
@@ -257,11 +258,9 @@ h1 {
 }
 
 .btn-danger {
-  background-color: var(--error-container);
-  color: var(--on-error-container);
-  font-size: 0.8125rem;
-  padding: var(--spacing-1) var(--spacing-4);
-  min-height: 32px;
+  background-color: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
 }
 
 .btn-danger:hover {
@@ -789,29 +788,34 @@ input:focus+.slider {
 
 /* --- Action Buttons --- */
 .action-btn {
-  background: none;
-  border: none;
+  background-color: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
   cursor: pointer;
-  padding: var(--spacing-2);
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  padding: var(--spacing-2) var(--spacing-6);
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  font-size: 0.875rem;
+  min-height: 40px;
+  font-family: var(--font-family);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--on-surface-variant);
   transition: all 0.25s cubic-bezier(0.2, 0.0, 0, 1.0);
-  font-weight: 500;
-  font-size: 13px;
+  position: relative;
+  overflow: hidden;
 }
 
 .action-btn:hover {
-  background-color: var(--error-container);
-  color: var(--danger);
+  background-color: var(--danger);
+  color: var(--surface);
+  box-shadow: 0 4px 12px rgba(243, 139, 168, 0.3);
+  transform: translateY(-1px);
 }
 
 .action-btn:active {
-  transform: scale(0.95);
+  transform: translateY(0);
+  box-shadow: var(--shadow-1);
 }
 
 .import-export {
