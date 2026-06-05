@@ -88,7 +88,10 @@ const renderModesUI = () => {
 
   modesContainer.textContent = ''; // Clear existing cards
 
-  settingsState.enhancementModes.forEach(mode => {
+  const builtInModes = settingsState.enhancementModes.filter(m => m.isBuiltIn);
+  const customModes = settingsState.enhancementModes.filter(m => !m.isBuiltIn);
+
+  const renderModeCard = (mode: EnhancementMode) => {
     const card = document.createElement('div');
     card.className = 'mode-card collapsed';
     card.dataset.modeId = mode.id;
@@ -474,7 +477,25 @@ const renderModesUI = () => {
     }
 
     modesContainer.appendChild(card);
-  });
+  };
+
+  // Custom Modes section
+  if (customModes.length > 0) {
+    const customHeader = document.createElement('div');
+    customHeader.className = 'modes-section-header';
+    customHeader.textContent = chrome.i18n.getMessage('customModes') || 'Custom Modes';
+    modesContainer.appendChild(customHeader);
+    customModes.forEach(renderModeCard);
+  }
+
+  // Built-in Modes section
+  if (builtInModes.length > 0) {
+    const builtInHeader = document.createElement('div');
+    builtInHeader.className = 'modes-section-header';
+    builtInHeader.textContent = chrome.i18n.getMessage('builtInModes') || 'Built-in Modes';
+    modesContainer.appendChild(builtInHeader);
+    builtInModes.forEach(renderModeCard);
+  }
 };
 
 /**
@@ -733,6 +754,10 @@ const setupEventListeners = () => {
       const syncedNewModes = synchronizeEffectsForCustomModes(newModes);
       const allCustomModes = [...settingsState.customModes, ...syncedNewModes];
       settingsState.customModes = allCustomModes;
+      settingsState.enhancementModes = [
+        ...settingsState.enhancementModes.filter(m => m.isBuiltIn),
+        ...allCustomModes,
+      ];
 
       renderModesUI();
       await saveSettings({ customModes: settingsState.customModes });

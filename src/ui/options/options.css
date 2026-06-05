@@ -285,6 +285,21 @@ h1 {
   gap: var(--spacing-4);
 }
 
+.modes-section-header {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: var(--spacing-3) 0 var(--spacing-1);
+  border-bottom: 1px solid var(--outline-variant);
+  margin-top: var(--spacing-2);
+}
+
+.modes-section-header:first-child {
+  margin-top: 0;
+}
+
 .mode-card {
   background: var(--surface-container-high);
   border-radius: var(--border-radius-lg);
