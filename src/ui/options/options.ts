@@ -30,8 +30,8 @@ const versionNumberSpan = document.getElementById('version-number') as HTMLSpanE
 
 // --- Smart Features UI Elements ---
 const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButtonElement;
-const gpuTierDisplay = document.getElementById('gpu-tier-display') as HTMLSpanElement;
 const warmupBatchSizeInput = document.getElementById('warmup-batch-size') as HTMLInputElement;
+const tierSelect = document.getElementById('tier-select') as HTMLSelectElement;
 
 // --- Drag and Drop State ---
 let draggedElement: HTMLElement | null = null;
@@ -574,6 +574,20 @@ const setupInternationalization = () => {
       }
     }
   });
+
+  // Add icons to tier select options
+  const tierIcons: Record<string, string> = {
+    performance: '🚀',
+    balanced: '⚖️',
+    quality: '🎨',
+    ultra: '🔬'
+  };
+  document.querySelectorAll<HTMLOptionElement>('#tier-select option').forEach(option => {
+    const icon = tierIcons[option.value];
+    if (icon && option.textContent && !option.textContent.startsWith(icon)) {
+      option.textContent = `${icon} ${option.textContent}`;
+    }
+  });
 };
 
 const renderGeneralSettingsUI = async () => {
@@ -584,15 +598,9 @@ const renderGeneralSettingsUI = async () => {
   // Smart features UI
   const localSettings = await getLocalSettings();
 
-  // Tier display
-  const tierIcons: Record<PerformanceTier, string> = {
-    performance: chrome.i18n.getMessage('tierPerformance') ? `🚀 ${chrome.i18n.getMessage('tierPerformance')}` : '🚀 Fast',
-    balanced: chrome.i18n.getMessage('tierBalanced') ? `⚖️ ${chrome.i18n.getMessage('tierBalanced')}` : '⚖️ Balanced',
-    quality: chrome.i18n.getMessage('tierQuality') ? `🎨 ${chrome.i18n.getMessage('tierQuality')}` : '🎨 Quality',
-    ultra: chrome.i18n.getMessage('tierUltra') ? `🔬 ${chrome.i18n.getMessage('tierUltra')}` : '🔬 Ultra'
-  };
-  if (gpuTierDisplay) {
-    gpuTierDisplay.textContent = tierIcons[localSettings.performanceTier];
+  // Tier selector
+  if (tierSelect) {
+    tierSelect.value = localSettings.performanceTier;
   }
 
   // Warmup batch size
@@ -624,6 +632,17 @@ const setupEventListeners = () => {
   });
 
   // --- Smart Features Listeners ---
+  if (tierSelect) {
+    tierSelect.addEventListener('change', async (e) => {
+      const tier = (e.target as HTMLSelectElement).value as PerformanceTier;
+      currentTier = tier;
+      await saveLocalSettings({ performanceTier: tier });
+      renderGeneralSettingsUI();
+      renderModesUI();
+      notifyUpdate();
+    });
+  }
+
   if (warmupBatchSizeInput) {
     warmupBatchSizeInput.addEventListener('change', async (e) => {
       const value = Math.max(1, Math.min(10, parseInt((e.target as HTMLInputElement).value, 10) || 3));
@@ -663,10 +682,10 @@ const setupEventListeners = () => {
 
         // Ask user whether to apply the recommended tier
         const tierNames: Record<PerformanceTier, string> = {
-          performance: chrome.i18n.getMessage('tierPerformance') ? `🚀 ${chrome.i18n.getMessage('tierPerformance')}` : '🚀 Fast',
-          balanced: chrome.i18n.getMessage('tierBalanced') ? `⚖️ ${chrome.i18n.getMessage('tierBalanced')}` : '⚖️ Balanced',
-          quality: chrome.i18n.getMessage('tierQuality') ? `🎨 ${chrome.i18n.getMessage('tierQuality')}` : '🎨 Quality',
-          ultra: chrome.i18n.getMessage('tierUltra') ? `🔬 ${chrome.i18n.getMessage('tierUltra')}` : '🔬 Ultra'
+          performance: `🚀 ${chrome.i18n.getMessage('tierPerformance') || 'Fast'}`,
+          balanced: `⚖️ ${chrome.i18n.getMessage('tierBalanced') || 'Balanced'}`,
+          quality: `🎨 ${chrome.i18n.getMessage('tierQuality') || 'Quality'}`,
+          ultra: `🔬 ${chrome.i18n.getMessage('tierUltra') || 'Ultra'}`
         };
         const confirmMessage = chrome.i18n.getMessage('confirmApplyTier', [tierNames[result.tier]])
           || `Test complete! Recommended tier: ${tierNames[result.tier]}\n\nApply this tier?`;
@@ -690,7 +709,7 @@ const setupEventListeners = () => {
       // Hide progress bar
       if (progressContainer) progressContainer.style.display = 'none';
       runBenchmarkBtn.disabled = false;
-      runBenchmarkBtn.textContent = chrome.i18n.getMessage('runTest') || 'Run Test';
+      runBenchmarkBtn.textContent = chrome.i18n.getMessage('startTest') || 'Start Test';
     });
   }
 

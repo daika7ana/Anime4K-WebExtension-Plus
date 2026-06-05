@@ -200,15 +200,10 @@
   "performanceSettings": {
     "message": "性能设置"
   },
-  "gpuPerformance": {
-    "message": "GPU性能"
+  "gpuPerformanceBenchmark": {
+    "message": "GPU性能基准测试"
   },
-  "runTest": {
-    "message": "运行测试"
-  },
-  "currentTier": {
-    "message": "当前档位:"
-  },
+
   "rules": {
     "message": "规则"
   },

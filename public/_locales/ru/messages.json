@@ -200,15 +200,10 @@
   "performanceSettings": {
     "message": "Настройки производительности"
   },
-  "gpuPerformance": {
-    "message": "Производительность GPU"
+  "gpuPerformanceBenchmark": {
+    "message": "Тест производительности GPU"
   },
-  "runTest": {
-    "message": "Запустить тест"
-  },
-  "currentTier": {
-    "message": "Текущий уровень:"
-  },
+
   "rules": {
     "message": "Правила"
   },

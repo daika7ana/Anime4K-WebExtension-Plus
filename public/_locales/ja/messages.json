@@ -200,15 +200,10 @@
   "performanceSettings": {
     "message": "パフォーマンス設定"
   },
-  "gpuPerformance": {
-    "message": "GPUパフォーマンス"
+  "gpuPerformanceBenchmark": {
+    "message": "GPUパフォーマンスベンチマーク"
   },
-  "runTest": {
-    "message": "テストを実行"
-  },
-  "currentTier": {
-    "message": "現在のティア："
-  },
+
   "rules": {
     "message": "ルール"
   },

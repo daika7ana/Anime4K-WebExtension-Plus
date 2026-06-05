@@ -17,6 +17,9 @@
   "performanceTierLabel": {
     "message": "Performance Tier:"
   },
+  "selectTierDesc": {
+    "message": "Manually select the performance tier. Higher tiers use larger AI models for better quality but require more GPU power."
+  },
   "enhancementModeLabel": {
     "message": "Default Enhancement Mode:"
   },
@@ -200,11 +203,8 @@
   "performanceSettings": {
     "message": "Performance Settings"
   },
-  "gpuPerformance": {
-    "message": "GPU Performance"
-  },
-  "runTest": {
-    "message": "Run Test"
+  "gpuPerformanceBenchmark": {
+    "message": "GPU Performance Benchmark"
   },
   "warmupBatchSize": {
     "message": "Warmup Batch Size"
@@ -212,9 +212,7 @@
   "warmupBatchSizeDesc": {
     "message": "Number of effects warmed up per GPU batch during initialization. Lower values keep the UI more responsive; higher values may speed up initialization."
   },
-  "currentTier": {
-    "message": "Current tier:"
-  },
+
   "rules": {
     "message": "Rules"
   },

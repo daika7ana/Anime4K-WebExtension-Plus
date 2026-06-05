@@ -135,11 +135,7 @@
           <!-- GPU 测试结果 -->
           <div class="setting-item">
             <div class="setting-label">
-              <label data-i18n="gpuPerformance">GPU Performance</label>
-              <p class="setting-description" id="gpu-info-desc">
-                <span data-i18n="currentTier">Current tier:</span>
-                <span id="gpu-tier-display"></span>
-              </p>
+              <label data-i18n="gpuPerformanceBenchmark">GPU Performance Benchmark</label>
               <!-- 测试进度条 -->
               <div id="benchmark-progress" class="benchmark-progress" style="display: none;">
                 <div class="progress-bar-container">
@@ -149,7 +145,25 @@
               </div>
             </div>
             <div class="setting-control">
-              <button id="run-benchmark-btn" class="btn btn-outline" data-i18n="runTest">Run Test</button>
+              <button id="run-benchmark-btn" class="btn btn-outline" data-i18n="startTest">Start Test</button>
+            </div>
+          </div>
+
+          <!-- 手动选择性能档位 -->
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="tier-select" data-i18n="performanceTierLabel">Performance Tier:</label>
+              <p class="setting-description" data-i18n="selectTierDesc">
+                Manually select the performance tier. Higher tiers use larger AI models for better quality but require more GPU power.
+              </p>
+            </div>
+            <div class="setting-control">
+              <select id="tier-select" class="theme-select">
+                <option value="performance" data-i18n="tierPerformance">Fast</option>
+                <option value="balanced" data-i18n="tierBalanced">Balanced</option>
+                <option value="quality" data-i18n="tierQuality">Quality</option>
+                <option value="ultra" data-i18n="tierUltra">Ultra</option>
+              </select>
             </div>
           </div>
 
