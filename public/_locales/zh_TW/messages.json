@@ -280,6 +280,9 @@
   "sharpness": {
     "message": "銳度:"
   },
+  "strength": {
+    "message": "強度:"
+  },
   "moveUp": {
     "message": "上移"
   },

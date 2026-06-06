@@ -13,7 +13,7 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     id: 'anime4k/Deblur/DoG',
     name: 'Deblur (DoG)',
     className: 'DoG',
-    // params: { strength: 4 } // Example: parameter configuration could be supported in the future
+    params: { strength: 4 },
   },
 
   // Denoise Effects

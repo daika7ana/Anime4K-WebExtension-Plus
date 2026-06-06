@@ -261,61 +261,103 @@ const renderModesUI = () => {
       effectName.textContent = effect.name;
       effectItem.appendChild(effectName);
 
-      // --- Configurable parameters (e.g. CAS sharpness) ---
-      if (effect.params && 'sharpness' in effect.params && !mode.isBuiltIn) {
-        const paramContainer = document.createElement('div');
-        paramContainer.className = 'effect-param-container';
+      // --- Configurable parameters (e.g. CAS sharpness, DoG strength) ---
+      if (effect.params && !mode.isBuiltIn) {
+        // CAS sharpness slider (0.0–1.0)
+        if ('sharpness' in effect.params) {
+          const paramContainer = document.createElement('div');
+          paramContainer.className = 'effect-param-container';
 
-        const label = document.createElement('label');
-        label.textContent = chrome.i18n.getMessage('sharpness') || 'Sharpness:';
-        label.className = 'effect-param-label';
+          const label = document.createElement('label');
+          label.textContent = chrome.i18n.getMessage('sharpness') || 'Sharpness:';
+          label.className = 'effect-param-label';
 
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = '0';
-        slider.max = '100';
-        slider.value = String(Math.round((effect.params.sharpness ?? 0.5) * 100));
-        slider.className = 'effect-param-slider';
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.min = '0';
+          slider.max = '100';
+          slider.value = String(Math.round((effect.params.sharpness ?? 0.5) * 100));
+          slider.className = 'effect-param-slider';
 
-        const valueDisplay = document.createElement('span');
-        valueDisplay.textContent = slider.value + '%';
-        valueDisplay.className = 'effect-param-value';
-
-        slider.addEventListener('input', () => {
+          const valueDisplay = document.createElement('span');
           valueDisplay.textContent = slider.value + '%';
-        });
+          valueDisplay.className = 'effect-param-value';
 
-        // Save on change (mouse release). Use a debounce so rapid changes batch.
-        let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-        slider.addEventListener('change', async () => {
-          const newValue = parseInt(slider.value) / 100;
-          const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-          if (targetMode && !targetMode.isBuiltIn) {
-            const targetEffect = targetMode.effects[index];
-            if (targetEffect && targetEffect.params) {
-              targetEffect.params.sharpness = newValue;
-              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-              notifyUpdate(mode.id);
+          slider.addEventListener('input', () => {
+            valueDisplay.textContent = slider.value + '%';
+          });
+
+          slider.addEventListener('change', async () => {
+            const newValue = parseInt(slider.value) / 100;
+            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
+            if (targetMode && !targetMode.isBuiltIn) {
+              const targetEffect = targetMode.effects[index];
+              if (targetEffect && targetEffect.params) {
+                targetEffect.params.sharpness = newValue;
+                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+                notifyUpdate(mode.id);
+              }
             }
-          }
-        });
+          });
 
-        // Prevent slider interactions from triggering drag on the parent effect item.
-        // Temporarily disable draggable while interacting with the slider.
-        slider.addEventListener('pointerdown', () => {
-          effectItem.draggable = false;
-        });
-        slider.addEventListener('pointerup', () => {
-          effectItem.draggable = !mode.isBuiltIn;
-        });
-        slider.addEventListener('pointerleave', () => {
-          effectItem.draggable = !mode.isBuiltIn;
-        });
+          // Prevent slider interactions from triggering drag on the parent effect item.
+          slider.addEventListener('pointerdown', () => { effectItem.draggable = false; });
+          slider.addEventListener('pointerup', () => { effectItem.draggable = !mode.isBuiltIn; });
+          slider.addEventListener('pointerleave', () => { effectItem.draggable = !mode.isBuiltIn; });
 
-        paramContainer.appendChild(label);
-        paramContainer.appendChild(slider);
-        paramContainer.appendChild(valueDisplay);
-        effectItem.appendChild(paramContainer);
+          paramContainer.appendChild(label);
+          paramContainer.appendChild(slider);
+          paramContainer.appendChild(valueDisplay);
+          effectItem.appendChild(paramContainer);
+        }
+
+        // DoG strength slider (1.0–10.0)
+        if ('strength' in effect.params) {
+          const paramContainer = document.createElement('div');
+          paramContainer.className = 'effect-param-container';
+
+          const label = document.createElement('label');
+          label.textContent = chrome.i18n.getMessage('strength') || 'Strength:';
+          label.className = 'effect-param-label';
+
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.min = '10';
+          slider.max = '100';
+          slider.value = String(Math.round((effect.params.strength ?? 4) * 10));
+          slider.className = 'effect-param-slider';
+
+          const valueDisplay = document.createElement('span');
+          valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
+          valueDisplay.className = 'effect-param-value';
+
+          slider.addEventListener('input', () => {
+            valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
+          });
+
+          slider.addEventListener('change', async () => {
+            const newValue = parseInt(slider.value) / 10;
+            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
+            if (targetMode && !targetMode.isBuiltIn) {
+              const targetEffect = targetMode.effects[index];
+              if (targetEffect && targetEffect.params) {
+                targetEffect.params.strength = newValue;
+                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+                notifyUpdate(mode.id);
+              }
+            }
+          });
+
+          // Prevent slider interactions from triggering drag on the parent effect item.
+          slider.addEventListener('pointerdown', () => { effectItem.draggable = false; });
+          slider.addEventListener('pointerup', () => { effectItem.draggable = !mode.isBuiltIn; });
+          slider.addEventListener('pointerleave', () => { effectItem.draggable = !mode.isBuiltIn; });
+
+          paramContainer.appendChild(label);
+          paramContainer.appendChild(slider);
+          paramContainer.appendChild(valueDisplay);
+          effectItem.appendChild(paramContainer);
+        }
       }
 
       if (!mode.isBuiltIn) {

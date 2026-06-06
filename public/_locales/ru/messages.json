@@ -275,6 +275,9 @@
   "sharpness": {
     "message": "Резкость:"
   },
+  "strength": {
+    "message": "Сила:"
+  },
   "moveUp": {
     "message": "Переместить вверх"
   },

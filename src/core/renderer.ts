@@ -390,6 +390,12 @@ export class Renderer {
             nativeDimensions: { width: curWidth, height: curHeight },
             targetDimensions: this.targetDimensions,
           });
+          // Apply effect params (e.g. DoG strength) after construction
+          if (effect.params && pipeline) {
+            for (const [key, value] of Object.entries(effect.params)) {
+              (pipeline as any).updateParam?.(key, value);
+            }
+          }
         } else {
           console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
         }
