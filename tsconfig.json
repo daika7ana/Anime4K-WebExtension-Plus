@@ -1,14 +1,24 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "node16",
+    "module": "node20",
     "moduleResolution": "node16",
     "strict": true,
+    "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["es2022", "dom"],
+    "noUncheckedSideEffectImports": false,
+    "lib": [
+      "es2022",
+      "dom"
+    ],
+    "types": ["chrome"]
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,100 +1,92 @@
-const path = require('path');
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const ExtensionManifestPlugin = require('webpack-extension-manifest-plugin');
-const WebExtensionPlugin = require('webpack-target-webextension');
-const TerserPlugin = require('terser-webpack-plugin');
+const path = require("path");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const ExtensionManifestPlugin = require("webpack-extension-manifest-plugin");
+const WebExtensionPlugin = require("webpack-target-webextension");
+const TerserPlugin = require("terser-webpack-plugin");
 
 module.exports = (env, argv) => {
-  const isDevelopment = argv.mode === 'development';
-  const targetBrowser = process.env.TARGET_BROWSER || 'chrome';
+  const isDevelopment = argv.mode === "development";
+  const targetBrowser = process.env.TARGET_BROWSER || "chrome";
 
-  const manifest = require('./manifest.json');
+  const manifest = require("./manifest.json");
 
   // Modify manifest based on target browser
-  if (targetBrowser === 'firefox') {
+  if (targetBrowser === "firefox") {
     // Firefox-specific transformations
     delete manifest.background.service_worker;
-    manifest.background.scripts = ['background.js'];
+    manifest.background.scripts = ["background.js"];
     manifest.browser_specific_settings = {
       gecko: {
-        id: 'anime4k-webextension-plus@daika7ana',
+        id: "anime4k-webextension-plus@daika7ana",
         data_collection_permissions: {
-          required: ['none']
-        }
+          required: ["none"],
+        },
       },
     };
   }
 
-
   return {
     entry: {
-      popup: './src/ui/popup/popup.ts',
-      options: './src/ui/options/options.ts',
-      onboarding: './src/ui/onboarding/onboarding.ts',
-      content: './src/content.ts',
-      background: './src/background.ts'
+      popup: "./src/ui/popup/popup.ts",
+      options: "./src/ui/options/options.ts",
+      onboarding: "./src/ui/onboarding/onboarding.ts",
+      content: "./src/content.ts",
+      background: "./src/background.ts",
     },
     output: {
-      filename: '[name].js',
-      path: path.resolve(__dirname, 'dist-' + targetBrowser),
+      filename: "[name].js",
+      path: path.resolve(__dirname, "dist-" + targetBrowser),
       clean: true, // Clean output directory
     },
     module: {
       rules: [
         {
           test: /\.ts$/,
-          use: 'ts-loader',
+          use: "ts-loader",
           exclude: /node_modules/,
         },
         {
           test: /\.css$/,
-          use: [
-            MiniCssExtractPlugin.loader,
-            'css-loader'
-          ],
+          use: [MiniCssExtractPlugin.loader, "css-loader"],
         },
       ],
     },
     resolve: {
-      extensions: ['.ts', '.js'],
+      extensions: [".ts", ".js"],
     },
     plugins: [
-      new CleanWebpackPlugin(),
       new CopyWebpackPlugin({
         patterns: [
-          { from: '*.{png,svg}', context: 'public/icons', to: 'icons' },
-          { from: 'public/_locales', to: '_locales' },
-          { from: 'rules.json' },
+          { from: "*.{png,svg}", context: "public/icons", to: "icons" },
+          { from: "public/_locales", to: "_locales" },
+          { from: "rules.json" },
         ],
       }),
       new HtmlWebpackPlugin({
-        filename: 'popup.html',
-        template: './src/ui/popup/popup.html',
-        chunks: ['popup'],
+        filename: "popup.html",
+        template: "./src/ui/popup/popup.html",
+        chunks: ["popup"],
       }),
       new HtmlWebpackPlugin({
-        filename: 'options.html',
-        template: './src/ui/options/options.html',
-        chunks: ['options'],
+        filename: "options.html",
+        template: "./src/ui/options/options.html",
+        chunks: ["options"],
       }),
       new HtmlWebpackPlugin({
-        filename: 'onboarding.html',
-        template: './src/ui/onboarding/onboarding.html',
-        chunks: ['onboarding'],
+        filename: "onboarding.html",
+        template: "./src/ui/onboarding/onboarding.html",
+        chunks: ["onboarding"],
       }),
       new MiniCssExtractPlugin({
-        filename: '[name].css',
+        filename: "[name].css",
       }),
       new ExtensionManifestPlugin({
         config: {
           base: manifest,
         },
-        pkgJsonProps: [
-          'version'
-        ]
+        pkgJsonProps: ["version"],
       }),
       new WebExtensionPlugin({
         background: {
@@ -103,8 +95,12 @@ module.exports = (env, argv) => {
         weakRuntimeCheck: true,
       }),
     ].filter(Boolean),
-    devtool: isDevelopment ? 'inline-source-map' : false,
+    devtool: isDevelopment ? "inline-source-map" : false,
     watch: isDevelopment,
+    performance: {
+      maxAssetSize: 4 * 1024 * 1024, // 4 MiB
+      hints: "warning",
+    },
     optimization: {
       minimize: !isDevelopment,
       minimizer: [
@@ -112,13 +108,13 @@ module.exports = (env, argv) => {
           terserOptions: {
             compress: {
               // Remove console.log and console.warn in production (keep console.error)
-              pure_funcs: ['console.log', 'console.warn'],
+              pure_funcs: ["console.log", "console.warn"],
             },
           },
         }),
       ],
       splitChunks: {
-        chunks: 'async',
+        chunks: "async",
         minSize: 20000,
       },
     },

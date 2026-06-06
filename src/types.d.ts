@@ -1,3 +1,6 @@
+// ===== CSS Module Declarations =====
+declare module "*.css";
+
 // ===== Performance Tier Type =====
 type PerformanceTier = 'performance' | 'balanced' | 'quality' | 'ultra';
 
