@@ -283,6 +283,12 @@
   "strength": {
     "message": "強度:"
   },
+  "intensitySigma": {
+    "message": "強度 σ:"
+  },
+  "spatialSigma": {
+    "message": "空間 σ:"
+  },
   "moveUp": {
     "message": "上移"
   },

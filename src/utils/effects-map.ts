@@ -8,6 +8,22 @@ import { EnhancementEffect } from '../types';
  * className: Corresponds to the class exported by the `anime4k-webgpu` library, used for dynamic instantiation.
  */
 export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
+  // Sharpen Effects
+  {
+    id: 'anime4k/Sharpen/CAS',
+    name: 'Contrast Adaptive Sharpening (CAS)',
+    className: 'CAS',
+    params: { sharpness: 0.5 },
+  },
+
+  // Helper Effect
+  // Note: `Downscale` is handled automatically by the extension based on resolution, not available as a user-selectable effect.
+  {
+    id: 'anime4k/Helper/ClampHighlights',
+    name: 'Clamp Highlights',
+    className: 'ClampHighlights',
+  },
+
   // Deblur Effects
   {
     id: 'anime4k/Deblur/DoG',
@@ -21,6 +37,7 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     id: 'anime4k/Denoise/BilateralMean',
     name: 'Denoise (Bilateral Mean)',
     className: 'BilateralMean',
+    params: { strength: 0.2, strength2: 2 },
   },
 
   // Restore Effects
@@ -91,22 +108,5 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     name: 'Upscale GAN x4 (UUL)',
     className: 'GANx4UUL',
     upscaleFactor: 4,
-  },
-
-  // Helper Effects
-  // Note: `Downscale` is handled automatically by the extension based on resolution, not available as a user-selectable effect.
-  // `ClampHighlights` can be selected by the user.
-  {
-    id: 'anime4k/Helper/ClampHighlights',
-    name: 'Clamp Highlights',
-    className: 'ClampHighlights',
-  },
-
-  // Sharpen Effects
-  {
-    id: 'anime4k/Sharpen/CAS',
-    name: 'Contrast Adaptive Sharpening (CAS)',
-    className: 'CAS',
-    params: { sharpness: 0.5 },
   },
 ];

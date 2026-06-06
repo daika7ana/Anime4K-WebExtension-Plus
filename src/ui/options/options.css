@@ -393,8 +393,17 @@ h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   border: 1px solid var(--outline-variant);
   transition: all 0.2s cubic-bezier(0.2, 0.0, 0, 1.0);
+}
+
+.effect-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .effect-item:hover {
@@ -402,9 +411,7 @@ h1 {
   background-color: var(--surface-container);
 }
 
-.effect-item span {
-  flex-grow: 1;
-  word-break: break-all;
+.effect-content span {
   font-size: 0.9375rem;
   font-weight: 500;
 }
@@ -438,22 +445,39 @@ h1 {
 }
 
 /* Effect parameter controls (e.g. CAS sharpness slider) */
+.effect-params-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .effect-param-container {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
+  gap: 10px;
   flex-shrink: 0;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  padding: 4px 6px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.effect-param-container:hover {
+  background: var(--surface-container-high);
+  border-color: var(--outline);
 }
 
 .effect-param-label {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--on-surface-variant);
   white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.025em;
 }
 
 .effect-param-slider {
-  width: 100px;
+  width: 140px;
   height: 4px;
   appearance: none;
   background: var(--outline-variant);
@@ -464,21 +488,32 @@ h1 {
 
 .effect-param-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--primary);
   cursor: pointer;
   border: 2px solid var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.effect-param-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .effect-param-value {
   font-size: 0.8125rem;
   color: var(--on-surface);
-  min-width: 32px;
+  min-width: 40px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: var(--surface-container-lowest);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
 }
 
 .btn-remove-effect {

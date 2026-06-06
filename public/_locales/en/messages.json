@@ -278,6 +278,12 @@
   "strength": {
     "message": "Strength:"
   },
+  "intensitySigma": {
+    "message": "Intensity σ:"
+  },
+  "spatialSigma": {
+    "message": "Spatial σ:"
+  },
   "moveUp": {
     "message": "Move Up"
   },
