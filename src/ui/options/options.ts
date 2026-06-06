@@ -30,7 +30,6 @@ const versionNumberSpan = document.getElementById('version-number') as HTMLSpanE
 
 // --- Smart Features UI Elements ---
 const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButtonElement;
-const warmupBatchSizeInput = document.getElementById('warmup-batch-size') as HTMLInputElement;
 const tierSelect = document.getElementById('tier-select') as HTMLSelectElement;
 
 // --- Drag and Drop State ---
@@ -602,11 +601,6 @@ const renderGeneralSettingsUI = async () => {
   if (tierSelect) {
     tierSelect.value = localSettings.performanceTier;
   }
-
-  // Warmup batch size
-  if (warmupBatchSizeInput) {
-    warmupBatchSizeInput.value = String(settingsState.warmupBatchSize ?? 3);
-  }
 };
 
 const renderAboutSectionUI = () => {
@@ -639,16 +633,6 @@ const setupEventListeners = () => {
       await saveLocalSettings({ performanceTier: tier });
       renderGeneralSettingsUI();
       renderModesUI();
-      notifyUpdate();
-    });
-  }
-
-  if (warmupBatchSizeInput) {
-    warmupBatchSizeInput.addEventListener('change', async (e) => {
-      const value = Math.max(1, Math.min(10, parseInt((e.target as HTMLInputElement).value, 10) || 3));
-      (e.target as HTMLInputElement).value = String(value);
-      settingsState.warmupBatchSize = value;
-      await saveSettings({ warmupBatchSize: value });
       notifyUpdate();
     });
   }

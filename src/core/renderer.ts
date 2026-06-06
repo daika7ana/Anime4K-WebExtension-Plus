@@ -2,6 +2,8 @@ import type { Anime4KPipeline } from 'anime4k-webgpu';
 import type { Dimensions, EnhancementEffect } from '../types';
 import { RendererInitializationError, RendererRuntimeError } from './errors';
 import { CAS } from './cas';
+import { yieldToMain, yieldToAnimationFrame } from './yield-utils';
+import { PipelinePreWarmer } from './pipeline-prewarmer';
 
 /**
  * Full-screen textured quad vertex shader
@@ -72,9 +74,7 @@ export interface RendererOptions {
   /** Callback function invoked when the first frame is successfully rendered */
   onFirstFrameRendered?: () => void;
   /** Initialization progress callback function */
-  onProgress?: (stage: string, current?: number, total?: number) => void;
-  /** Warmup batch size: number of pipelines submitted to the GPU at a time */
-  warmupBatchSize?: number;
+  onProgress?: (stage: string | null, current?: number, total?: number) => void;
 }
 
 /**
@@ -89,7 +89,7 @@ export class Renderer {
   private targetDimensions: Dimensions;
   private onError?: (error: Error) => void;
   private onFirstFrameRendered?: () => void;
-  private onProgress?: (stage: string, current?: number, total?: number) => void;
+  private onProgress?: (stage: string | null, current?: number, total?: number) => void;
 
   // --- State flags ---
   private destroyed = false;
@@ -114,6 +114,8 @@ export class Renderer {
   private videoFrameTexture!: GPUTexture;
   /** Effect processing pipeline chain */
   private pipelines: Anime4KPipeline[] = [];
+  /** Generation counter to prevent concurrent buildPipelines() calls from clobbering each other */
+  private buildGeneration = 0;
 
   // --- Objects for the final rendering stage ---
   private renderBindGroupLayout!: GPUBindGroupLayout;
@@ -125,13 +127,11 @@ export class Renderer {
   /** Cached anime4k-webgpu module (avoids repeated dynamic imports) */
   private static cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
 
-  /** Warmup batch size */
-  private warmupBatchSize: number;
-
   // --- Static GPU pre-warm state ---
   private static prewarmedAdapter: GPUAdapter | null = null;
   private static prewarmedDevice: GPUDevice | null = null;
   private static prewarmPromise: Promise<void> | null = null;
+  private static preWarmer = new PipelinePreWarmer();
 
   /**
    * Pre-request GPU adapter and device so they're ready when the user clicks Enhance.
@@ -162,6 +162,7 @@ export class Renderer {
       }
     })();
   }
+
   private constructor(options: RendererOptions) {
     this.video = options.video;
     this.canvas = options.canvas;
@@ -170,7 +171,6 @@ export class Renderer {
     this.onError = options.onError;
     this.onFirstFrameRendered = options.onFirstFrameRendered;
     this.onProgress = options.onProgress;
-    this.warmupBatchSize = options.warmupBatchSize ?? 3;
   }
 
   /**
@@ -203,7 +203,9 @@ export class Renderer {
 
       if (Renderer.prewarmedDevice) {
         this.device = Renderer.prewarmedDevice;
-        // Clear the cached device so each renderer gets its own
+        // Clear the cached device so each renderer gets its own.
+        // Sharing a single device across renderers would cause use-after-destroy
+        // when one renderer's destroy() kills the shared device.
         Renderer.prewarmedDevice = null;
         Renderer.prewarmedAdapter = null;
       } else {
@@ -296,12 +298,15 @@ export class Renderer {
    * This method destroys old pipelines and creates new ones.
    */
   private async buildPipelines(): Promise<void> {
+    const generation = ++this.buildGeneration;
+
     // Wait for the GPU queue to finish before destroying old pipelines to avoid resource contention
     try {
       await this.device.queue.onSubmittedWorkDone();
     } catch {
       // Ignore error; the device may have been lost
     }
+    if (this.buildGeneration !== generation) return; // Superseded
 
     // Safely destroy old pipelines
     for (const p of this.pipelines) {
@@ -322,6 +327,27 @@ export class Renderer {
       Renderer.cachedAnime4KModule = await import('anime4k-webgpu');
     }
     const anime4kModule = Renderer.cachedAnime4KModule;
+
+    // --- Phase 0: Speculative shader pre-warming ---
+    // Construct dummy 1×1 pipelines to trigger driver-level shader compilation and caching.
+    // The real pipeline construction in Phase 1 will then hit the cache (~1-3ms instead of ~25ms).
+    // On subsequent calls (same effect chain), the pre-warmer skips via in-memory deduplication,
+    // and the driver cache makes Phase 1 fast regardless.
+    this.onProgress?.(chrome.i18n.getMessage('warmupShadersProgress') || '⏳ Compiling shaders...');
+    try {
+      await Renderer.preWarmer.warm(this.device, this.effects, (className, dev, tex) => {
+        if (className === 'CAS') {
+          return {
+            EffectClass: CAS,
+            descriptor: { device: dev, inputTexture: tex, sharpness: 0.5 },
+          };
+        }
+        return null;
+      });
+    } catch (e) {
+      console.warn('[Anime4KWebExt] Phase 0 pre-warm failed (non-fatal):', e);
+    }
+    if (this.buildGeneration !== generation) return; // Superseded
 
     // If needed, get the Downscale class
     const needsDownscaling = this.effects.some((effect, i) => {
@@ -401,29 +427,31 @@ export class Renderer {
         }
       }
 
-      // Yield via rAF to let the browser repaint between synchronous GPU operations.
-      // rAF fires aligned with the frame cycle, giving the browser a chance to process
-      // paint and input events between blocking constructor calls.
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      // Yield to let the browser process input events between synchronous GPU operations.
+      // Uses scheduler.yield() (Chrome 115+) or MessageChannel fallback for faster
+      // yielding than requestAnimationFrame, which waits for the next frame boundary.
+      await yieldToMain();
     }
+    if (this.buildGeneration !== generation) return; // Superseded
 
-    // --- Phase 2: Batch warmup — submit shader compilations in small batches, yielding between batches ---
-    // First-run shader compilation can take several seconds; batching keeps the UI responsive between batches.
-    for (let i = 0; i < pipelines.length; i += this.warmupBatchSize) {
+    // --- Phase 2: Fire-and-forget warmup ---
+    // Submit all shader compilations as a single batch without waiting for GPU completion.
+    // Shader compilation happens at createComputePipeline() time (Phase 1), not at execution
+    // time. The warmup pass validates the pipeline can execute and triggers minor GPU-side
+    // optimizations. By NOT waiting for onSubmittedWorkDone(), we eliminate 400-800ms of
+    // UI freeze. The first real render frame will naturally wait for this to complete
+    // because GPUQueue.submit() maintains ordering.
+    if (pipelines.length > 1) { // Skip dummy pipeline case
       try {
         const warmupEncoder = this.device.createCommandEncoder();
-        const batchEnd = Math.min(i + this.warmupBatchSize, pipelines.length);
-        for (let j = i; j < batchEnd; j++) {
-          pipelines[j].pass(warmupEncoder);
+        for (const pipeline of pipelines) {
+          pipeline.pass(warmupEncoder);
         }
         this.device.queue.submit([warmupEncoder.finish()]);
-        await this.device.queue.onSubmittedWorkDone();
+        // NO onSubmittedWorkDone() — let the GPU process this asynchronously.
+        // The first real render frame will naturally wait for this to complete.
       } catch (e) {
-        console.warn('[Anime4KWebExt] Warmup batch failed, shaders will compile on first frame:', e);
-      }
-      // Yield via rAF so the UI can process input events and update progress
-      if (i + this.warmupBatchSize < pipelines.length) {
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        console.warn('[Anime4KWebExt] Warmup submission failed, shaders will compile on first frame:', e);
       }
     }
 
@@ -438,7 +466,7 @@ export class Renderer {
     this.pipelines = pipelines;
 
     // Notify that warmup is complete
-    this.onProgress?.(null as unknown as string);
+    this.onProgress?.(null);
 
     console.log(`[Anime4KWebExt] Built ${pipelines.length} pipelines with warmup complete.`);
   }
@@ -793,6 +821,10 @@ export class Renderer {
         alphaMode: 'premultiplied',
       });
 
+      // Invalidate shader pre-warm cache — the new device has a separate shader cache
+      Renderer.preWarmer.invalidate();
+      Renderer.prewarmPromise = null;
+
       // Rebuild resources and pipelines
       this.createResources();
       await this.buildPipelines();
@@ -840,6 +872,9 @@ export class Renderer {
       this.videoFrameTexture?.destroy();
       // Disassociate the canvas from the GPU device — critical for subsequent reinitialization
       this.context?.unconfigure();
+      // Invalidate shader pre-warm cache since the device is being destroyed
+      Renderer.preWarmer.invalidate();
+      Renderer.prewarmPromise = null;
       // Proactively destroy the device, which will trigger the device.lost Promise
       this.device?.destroy();
       console.log('[Anime4KWebExt] Renderer destroyed.');

@@ -8,9 +8,6 @@
   "cancelEnhance": {
     "message": "❌ Cancel"
   },
-  "retryEnhance": {
-    "message": "🔄 Retry Enhancement"
-  },
   "extensionName": {
     "message": "Anime4K Enhancement Plus"
   },
@@ -35,10 +32,6 @@
   "enhanceError": {
     "message": "Enhancement failed, please try again",
     "description": "Error message for enhancement failure"
-  },
-  "closeButton": {
-    "message": "Close",
-    "description": "Close button text"
   },
   "renderError": {
     "message": "Video rendering failed, please try again",
@@ -88,15 +81,6 @@
   },
   "export": {
     "message": "Export"
-  },
-  "importExport": {
-    "message": "Import/Export"
-  },
-  "doImport": {
-    "message": "Import Data"
-  },
-  "doExport": {
-    "message": "Export Data"
   },
   "invalidPattern": {
     "message": "Invalid pattern format"
@@ -206,11 +190,8 @@
   "gpuPerformanceBenchmark": {
     "message": "GPU Performance Benchmark"
   },
-  "warmupBatchSize": {
-    "message": "Warmup Batch Size"
-  },
-  "warmupBatchSizeDesc": {
-    "message": "Number of effects warmed up per GPU batch during initialization. Lower values keep the UI more responsive; higher values may speed up initialization."
+  "warmupShadersProgress": {
+    "message": "⏳ Compiling shaders..."
   },
 
   "rules": {
@@ -350,6 +331,9 @@
   },
   "continue": {
     "message": "Continue"
+  },
+  "getStarted": {
+    "message": "Get Started"
   },
   "setupComplete": {
     "message": "Setup Complete!"

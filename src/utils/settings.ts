@@ -45,7 +45,6 @@ const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
   whitelist: [],
   customModes: [],
   enableCrossOriginFix: false,
-  warmupBatchSize: 3,
 };
 
 const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
@@ -91,7 +90,6 @@ export async function getSyncedSettings(): Promise<SyncedSettings> {
       'whitelist',
       'customModes',
       'enableCrossOriginFix',
-      'warmupBatchSize',
     ], (data) => {
       resolve({
         selectedModeId: data.selectedModeId ?? DEFAULT_SYNCED_SETTINGS.selectedModeId,
@@ -100,7 +98,6 @@ export async function getSyncedSettings(): Promise<SyncedSettings> {
         whitelist: data.whitelist ?? DEFAULT_SYNCED_SETTINGS.whitelist,
         customModes: data.customModes ?? DEFAULT_SYNCED_SETTINGS.customModes,
         enableCrossOriginFix: data.enableCrossOriginFix ?? DEFAULT_SYNCED_SETTINGS.enableCrossOriginFix,
-        warmupBatchSize: data.warmupBatchSize ?? DEFAULT_SYNCED_SETTINGS.warmupBatchSize,
       });
     });
   });
@@ -203,7 +200,6 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
     'whitelist',
     'customModes',
     'enableCrossOriginFix',
-    'warmupBatchSize',
   ];
 
   const localKeys: (keyof LocalSettings)[] = [

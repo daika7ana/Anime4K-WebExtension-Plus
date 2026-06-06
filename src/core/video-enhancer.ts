@@ -3,6 +3,7 @@ import { Renderer } from './renderer';
 import { ANIME4K_APPLIED_ATTR } from '../constants';
 import { Dimensions, Anime4KWebExtSettings, EnhancementMode } from '../types';
 import { OverlayManager } from './overlay-manager';
+import { yieldToAnimationFrame } from './yield-utils';
 
 /**
  * Video enhancer class that encapsulates Anime4K processing logic.
@@ -98,7 +99,7 @@ export class VideoEnhancer {
 
     // Defer heavy initialization to the next animation frame so the browser can
     // repaint the "Enhancing..." button text before any blocking GPU work begins.
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    await yieldToAnimationFrame();
 
     const settings = await getSettings();
 
@@ -221,7 +222,6 @@ export class VideoEnhancer {
           this.button.innerText = stage;
         }
       },
-      warmupBatchSize: settings.warmupBatchSize,
     });
 
     console.log(`[Anime4KWebExt] Renderer initialized with mode: ${selectedMode.name}`);

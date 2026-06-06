@@ -8,14 +8,14 @@
   "cancelEnhance": {
     "message": "❌ Остановить"
   },
-  "retryEnhance": {
-    "message": "🔄 Попробовать ещё раз"
-  },
   "extensionName": {
     "message": "Улучшение Anime4K Plus"
   },
   "performanceTierLabel": {
     "message": "Уровень производительности:"
+  },
+  "selectTierDesc": {
+    "message": "Вручную выберите уровень производительности. Более высокие уровни используют более крупные модели ИИ для лучшего качества, но требуют больше мощности GPU."
   },
   "enhancementModeLabel": {
     "message": "Режим улучшения по умолчанию:"
@@ -32,10 +32,6 @@
   "enhanceError": {
     "message": "Не удалось улучшить видео, попробуйте еще раз",
     "description": "Текст ошибки для неудавшегося улучшения"
-  },
-  "closeButton": {
-    "message": "Закрыть",
-    "description": "Текст кнопки закрытия"
   },
   "renderError": {
     "message": "Не удалось отрендерить видео, попробуйте еще раз",
@@ -85,15 +81,6 @@
   },
   "export": {
     "message": "Экспорт"
-  },
-  "importExport": {
-    "message": "Импорт/Экспорт"
-  },
-  "doImport": {
-    "message": "Импортировать данные"
-  },
-  "doExport": {
-    "message": "Экспортировать данные"
   },
   "invalidPattern": {
     "message": "Неверный формат паттерна"
@@ -202,6 +189,9 @@
   },
   "gpuPerformanceBenchmark": {
     "message": "Тест производительности GPU"
+  },
+  "warmupShadersProgress": {
+    "message": "⏳ Компиляция шейдеров..."
   },
 
   "rules": {
@@ -341,6 +331,9 @@
   },
   "continue": {
     "message": "Продолжить"
+  },
+  "getStarted": {
+    "message": "Начать"
   },
   "setupComplete": {
     "message": "Настройка завершена!"

@@ -8,14 +8,15 @@
   "cancelEnhance": {
     "message": "❌ 取消"
   },
-  "retryEnhance": {
-    "message": "🔄 重試超解析"
-  },
+
   "extensionName": {
     "message": "Anime4K超解析 Plus"
   },
   "performanceTierLabel": {
     "message": "效能檔位："
+  },
+  "selectTierDesc": {
+    "message": "手動選擇效能檔位。更高的檔位使用更大的AI模型，提供更好的品質，但需要更多的GPU效能。"
   },
   "enhancementModeLabel": {
     "message": "預設增強模式："
@@ -33,10 +34,7 @@
     "message": "超解析失敗，請重試",
     "description": "超解析失敗錯誤訊息"
   },
-  "closeButton": {
-    "message": "關閉",
-    "description": "關閉按鈕文字"
-  },
+
   "renderError": {
     "message": "影片渲染失敗，請重試",
     "description": "渲染失敗錯誤訊息"
@@ -86,15 +84,9 @@
   "export": {
     "message": "匯出"
   },
-  "importExport": {
-    "message": "匯入/匯出"
-  },
-  "doImport": {
-    "message": "匯入資料"
-  },
-  "doExport": {
-    "message": "匯出資料"
-  },
+
+
+
   "invalidPattern": {
     "message": "無效的模式格式"
   },
@@ -202,6 +194,9 @@
   },
   "gpuPerformanceBenchmark": {
     "message": "GPU效能基準測試"
+  },
+  "warmupShadersProgress": {
+    "message": "⏳ 編譯著色器..."
   },
 
   "rules": {
@@ -341,6 +336,9 @@
   },
   "continue": {
     "message": "繼續"
+  },
+  "getStarted": {
+    "message": "開始使用"
   },
   "setupComplete": {
     "message": "設定完成！"

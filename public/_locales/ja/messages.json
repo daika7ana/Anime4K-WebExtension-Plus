@@ -8,14 +8,14 @@
   "cancelEnhance": {
     "message": "❌ キャンセル"
   },
-  "retryEnhance": {
-    "message": "🔄 超解像を再試行"
-  },
   "extensionName": {
     "message": "Anime4K超解像 Plus"
   },
   "performanceTierLabel": {
     "message": "パフォーマンス段階："
+  },
+  "selectTierDesc": {
+    "message": "パフォーマンス段階を手動で選択します。高い段階はより大きなAIモデルを使用し、より良い品質を提供しますが、より多くのGPUパワーが必要です。"
   },
   "enhancementModeLabel": {
     "message": "デフォルト拡張モード："
@@ -32,10 +32,6 @@
   "enhanceError": {
     "message": "超解像に失敗しました、再試行してください",
     "description": "超解像失敗エラーメッセージ"
-  },
-  "closeButton": {
-    "message": "閉じる",
-    "description": "閉じるボタンテキスト"
   },
   "renderError": {
     "message": "動画レンダリングに失敗しました、再試行してください",
@@ -86,15 +82,7 @@
   "export": {
     "message": "エクスポート"
   },
-  "importExport": {
-    "message": "インポート/エクスポート"
-  },
-  "doImport": {
-    "message": "データをインポート"
-  },
-  "doExport": {
-    "message": "データをエクスポート"
-  },
+
   "invalidPattern": {
     "message": "無効なパターン形式"
   },
@@ -202,6 +190,9 @@
   },
   "gpuPerformanceBenchmark": {
     "message": "GPUパフォーマンスベンチマーク"
+  },
+  "warmupShadersProgress": {
+    "message": "⏳ シェーダーをコンパイル中..."
   },
 
   "rules": {
@@ -341,6 +332,9 @@
   },
   "continue": {
     "message": "続ける"
+  },
+  "getStarted": {
+    "message": "はじめる"
   },
   "setupComplete": {
     "message": "セットアップ完了！"

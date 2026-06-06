@@ -66,7 +66,6 @@ interface SyncedSettings {
   whitelist: WhitelistRule[];
   customModes: CustomMode[];
   enableCrossOriginFix: boolean;
-  warmupBatchSize: number;
 }
 
 // ===== Local-only Settings (storage.local) =====
