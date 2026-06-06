@@ -20,7 +20,7 @@ const CURRENT_CONFIG_VERSION = 2;
 /**
  * Check if migration is needed
  */
-export async function needsMigration(): Promise<boolean> {
+async function needsMigration(): Promise<boolean> {
     const data = await chrome.storage.sync.get(['_configVersion', 'enhancementModes']);
 
     // If already on the new version, no migration needed
@@ -39,7 +39,7 @@ export async function needsMigration(): Promise<boolean> {
 /**
  * Execute migration from v1 to v2
  */
-export async function migrateV1ToV2(): Promise<void> {
+async function migrateV1ToV2(): Promise<void> {
     console.log('[Migration] Starting v1 to v2 migration...');
 
     const syncData = await chrome.storage.sync.get([

@@ -3,7 +3,7 @@ import '../common-vars.css';
 import { getSettings, saveSettings, synchronizeEffectsForCustomModes, getEffectsForMode, getLocalSettings, saveLocalSettings } from '../../utils/settings';
 import { WhitelistRule, validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '../../utils/whitelist';
 import { AVAILABLE_EFFECTS } from '../../utils/effects-map';
-import type { EnhancementMode, EnhancementEffect, CustomMode, BuiltInMode, PerformanceTier } from '../../types';
+import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '../../types';
 import { themeManager } from '../theme-manager';
 import { Sidebar } from './Sidebar';
 import { runGPUBenchmark } from '../../core/gpu-benchmark';

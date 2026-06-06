@@ -3,9 +3,9 @@
  * Handles theme switching and persistence
  */
 
-export type ThemeMode = 'light' | 'dark' | 'auto';
+type ThemeMode = 'light' | 'dark' | 'auto';
 
-export class ThemeManager {
+class ThemeManager {
   private static instance: ThemeManager;
   private currentTheme: ThemeMode = 'auto';
 

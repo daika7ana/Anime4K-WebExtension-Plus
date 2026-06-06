@@ -2,7 +2,7 @@ import type { Anime4KPipeline } from 'anime4k-webgpu';
 import type { Dimensions, EnhancementEffect } from '../types';
 import { RendererInitializationError, RendererRuntimeError } from './errors';
 import { CAS } from './cas';
-import { yieldToMain, yieldToAnimationFrame } from './yield-utils';
+import { yieldToMain } from './yield-utils';
 import { PipelinePreWarmer } from './pipeline-prewarmer';
 
 /**

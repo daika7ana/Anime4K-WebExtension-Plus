@@ -68,9 +68,4 @@ export function resolveEffectChain(
         .filter((e): e is EnhancementEffect => !!e);
 }
 
-/**
- * Get a short description of the effect chain
- */
-export function getEffectChainSummary(effects: EnhancementEffect[]): string {
-    return effects.map(e => e.name.split('(')[0].trim()).join(' → ') || 'No effects';
-}
+

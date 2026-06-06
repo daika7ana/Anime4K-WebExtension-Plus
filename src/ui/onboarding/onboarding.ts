@@ -1,6 +1,6 @@
 import './onboarding.css';
 import '../common-vars.css';
-import { saveLocalSettings, getLocalSettings } from '../../utils/settings';
+import { saveLocalSettings } from '../../utils/settings';
 import { runGPUBenchmark, BenchmarkProgress } from '../../core/gpu-benchmark';
 import { themeManager } from '../theme-manager';
 import type { PerformanceTier, GPUBenchmarkResult } from '../../types';

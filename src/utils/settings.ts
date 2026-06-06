@@ -81,7 +81,7 @@ export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMod
 /**
  * Get synced settings (storage.sync)
  */
-export async function getSyncedSettings(): Promise<SyncedSettings> {
+async function getSyncedSettings(): Promise<SyncedSettings> {
   return new Promise(resolve => {
     chrome.storage.sync.get([
       'selectedModeId',
@@ -162,7 +162,7 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
 /**
  * Save synced settings
  */
-export async function saveSyncedSettings(settings: Partial<SyncedSettings>): Promise<void> {
+async function saveSyncedSettings(settings: Partial<SyncedSettings>): Promise<void> {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.set(settings, () => {
       if (chrome.runtime.lastError) {
@@ -250,12 +250,3 @@ export function getEffectsForMode(
   }
 }
 
-/**
- * Find a mode by its ID
- */
-export function findModeById(
-  modes: EnhancementMode[],
-  modeId: string
-): EnhancementMode | undefined {
-  return modes.find(m => m.id === modeId);
-}

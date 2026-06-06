@@ -1,7 +1,6 @@
 import { VideoEnhancer } from './video-enhancer';
 import { ANIME4K_APPLIED_ATTR } from '../constants';
 import { getSettings } from '../utils/settings';
-import { Anime4KWebExtSettings } from '../types';
 import { stashEnhancer, findAndunstashEnhancer } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
 import { Renderer } from './renderer';

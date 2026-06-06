@@ -7,17 +7,6 @@ type PerformanceTier = 'performance' | 'balanced' | 'quality' | 'ultra';
 // ===== Base Mode Type =====
 type BaseMode = 'A' | 'B' | 'C' | 'A+A' | 'B+B' | 'C+A';
 
-// Video enhancer interface
-interface VideoEnhancer {
-  destroy: () => void;
-  toggleEnhancement: () => Promise<void>;
-  getCurrentModeId: () => string | null;
-  updateSettings: (settings: Anime4KWebExtSettings) => Promise<void>;
-  getVideoElement: () => HTMLVideoElement;
-  detach: () => void;
-  reattach: (newVideo: HTMLVideoElement) => Promise<void>;
-}
-
 // Whitelist rule interface
 interface WhitelistRule {
   pattern: string;
@@ -96,7 +85,6 @@ interface Dimensions {
 export {
   PerformanceTier,
   BaseMode,
-  VideoEnhancer,
   Anime4KWebExtSettings,
   SyncedSettings,
   LocalSettings,
