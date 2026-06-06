@@ -1,9 +1,39 @@
 import type { Anime4KPipeline } from 'anime4k-webgpu';
-import type { Dimensions, EnhancementEffect } from '../types';
+import type { Dimensions, EnhancementEffect, CustomEffectDescriptor } from '../types';
 import { RendererInitializationError, RendererRuntimeError } from './errors';
 import { CAS } from './cas';
+import { Debanding } from './debanding';
 import { yieldToMain } from './yield-utils';
 import { PipelinePreWarmer } from './pipeline-prewarmer';
+
+/**
+ * Registry of custom (non-anime4k-webgpu) effects.
+ *
+ * Maps an effect's `className` to its constructor and a descriptor builder. Adding a
+ * new custom effect is a one-entry change here — no edits to the pipeline build loop
+ * or prewarmer. The descriptor builder receives the live effect params so per-effect
+ * values (e.g. strength, threshold) flow through uniformly.
+ */
+
+const CUSTOM_EFFECTS: Record<string, CustomEffectDescriptor> = {
+  CAS: {
+    EffectClass: CAS,
+    getDescriptor: (device, inputTexture, params) => ({
+      device,
+      inputTexture,
+      sharpness: params?.sharpness ?? 0.5,
+    }),
+  },
+  Debanding: {
+    EffectClass: Debanding,
+    getDescriptor: (device, inputTexture, params) => ({
+      device,
+      inputTexture,
+      strength: params?.strength ?? 0.5,
+      bandThreshold: params?.bandThreshold ?? 0.08,
+    }),
+  },
+};
 
 /**
  * Full-screen textured quad vertex shader
@@ -336,13 +366,13 @@ export class Renderer {
     this.onProgress?.(chrome.i18n.getMessage('warmupShadersProgress') || '⏳ Compiling shaders...');
     try {
       await Renderer.preWarmer.warm(this.device, this.effects, (className, dev, tex) => {
-        if (className === 'CAS') {
-          return {
-            EffectClass: CAS,
-            descriptor: { device: dev, inputTexture: tex, sharpness: 0.5 },
-          };
-        }
-        return null;
+        const custom = CUSTOM_EFFECTS[className];
+        if (!custom) return null;
+        // Prewarm uses default params; the real build supplies effect.params.
+        return {
+          EffectClass: custom.EffectClass,
+          descriptor: custom.getDescriptor(dev, tex),
+        };
       });
     } catch (e) {
       console.warn('[Anime4KWebExt] Phase 0 pre-warm failed (non-fatal):', e);
@@ -374,12 +404,11 @@ export class Renderer {
       let pipeline: Anime4KPipeline | null = null;
 
       // Check for custom effects first (not from anime4k-webgpu library)
-      if (effect.className === 'CAS') {
-        pipeline = new CAS({
-          device: this.device,
-          inputTexture: currentTexture,
-          sharpness: effect.params?.sharpness ?? 0.5,
-        }) as unknown as Anime4KPipeline;
+      const custom = CUSTOM_EFFECTS[effect.className];
+      if (custom) {
+        pipeline = new custom.EffectClass(
+          custom.getDescriptor(this.device, currentTexture, effect.params),
+        ) as unknown as Anime4KPipeline;
       } else {
         const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
 
@@ -739,9 +768,13 @@ export class Renderer {
 
     const { effects, targetDimensions } = options;
 
-    // Use ID array comparison to detect substantive changes in the effect array (more reliable and efficient than JSON.stringify)
+    // Detect substantive changes in the effect array. ID-only comparison is insufficient:
+    // a slider tweak (e.g. Debanding strength) keeps the same ID but must trigger a rebuild.
     const effectsChanged = this.effects.length !== effects.length ||
-      this.effects.some((e, i) => e.id !== effects[i].id);
+      this.effects.some((e, i) =>
+        e.id !== effects[i].id ||
+        JSON.stringify(e.params) !== JSON.stringify(effects[i].params)
+      );
     const dimensionsChanged = this.targetDimensions.width !== targetDimensions.width || this.targetDimensions.height !== targetDimensions.height;
 
     if (!effectsChanged && !dimensionsChanged) {

@@ -5,6 +5,7 @@ import { WhitelistRule, validateRulePattern, removeWhitelistRule, updateWhitelis
 import { AVAILABLE_EFFECTS } from '../../utils/effects-map';
 import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '../../types';
 import { themeManager } from '../theme-manager';
+import { renderParamSliders } from './param-sliders';
 import { Sidebar } from './Sidebar';
 import { runGPUBenchmark } from '../../core/gpu-benchmark';
 
@@ -268,168 +269,10 @@ const renderModesUI = () => {
       if (effect.params && !mode.isBuiltIn) {
         const paramsWrapper = document.createElement('div');
         paramsWrapper.className = 'effect-params-wrapper';
-
-        // CAS sharpness slider (0.0–1.0)
-        if ('sharpness' in effect.params) {
-          const paramContainer = document.createElement('div');
-          paramContainer.className = 'effect-param-container';
-
-          const label = document.createElement('label');
-          label.textContent = chrome.i18n.getMessage('sharpness') || 'Sharpness';
-          label.className = 'effect-param-label';
-
-          const slider = document.createElement('input');
-          slider.type = 'range';
-          slider.min = '0';
-          slider.max = '100';
-          slider.value = String(Math.round((effect.params.sharpness ?? 0.5) * 100));
-          slider.className = 'effect-param-slider';
-
-          const valueDisplay = document.createElement('span');
-          valueDisplay.textContent = slider.value + '%';
-          valueDisplay.className = 'effect-param-value';
-
-          slider.addEventListener('input', () => {
-            valueDisplay.textContent = slider.value + '%';
-          });
-
-          slider.addEventListener('change', async () => {
-            const newValue = parseInt(slider.value) / 100;
-            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-            if (targetMode && !targetMode.isBuiltIn) {
-              const targetEffect = targetMode.effects[index];
-              if (targetEffect && targetEffect.params) {
-                targetEffect.params.sharpness = newValue;
-                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-                notifyUpdate(mode.id);
-              }
-            }
-          });
-
-          // Prevent slider interactions from triggering drag on the parent effect item.
-          slider.addEventListener('pointerdown', () => { effectItem.draggable = false; });
-          slider.addEventListener('pointerup', () => { effectItem.draggable = !mode.isBuiltIn; });
-          slider.addEventListener('pointerleave', () => { effectItem.draggable = !mode.isBuiltIn; });
-
-          paramContainer.appendChild(label);
-          paramContainer.appendChild(slider);
-          paramContainer.appendChild(valueDisplay);
-          paramsWrapper.appendChild(paramContainer);
-        }
-
-        // DoG strength slider (1.0–10.0) or BilateralMean intensity sigma (0.0–1.0)
-        if ('strength' in effect.params) {
-          const isDoG = effect.className === 'DoG';
-          const paramContainer = document.createElement('div');
-          paramContainer.className = 'effect-param-container';
-
-          const label = document.createElement('label');
-          label.textContent = isDoG
-            ? (chrome.i18n.getMessage('strength') || 'Strength')
-            : (chrome.i18n.getMessage('intensitySigma') || 'Intensity σ');
-          label.className = 'effect-param-label';
-
-          const slider = document.createElement('input');
-          slider.type = 'range';
-          if (isDoG) {
-            slider.min = '10';
-            slider.max = '100';
-            slider.value = String(Math.round((effect.params.strength ?? 4) * 10));
-          } else {
-            slider.min = '0';
-            slider.max = '100';
-            slider.value = String(Math.round((effect.params.strength ?? 0.2) * 100));
-          }
-          slider.className = 'effect-param-slider';
-
-          const valueDisplay = document.createElement('span');
-          if (isDoG) {
-            valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
-          } else {
-            valueDisplay.textContent = (parseInt(slider.value) / 100).toFixed(2);
-          }
-          valueDisplay.className = 'effect-param-value';
-
-          slider.addEventListener('input', () => {
-            if (isDoG) {
-              valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
-            } else {
-              valueDisplay.textContent = (parseInt(slider.value) / 100).toFixed(2);
-            }
-          });
-
-          slider.addEventListener('change', async () => {
-            const newValue = isDoG ? parseInt(slider.value) / 10 : parseInt(slider.value) / 100;
-            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-            if (targetMode && !targetMode.isBuiltIn) {
-              const targetEffect = targetMode.effects[index];
-              if (targetEffect && targetEffect.params) {
-                targetEffect.params.strength = newValue;
-                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-                notifyUpdate(mode.id);
-              }
-            }
-          });
-
-          // Prevent slider interactions from triggering drag on the parent effect item.
-          slider.addEventListener('pointerdown', () => { effectItem.draggable = false; });
-          slider.addEventListener('pointerup', () => { effectItem.draggable = !mode.isBuiltIn; });
-          slider.addEventListener('pointerleave', () => { effectItem.draggable = !mode.isBuiltIn; });
-
-          paramContainer.appendChild(label);
-          paramContainer.appendChild(slider);
-          paramContainer.appendChild(valueDisplay);
-          paramsWrapper.appendChild(paramContainer);
-        }
-
-        // BilateralMean spatial sigma slider (0.5–5.0)
-        if ('strength2' in effect.params) {
-          const paramContainer = document.createElement('div');
-          paramContainer.className = 'effect-param-container';
-
-          const label = document.createElement('label');
-          label.textContent = chrome.i18n.getMessage('spatialSigma') || 'Spatial σ';
-          label.className = 'effect-param-label';
-
-          const slider = document.createElement('input');
-          slider.type = 'range';
-          slider.min = '5';
-          slider.max = '50';
-          slider.value = String(Math.round((effect.params.strength2 ?? 2) * 10));
-          slider.className = 'effect-param-slider';
-
-          const valueDisplay = document.createElement('span');
-          valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
-          valueDisplay.className = 'effect-param-value';
-
-          slider.addEventListener('input', () => {
-            valueDisplay.textContent = (parseInt(slider.value) / 10).toFixed(1);
-          });
-
-          slider.addEventListener('change', async () => {
-            const newValue = parseInt(slider.value) / 10;
-            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-            if (targetMode && !targetMode.isBuiltIn) {
-              const targetEffect = targetMode.effects[index];
-              if (targetEffect && targetEffect.params) {
-                targetEffect.params.strength2 = newValue;
-                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-                notifyUpdate(mode.id);
-              }
-            }
-          });
-
-          // Prevent slider interactions from triggering drag on the parent effect item.
-          slider.addEventListener('pointerdown', () => { effectItem.draggable = false; });
-          slider.addEventListener('pointerup', () => { effectItem.draggable = !mode.isBuiltIn; });
-          slider.addEventListener('pointerleave', () => { effectItem.draggable = !mode.isBuiltIn; });
-
-          paramContainer.appendChild(label);
-          paramContainer.appendChild(slider);
-          paramContainer.appendChild(valueDisplay);
-          paramsWrapper.appendChild(paramContainer);
-        }
-
+        renderParamSliders(effect, mode.id, effectItem, paramsWrapper, async (modeId) => {
+          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+          notifyUpdate(modeId);
+        });
         effectContent.appendChild(paramsWrapper);
       }
 

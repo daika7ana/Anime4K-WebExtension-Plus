@@ -284,6 +284,12 @@
   "spatialSigma": {
     "message": "Spatial σ:"
   },
+  "debandingStrength": {
+    "message": "Debanding:"
+  },
+  "debandingThreshold": {
+    "message": "Threshold:"
+  },
   "moveUp": {
     "message": "Move Up"
   },

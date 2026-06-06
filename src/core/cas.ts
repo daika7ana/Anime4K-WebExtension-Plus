@@ -161,7 +161,7 @@ export class CAS {
 
   /** Update sharpness at runtime (0.0 = no sharpening, 1.0 = maximum) */
   updateParam(param: string, value: unknown): void {
-    if (param === 'sharpness' && typeof value === 'number') {
+    if (param === 'sharpness' && typeof value === 'number' && Number.isFinite(value)) {
       this.sharpness = Math.max(0, Math.min(1, value));
       this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([this.sharpness, 0]));
     }

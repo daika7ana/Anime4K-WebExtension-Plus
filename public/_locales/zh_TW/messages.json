@@ -289,6 +289,12 @@
   "spatialSigma": {
     "message": "空間 σ:"
   },
+  "debandingStrength": {
+    "message": "去色帶:"
+  },
+  "debandingThreshold": {
+    "message": "閾值:"
+  },
   "moveUp": {
     "message": "上移"
   },

@@ -284,6 +284,12 @@
   "spatialSigma": {
     "message": "Пространственное σ:"
   },
+  "debandingStrength": {
+    "message": "Устранение полосатости:"
+  },
+  "debandingThreshold": {
+    "message": "Порог:"
+  },
   "moveUp": {
     "message": "Переместить вверх"
   },

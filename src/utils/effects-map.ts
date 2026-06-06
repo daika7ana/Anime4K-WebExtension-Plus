@@ -24,6 +24,14 @@ export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
     className: 'ClampHighlights',
   },
 
+  // Debanding Effects
+  {
+    id: 'anime4k/Debanding/Debanding',
+    name: 'Debanding',
+    className: 'Debanding',
+    params: { strength: 0.5, bandThreshold: 0.08 },
+  },
+
   // Deblur Effects
   {
     id: 'anime4k/Deblur/DoG',

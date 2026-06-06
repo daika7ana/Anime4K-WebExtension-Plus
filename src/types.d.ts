@@ -41,6 +41,34 @@ interface CustomMode {
 // Unified enhancement mode type
 type EnhancementMode = BuiltInMode | CustomMode;
 
+// ===== Effect Class Name (for param-slider registry) =====
+// Class names of effects that expose a user-tunable param.
+// Kept in sync with PARAM_REGISTRY keys — TypeScript will flag any drift.
+type EffectClassName = 'CAS' | 'DoG' | 'BilateralMean' | 'Debanding';
+
+// ===== Param Slider Configuration (for options UI) =====
+interface ParamSliderConfig {
+  paramKey: string;       // e.g. 'sharpness', 'strength'
+  labelKey: string;       // i18n key
+  labelFallback: string;  // fallback text
+  sliderMin: number;
+  sliderMax: number;
+  defaultValue: number;
+  toSlider: (v: number) => number;   // param value → slider position
+  fromSlider: (v: number) => number; // slider position → param value
+  formatValue: (v: number) => string; // display format
+}
+
+// ===== Custom Effect Descriptor (for renderer custom-effect registry) =====
+interface CustomEffectDescriptor {
+  EffectClass: new (descriptor: any) => unknown;
+  getDescriptor: (
+    device: GPUDevice,
+    inputTexture: GPUTexture,
+    params?: { [key: string]: any },
+  ) => Record<string, unknown>;
+}
+
 // ===== GPU Benchmark Result Interface =====
 interface GPUBenchmarkResult {
   tier: PerformanceTier;
@@ -95,4 +123,7 @@ export {
   BuiltInMode,
   CustomMode,
   GPUBenchmarkResult,
+  EffectClassName,
+  ParamSliderConfig,
+  CustomEffectDescriptor,
 };
