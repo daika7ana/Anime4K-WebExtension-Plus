@@ -1,9 +1,9 @@
-import { getSettings, getEffectsForMode } from '../utils/settings';
-import { Renderer } from './renderer';
-import { ANIME4K_APPLIED_ATTR } from '../constants';
-import { Dimensions, Anime4KWebExtSettings, EnhancementMode } from '../types';
-import { OverlayManager } from './overlay-manager';
-import { yieldToAnimationFrame } from './yield-utils';
+import { getSettings, getEffectsForMode } from '@utils/settings';
+import { Renderer } from '@core/renderer';
+import { ANIME4K_APPLIED_ATTR } from '@/constants';
+import { Dimensions, Anime4KWebExtSettings, EnhancementMode } from '@/types';
+import { OverlayManager } from '@core/ui/overlay-manager';
+import { yieldToAnimationFrame } from '@core/utils/yield-utils';
 
 /**
  * Video enhancer class that encapsulates Anime4K processing logic.
@@ -40,6 +40,7 @@ export class VideoEnhancer {
   }
 
   private fixAttempted = false;
+  private initializing = false;
 
   /**
    * Checks and fixes cross-origin issues with the video.
@@ -95,6 +96,9 @@ export class VideoEnhancer {
       this.disableEnhancement();
       return;
     }
+
+    if (this.initializing) return;
+    this.initializing = true;
 
     this.button.innerText = chrome.i18n.getMessage('enhancing');
     this.button.disabled = true;
@@ -157,6 +161,7 @@ export class VideoEnhancer {
         this.showErrorModal(err.message || chrome.i18n.getMessage('enhanceError'));
       }
     } finally {
+      this.initializing = false;
       this.button.disabled = false;
     }
   }

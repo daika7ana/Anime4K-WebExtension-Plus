@@ -12,7 +12,7 @@
  * https://github.com/BenjaminWegener/AMD-fidelityFX-SuperResolution-webGL
  */
 
-import CAS_SHADER from '../shaders/cas.wgsl';
+import CAS_SHADER from '@shaders/cas.wgsl';
 
 /**
  * CAS (Contrast Adaptive Sharpening) pipeline implementing the Anime4KPipeline interface.

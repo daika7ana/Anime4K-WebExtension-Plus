@@ -1,4 +1,4 @@
-import { ANIME4K_BUTTON_CLASS } from '../constants';
+import { ANIME4K_BUTTON_CLASS } from '@/constants';
 
 /**
  * OverlayManager

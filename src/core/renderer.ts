@@ -1,50 +1,17 @@
-import type { Anime4KPipeline } from 'anime4k-webgpu';
-import type { Dimensions, EnhancementEffect, CustomEffectDescriptor, RendererOptions } from '../types';
-import { RendererInitializationError, RendererRuntimeError } from './errors';
-import { CAS } from './cas';
-import { Debanding } from './debanding';
-import { yieldToMain } from './yield-utils';
-import { PipelinePreWarmer } from './pipeline-prewarmer';
-import fullscreenTexturedQuadWGSL from '../shaders/fullscreen-textured-quad.wgsl';
-import sampleExternalTextureWGSL from '../shaders/sample-external-texture.wgsl';
-
-/** Anime4KPipeline extended with optional destroy() that some implementations expose */
-interface PipelineWithDestroy extends Anime4KPipeline {
-  destroy?(): void;
-}
-
-/**
- * Registry of custom (non-anime4k-webgpu) effects.
- *
- * Maps an effect's `className` to its constructor and a descriptor builder. Adding a
- * new custom effect is a one-entry change here — no edits to the pipeline build loop
- * or prewarmer. The descriptor builder receives the live effect params so per-effect
- * values (e.g. strength, threshold) flow through uniformly.
- */
-
-const CUSTOM_EFFECTS: Record<string, CustomEffectDescriptor> = {
-  CAS: {
-    EffectClass: CAS,
-    getDescriptor: (device, inputTexture, params) => ({
-      device,
-      inputTexture,
-      sharpness: params?.sharpness ?? 0.5,
-    }),
-  },
-  Debanding: {
-    EffectClass: Debanding,
-    getDescriptor: (device, inputTexture, params) => ({
-      device,
-      inputTexture,
-      strength: params?.strength ?? 0.5,
-      bandThreshold: params?.bandThreshold ?? 0.08,
-    }),
-  },
-};
+import type { Dimensions, EnhancementEffect, RendererOptions } from '@/types';
+import { RendererInitializationError, RendererRuntimeError } from '@core/errors';
+import { yieldToMain } from '@core/utils/yield-utils';
+import * as GPUDeviceManager from '@core/gpu/gpu-device-manager';
+import { buildEffectPipelines, paramsEqual, PipelineWithDestroy } from '@core/gpu/pipeline-builder';
+import fullscreenTexturedQuadWGSL from '@shaders/fullscreen-textured-quad.wgsl';
+import sampleExternalTextureWGSL from '@shaders/sample-external-texture.wgsl';
 
 /**
  * The Renderer class encapsulates all WebGPU-related rendering logic.
  * It manages the GPU device, context, rendering pipelines, textures, and the render loop.
+ *
+ * GPU device lifecycle is delegated to GPUDeviceManager
+ * and pipeline construction is delegated to PipelineBuilder.
  */
 export class Renderer {
   // --- Core properties ---
@@ -70,6 +37,10 @@ export class Renderer {
   private frameInFlight = false;
   /** Pending bitmap from the previous frame in the ImageBitmap fallback (awaiting close) */
   private pendingBitmap: ImageBitmap | null = null;
+  /** Whether pipeline rebuild is in progress (skip frames during rebuild) */
+  private rebuilding = false;
+  /** Whether a source resize is in progress (prevent concurrent resizes) */
+  private resizing = false;
 
   // --- WebGPU objects ---
   private device!: GPUDevice;
@@ -88,55 +59,9 @@ export class Renderer {
   private sampler!: GPUSampler;
   private renderBindGroup!: GPUBindGroup;
 
-  // --- Static properties ---
-  /** Cached anime4k-webgpu module (avoids repeated dynamic imports) */
-  private static cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
-
-  // --- Static GPU pre-warm state ---
-  private static prewarmedAdapter: GPUAdapter | null = null;
-  private static prewarmedDevice: GPUDevice | null = null;
-  private static prewarmPromise: Promise<void> | null = null;
-  private static preWarmer = new PipelinePreWarmer();
-
-  /**
-   * Pre-request GPU adapter and device so they're ready when the user clicks Enhance.
-   * This warms the GPU driver and saves 50-100ms during initialization.
-   * Safe to call multiple times — only the first call does work.
-   */
-  public static preWarmGPU(): void {
-    if (Renderer.prewarmPromise) return;
-    Renderer.prewarmPromise = (async () => {
-      try {
-        if (!navigator.gpu) return;
-        const adapterOptions: GPURequestAdapterOptions = {};
-        if (!navigator.platform.startsWith('Win')) {
-          adapterOptions.powerPreference = 'high-performance';
-        }
-        const adapter = await navigator.gpu.requestAdapter(adapterOptions);
-        if (!adapter) return;
-        Renderer.prewarmedAdapter = adapter;
-        const adapterLimits = adapter.limits;
-        Renderer.prewarmedDevice = await adapter.requestDevice({
-          requiredLimits: {
-            maxBufferSize: adapterLimits.maxBufferSize,
-            maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
-          },
-        });
-
-        // Auto-destroy prewarmed device if unclaimed after 30 seconds
-        setTimeout(() => {
-          if (Renderer.prewarmedDevice) {
-            console.log('[Anime4KWebExt] Prewarmed GPU device unclaimed after 30s, releasing.');
-            Renderer.prewarmedDevice.destroy();
-            Renderer.prewarmedDevice = null;
-            Renderer.prewarmedAdapter = null;
-          }
-        }, 30000);
-      } catch {
-        // Pre-warm is best-effort; errors are non-fatal
-      }
-    })();
-  }
+  // --- Static backward-compat alias (delegates to GPUDeviceManager) ---
+  /** @deprecated Use GPUDeviceManager.preWarmGPU() directly. Kept for backward compatibility. */
+  public static preWarmGPU = GPUDeviceManager.preWarmGPU;
 
   private constructor(options: RendererOptions) {
     this.video = options.video;
@@ -176,33 +101,12 @@ export class Renderer {
       // Use pre-warmed adapter/device if available (pre-requested on content script load)
       this.onProgress?.(chrome.i18n.getMessage('initGpu') || '⏳ Initializing GPU...');
 
-      if (Renderer.prewarmedDevice) {
-        this.device = Renderer.prewarmedDevice;
-        // Clear the cached device so each renderer gets its own.
-        // Sharing a single device across renderers would cause use-after-destroy
-        // when one renderer's destroy() kills the shared device.
-        Renderer.prewarmedDevice = null;
-        Renderer.prewarmedAdapter = null;
+      const claimedDevice = GPUDeviceManager.claimPreWarmedDevice();
+      if (claimedDevice) {
+        this.device = claimedDevice;
       } else {
-        const adapterOptions: GPURequestAdapterOptions = {};
-        // Setting powerPreference on Windows produces a warning, so only use it on other platforms
-        if (!navigator.platform.startsWith('Win')) {
-          adapterOptions.powerPreference = 'high-performance';
-        }
-        const adapter = await navigator.gpu.requestAdapter(adapterOptions);
-        if (!adapter) {
-          throw new RendererInitializationError('WebGPU not supported: No adapter found.');
-        }
-
-        // Request GPU device and configure Canvas context
-        // Request higher maxBufferSize based on adapter-supported limits for high-resolution video processing
-        const adapterLimits = adapter.limits;
-        this.device = await adapter.requestDevice({
-          requiredLimits: {
-            maxBufferSize: adapterLimits.maxBufferSize,
-            maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
-          },
-        });
+        const { device } = await GPUDeviceManager.requestGPUDevice();
+        this.device = device;
       }
 
       // Listen for device loss events and attempt automatic recovery
@@ -270,185 +174,31 @@ export class Renderer {
 
   /**
    * Builds Anime4K processing pipelines based on the current effect chain (this.effects).
-   * This method destroys old pipelines and creates new ones.
+   * Delegates to PipelineBuilder for the actual construction.
+   * Sets rebuilding flag to prevent processFrame() from using stale pipelines.
    */
   private async buildPipelines(): Promise<void> {
     const generation = ++this.buildGeneration;
-
-    // Wait for the GPU queue to finish before destroying old pipelines to avoid resource contention
+    this.rebuilding = true; // Prevent render loop from processing frames during rebuild
+    const oldPipelines = this.pipelines;
+    this.pipelines = []; // Clear reference before builder destroys old pipelines
     try {
-      await this.device.queue.onSubmittedWorkDone();
-    } catch {
-      // Ignore error; the device may have been lost
-    }
-    if (this.buildGeneration !== generation) return; // Superseded
-
-    // Safely destroy old pipelines
-    for (const p of this.pipelines) {
-      try {
-        p.destroy?.();
-      } catch {
-        // Ignore individual pipeline destruction errors
-      }
-    }
-
-    const pipelines: PipelineWithDestroy[] = [];
-    let currentTexture = this.videoFrameTexture;
-    let curWidth = this.video.videoWidth;
-    let curHeight = this.video.videoHeight;
-
-    // Use the cached module to avoid repeated dynamic imports
-    if (!Renderer.cachedAnime4KModule) {
-      Renderer.cachedAnime4KModule = await import('anime4k-webgpu');
-    }
-    const anime4kModule = Renderer.cachedAnime4KModule;
-
-    // --- Phase 0: Speculative shader pre-warming ---
-    // Construct dummy 1×1 pipelines to trigger driver-level shader compilation and caching.
-    // The real pipeline construction in Phase 1 will then hit the cache (~1-3ms instead of ~25ms).
-    // On subsequent calls (same effect chain), the pre-warmer skips via in-memory deduplication,
-    // and the driver cache makes Phase 1 fast regardless.
-    this.onProgress?.(chrome.i18n.getMessage('warmupShadersProgress') || '⏳ Compiling shaders...');
-    try {
-      await Renderer.preWarmer.warm(this.device, this.effects, (className, dev, tex) => {
-        const custom = CUSTOM_EFFECTS[className];
-        if (!custom) return null;
-        // Prewarm uses default params; the real build supplies effect.params.
-        return {
-          EffectClass: custom.EffectClass,
-          descriptor: custom.getDescriptor(dev, tex),
-        };
+      const pipelines = await buildEffectPipelines({
+        device: this.device,
+        videoFrameTexture: this.videoFrameTexture,
+        video: this.video,
+        targetDimensions: this.targetDimensions,
+        effects: this.effects,
+        oldPipelines, // Pass captured reference, not this.pipelines
+        preWarmer: GPUDeviceManager.getPreWarmer(),
+        onProgress: this.onProgress,
+        isStale: () => this.buildGeneration !== generation,
       });
-    } catch (e) {
-      console.warn('[Anime4KWebExt] Phase 0 pre-warm failed (non-fatal):', e);
+      if (this.buildGeneration !== generation) return; // Superseded
+      this.pipelines = pipelines;
+    } finally {
+      this.rebuilding = false; // Allow render loop to resume
     }
-    if (this.buildGeneration !== generation) return; // Superseded
-
-    // If needed, get the Downscale class
-    const needsDownscaling = this.effects.some((effect, i) => {
-      const remainingFactor = this.effects.slice(i + 1).reduce((acc, val) => acc * (val.upscaleFactor ?? 1), 1);
-      return (effect.upscaleFactor ?? 1) > 1 && remainingFactor > 1;
-    });
-    const DownscaleClass = needsDownscaling ? anime4kModule.Downscale : null;
-
-    const upscaleFactors = this.effects.map(e => e.upscaleFactor ?? 1);
-    const remainingUpscaleFactors = upscaleFactors.map((_, i) =>
-      upscaleFactors.slice(i + 1).reduce((acc, val) => acc * val, 1)
-    );
-
-    // --- Phase 1: Create all pipeline instances (no GPU submission) ---
-    // Each pipeline constructor may trigger synchronous GPU shader compilation (200-500ms on first run),
-    // so we yield the main thread after each pipeline creation to keep the UI responsive.
-    for (let i = 0; i < this.effects.length; i++) {
-      // Report progress
-      const loadingMsg = chrome.i18n.getMessage('loadingEffect', [String(i + 1), String(this.effects.length)])
-        || `⏳ Loading effect ${i + 1}/${this.effects.length}...`;
-      this.onProgress?.(loadingMsg, i + 1, this.effects.length);
-
-      const effect = this.effects[i];
-      let pipeline: PipelineWithDestroy | null = null;
-
-      // Check for custom effects first (not from anime4k-webgpu library)
-      const custom = CUSTOM_EFFECTS[effect.className];
-      if (custom) {
-        pipeline = new custom.EffectClass(
-          custom.getDescriptor(this.device, currentTexture, effect.params),
-        ) as unknown as PipelineWithDestroy;
-      } else {
-        const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
-
-        if (EffectClass) {
-          pipeline = new EffectClass({
-            device: this.device,
-            inputTexture: currentTexture,
-            nativeDimensions: { width: curWidth, height: curHeight },
-            targetDimensions: this.targetDimensions,
-          });
-          // Apply effect params (e.g. DoG strength) after construction
-          if (effect.params && pipeline) {
-            for (const [key, value] of Object.entries(effect.params)) {
-              (pipeline as any).updateParam?.(key, value);
-            }
-          }
-        } else {
-          console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
-        }
-      }
-
-      if (pipeline) {
-        pipelines.push(pipeline);
-        currentTexture = pipeline.getOutputTexture();
-
-        if (effect.upscaleFactor) {
-          curWidth *= effect.upscaleFactor;
-          curHeight *= effect.upscaleFactor;
-
-          const remainingFactor = remainingUpscaleFactors[i];
-          if (DownscaleClass && remainingFactor > 1) {
-            const idealIntermediateWidth = this.targetDimensions.width / remainingFactor;
-            const idealIntermediateHeight = this.targetDimensions.height / remainingFactor;
-
-            if (curWidth > idealIntermediateWidth * 1.1) {
-              const intermediateDownscale = new DownscaleClass({
-                device: this.device,
-                inputTexture: currentTexture,
-                targetDimensions: {
-                  width: Math.ceil(idealIntermediateWidth),
-                  height: Math.ceil(idealIntermediateHeight),
-                },
-              });
-              pipelines.push(intermediateDownscale);
-
-              currentTexture = intermediateDownscale.getOutputTexture();
-              curWidth = Math.ceil(idealIntermediateWidth);
-              curHeight = Math.ceil(idealIntermediateHeight);
-            }
-          }
-        }
-      }
-
-      // Yield to let the browser process input events between synchronous GPU operations.
-      // Uses scheduler.yield() (Chrome 115+) or MessageChannel fallback for faster
-      // yielding than requestAnimationFrame, which waits for the next frame boundary.
-      await yieldToMain();
-    }
-    if (this.buildGeneration !== generation) return; // Superseded
-
-    // --- Phase 2: Fire-and-forget warmup ---
-    // Submit all shader compilations as a single batch without waiting for GPU completion.
-    // Shader compilation happens at createComputePipeline() time (Phase 1), not at execution
-    // time. The warmup pass validates the pipeline can execute and triggers minor GPU-side
-    // optimizations. By NOT waiting for onSubmittedWorkDone(), we eliminate 400-800ms of
-    // UI freeze. The first real render frame will naturally wait for this to complete
-    // because GPUQueue.submit() maintains ordering.
-    if (pipelines.length > 1) { // Skip dummy pipeline case
-      try {
-        const warmupEncoder = this.device.createCommandEncoder();
-        for (const pipeline of pipelines) {
-          pipeline.pass(warmupEncoder);
-        }
-        this.device.queue.submit([warmupEncoder.finish()]);
-        // NO onSubmittedWorkDone() — let the GPU process this asynchronously.
-        // The first real render frame will naturally wait for this to complete.
-      } catch (e) {
-        console.warn('[Anime4KWebExt] Warmup submission failed, shaders will compile on first frame:', e);
-      }
-    }
-
-    if (pipelines.length === 0) {
-      // If no effects are applied, create a dummy pipeline
-      pipelines.push({
-        pass: () => { },
-        getOutputTexture: () => this.videoFrameTexture,
-        updateParam: () => { },
-      } as unknown as PipelineWithDestroy);
-    }
-    this.pipelines = pipelines;
-
-    // Notify that warmup is complete
-    this.onProgress?.(null);
-
-    console.log(`[Anime4KWebExt] Built ${pipelines.length} pipelines with warmup complete.`);
   }
 
   /**
@@ -524,11 +274,14 @@ export class Renderer {
 
   /**
    * Core logic for processing a single frame.
+   * Skips processing when pipeline rebuild or source resize is in progress.
    * @returns {boolean} Returns true if a frame was successfully rendered, false otherwise.
    */
   private async processFrame(): Promise<boolean> {
     if (this.destroyed) return false;
     if (this.isRecovering) return false;
+    if (this.rebuilding) return false; // Skip frames during pipeline rebuild
+    if (this.resizing) return false; // Skip frames during resize
 
     try {
       if (this.video.readyState < this.video.HAVE_CURRENT_DATA) {
@@ -695,18 +448,25 @@ export class Renderer {
   /**
    * Called when the video source itself changes resolution (e.g., user switches quality in the video player).
    * This recreates resources based on the video's native dimensions.
+   * Guarded against concurrent calls with a resizing flag.
    */
   public async handleSourceResize(): Promise<void> {
-    if (this.destroyed) return;
-    console.log('[Anime4KWebExt] Resizing renderer due to video source dimension change...');
-    this.createResources();
-    await this.buildPipelines();
-    this.createRenderBindGroup();
-    console.log('[Anime4KWebExt] Renderer resized for source.');
+    if (this.destroyed || this.resizing) return; // Prevent concurrent resizes
+    this.resizing = true;
+    try {
+      console.log('[Anime4KWebExt] Resizing renderer due to video source dimension change...');
+      this.createResources();
+      await this.buildPipelines();
+      this.createRenderBindGroup();
+      console.log('[Anime4KWebExt] Renderer resized for source.');
+    } finally {
+      this.resizing = false; // Always release the guard
+    }
   }
 
   /**
    * Updates the renderer configuration based on user settings (effects or target resolution).
+   * Uses shallow params comparison instead of JSON.stringify.
    * @param options Object containing new effects and target dimensions
    */
   public async updateConfiguration(options: { effects: EnhancementEffect[], targetDimensions: Dimensions }): Promise<void> {
@@ -714,12 +474,11 @@ export class Renderer {
 
     const { effects, targetDimensions } = options;
 
-    // Detect substantive changes in the effect array. ID-only comparison is insufficient:
-    // a slider tweak (e.g. Debanding strength) keeps the same ID but must trigger a rebuild.
+    // Detect substantive changes using shallow params comparison
     const effectsChanged = this.effects.length !== effects.length ||
       this.effects.some((e, i) =>
         e.id !== effects[i].id ||
-        JSON.stringify(e.params) !== JSON.stringify(effects[i].params)
+        !paramsEqual(e.params, effects[i].params)
       );
     const dimensionsChanged = this.targetDimensions.width !== targetDimensions.width || this.targetDimensions.height !== targetDimensions.height;
 
@@ -761,6 +520,7 @@ export class Renderer {
   /**
    * Recovers from device loss.
    * Attempts to reinitialize GPU resources and resume rendering.
+   * Uses GPUDeviceManager for device re-acquisition.
    */
   private async recoverFromDeviceLoss(): Promise<void> {
     if (this.destroyed || this.isRecovering) return;
@@ -775,19 +535,9 @@ export class Renderer {
         this.animationFrameId = null;
       }
 
-      // Re-request GPU adapter and device
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) {
-        throw new Error('Failed to get GPU adapter during recovery');
-      }
-
-      const adapterLimits = adapter.limits;
-      this.device = await adapter.requestDevice({
-        requiredLimits: {
-          maxBufferSize: adapterLimits.maxBufferSize,
-          maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
-        },
-      });
+      // Re-request GPU adapter and device via GPUDeviceManager
+      const { device } = await GPUDeviceManager.requestGPUDevice();
+      this.device = device;
 
       // Set up device loss listener for the new device
       this.device.lost.then((info) => {
@@ -807,8 +557,7 @@ export class Renderer {
       });
 
       // Invalidate shader pre-warm cache — the new device has a separate shader cache
-      Renderer.preWarmer.invalidate();
-      Renderer.prewarmPromise = null;
+      GPUDeviceManager.invalidatePreWarm();
 
       // Rebuild resources and pipelines
       this.createResources();
@@ -833,6 +582,7 @@ export class Renderer {
   /**
    * Destroys the renderer and releases all WebGPU resources.
    * This is a critical cleanup method to prevent memory and GPU resource leaks.
+   * Uses GPUDeviceManager for pre-warm invalidation.
    */
   public destroy(): void {
     if (this.destroyed) return;
@@ -856,8 +606,7 @@ export class Renderer {
       // Disassociate the canvas from the GPU device — critical for subsequent reinitialization
       this.context?.unconfigure();
       // Invalidate shader pre-warm cache since the device is being destroyed
-      Renderer.preWarmer.invalidate();
-      Renderer.prewarmPromise = null;
+      GPUDeviceManager.invalidatePreWarm();
       // Proactively destroy the device, which will trigger the device.lost Promise
       this.device?.destroy();
       console.log('[Anime4KWebExt] Renderer destroyed.');

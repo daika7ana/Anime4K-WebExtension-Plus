@@ -13,7 +13,18 @@
       "es2022",
       "dom"
     ],
-    "types": ["chrome"]
+    "types": ["chrome"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@core/video/*": ["./src/core/video/*"],
+      "@core/gpu/*": ["./src/core/gpu/*"],
+      "@core/effects/*": ["./src/core/effects/*"],
+      "@core/ui/*": ["./src/core/ui/*"],
+      "@core/utils/*": ["./src/core/utils/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@shaders/*": ["./src/shaders/*"]
+    }
   },
   "include": [
     "**/*.ts"

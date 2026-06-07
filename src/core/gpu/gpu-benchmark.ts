@@ -3,8 +3,8 @@
  * Tests using real Anime4K effects
  */
 
-import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect, BenchmarkProgress } from '../types';
-import { resolveEffectChain } from '../utils/effect-chain-templates';
+import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect, BenchmarkProgress } from '@/types';
+import { resolveEffectChain } from '@utils/effect-chain-templates';
 
 // Test configuration
 const TEST_TIMEOUT_MS = 20000; // Individual test timeout

@@ -14,8 +14,8 @@
  * shaders remain cached in the driver.
  */
 
-import type { EnhancementEffect } from '../types';
-import { yieldToMain } from './yield-utils';
+import type { EnhancementEffect } from '@/types';
+import { yieldToMain } from '@core/utils/yield-utils';
 
 export class PipelinePreWarmer {
   private warmedSignatures: Set<string> = new Set();

@@ -13,7 +13,7 @@
  * Inspired by f3kdb (Flash3kyuu Deband) and mpv's deband shader.
  */
 
-import DEBANDING_SHADER from '../shaders/debanding.wgsl';
+import DEBANDING_SHADER from '@shaders/debanding.wgsl';
 
 /**
  * Debanding pipeline implementing the Anime4KPipeline interface.

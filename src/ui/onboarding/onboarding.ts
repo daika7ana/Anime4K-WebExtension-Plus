@@ -1,10 +1,10 @@
 import './onboarding.css';
 import '../common-vars.css';
-import { saveLocalSettings } from '../../utils/settings';
-import type { BenchmarkProgress } from '../../types';
-import { runGPUBenchmark } from '../../core/gpu-benchmark';
+import { saveLocalSettings } from '@utils/settings';
+import type { BenchmarkProgress } from '@/types';
+import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 import { themeManager } from '../theme-manager';
-import type { PerformanceTier, GPUBenchmarkResult } from '../../types';
+import type { PerformanceTier, GPUBenchmarkResult } from '@/types';
 
 // Tier display names
 const TIER_DISPLAY: Record<PerformanceTier, { icon: string; name: string }> = {
