@@ -11,7 +11,7 @@ import { Sidebar } from './Sidebar';
 import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 
 
-import { Anime4KWebExtSettings } from '@/types';
+import type { Anime4KWebExtSettings } from '@/types';
 
 // --- Global State ---
 let settingsState: Anime4KWebExtSettings;

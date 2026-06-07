@@ -65,7 +65,7 @@ export function paramsEqual(a?: Record<string, unknown>, b?: Record<string, unkn
 }
 
 /** Parameters for buildEffectPipelines */
-export interface BuildPipelinesParams {
+interface BuildPipelinesParams {
   device: GPUDevice;
   videoFrameTexture: GPUTexture;
   video: HTMLVideoElement;

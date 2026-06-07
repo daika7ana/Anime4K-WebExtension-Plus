@@ -1,6 +1,6 @@
 import type { Dimensions, EnhancementEffect, RendererOptions } from '@/types';
 import { RendererInitializationError, RendererRuntimeError } from '@core/errors';
-import { yieldToMain } from '@core/utils/yield-utils';
+
 import * as GPUDeviceManager from '@core/gpu/gpu-device-manager';
 import { buildEffectPipelines, paramsEqual, PipelineWithDestroy } from '@core/gpu/pipeline-builder';
 import fullscreenTexturedQuadWGSL from '@shaders/fullscreen-textured-quad.wgsl';
