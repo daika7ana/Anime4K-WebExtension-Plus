@@ -120,9 +120,9 @@ export async function runGPUBenchmark(
 
     let recommendedTier: PerformanceTier = 'performance';
 
-    // Dynamically import anime4k-webgpu module
-    console.log('[GPUBenchmark] Loading anime4k-webgpu module...');
-    const Anime4K = await import('anime4k-webgpu');
+    // Dynamically import anime4k-webgpu-async module
+    console.log('[GPUBenchmark] Loading anime4k-webgpu-async module...');
+    const Anime4K = await import('anime4k-webgpu-async');
 
     console.log('[GPUBenchmark] Starting benchmark...');
 
@@ -288,7 +288,7 @@ async function runEffectChainTest(
     device: GPUDevice,
     inputTexture: GPUTexture,
     effects: EnhancementEffect[],
-    Anime4K: typeof import('anime4k-webgpu')
+    Anime4K: typeof import('anime4k-webgpu-async')
 ): Promise<{ avgTime: number; maxTime: number }> {
     // Build pipelines
     const pipelines: any[] = [];
@@ -366,7 +366,7 @@ async function runEffectChainTest(
     for (let pipelineIdx = 0; pipelineIdx < pipelines.length; pipelineIdx++) {
         const pipeline = pipelines[pipelineIdx];
         const commandEncoder = device.createCommandEncoder();
-        pipeline.pass(commandEncoder);
+        await pipeline.pass(commandEncoder);
         device.queue.submit([commandEncoder.finish()]);
         await device.queue.onSubmittedWorkDone();
     }
@@ -375,7 +375,7 @@ async function runEffectChainTest(
     for (let warmup = 0; warmup < 4; warmup++) {
         const commandEncoder = device.createCommandEncoder();
         for (const pipeline of pipelines) {
-            pipeline.pass(commandEncoder);
+            await pipeline.pass(commandEncoder);
         }
         device.queue.submit([commandEncoder.finish()]);
         await device.queue.onSubmittedWorkDone();
@@ -398,7 +398,7 @@ async function runEffectChainTest(
         for (let i = 0; i < framesInBatch; i++) {
             const commandEncoder = device.createCommandEncoder();
             for (const pipeline of pipelines) {
-                pipeline.pass(commandEncoder);
+                await pipeline.pass(commandEncoder);
             }
             device.queue.submit([commandEncoder.finish()]);
         }

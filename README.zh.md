@@ -104,4 +104,4 @@
 
 - [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — 本项目 fork 自此仓库
 - [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
-- [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)
+- [Anime4K-WebGPU-Async](https://github.com/daika7ana/Anime4K-WebGPU-Async)

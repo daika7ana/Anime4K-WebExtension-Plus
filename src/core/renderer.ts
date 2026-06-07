@@ -321,7 +321,9 @@ export class Renderer {
 
 
       const commandEncoder = this.device.createCommandEncoder();
-      this.pipelines.forEach((pipeline) => pipeline.pass(commandEncoder));
+      for (const pipeline of this.pipelines) {
+        await pipeline.pass(commandEncoder);
+      }
       const passEncoder = commandEncoder.beginRenderPass({
         colorAttachments: [{
           view: this.context.getCurrentTexture().createView(),

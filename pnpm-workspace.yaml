@@ -1,2 +1,6 @@
 allowBuilds:
   core-js: false
+minimumReleaseAgeExclude:
+  - anime4k-webgpu-async@2.0.0
+overrides:
+  anime4k-webgpu: link:../Anime4K-WebGPU

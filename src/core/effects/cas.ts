@@ -91,7 +91,7 @@ export class CAS {
   }
 
   /** Record CAS compute pass into the command encoder */
-  pass(encoder: GPUCommandEncoder): void {
+  pass(encoder: GPUCommandEncoder): Promise<void> {
     const pass = encoder.beginComputePass();
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
@@ -99,6 +99,7 @@ export class CAS {
     const workgroupsY = Math.ceil(this.outputTexture.height / 8);
     pass.dispatchWorkgroups(workgroupsX, workgroupsY);
     pass.end();
+    return Promise.resolve();
   }
 
   /** Get the sharpened output texture */

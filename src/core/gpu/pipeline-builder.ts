@@ -3,12 +3,12 @@
  *
  * Extracted from Renderer to isolate pipeline construction responsibilities.
  * Handles:
- *  - CUSTOM_EFFECTS registry for non-anime4k-webgpu effects (CAS, Debanding)
+ *  - CUSTOM_EFFECTS registry for non-anime4k-webgpu-async effects (CAS, Debanding)
  *  - 3-phase pipeline building: shader pre-warm → pipeline creation → fire-and-forget warmup
  *  - Generation counter to prevent concurrent builds from clobbering each other
  *  - Shallow params comparison (replaces JSON.stringify)
  */
-import type { Anime4KPipeline } from 'anime4k-webgpu';
+import type { Anime4KPipeline } from 'anime4k-webgpu-async';
 import type { Dimensions, EnhancementEffect, CustomEffectDescriptor } from '@/types';
 import { CAS } from '@core/effects/cas';
 import { Debanding } from '@core/effects/debanding';
@@ -21,7 +21,7 @@ export interface PipelineWithDestroy extends Anime4KPipeline {
 }
 
 /**
- * Registry of custom (non-anime4k-webgpu) effects.
+ * Registry of custom (non-anime4k-webgpu-async) effects.
  *
  * Maps an effect's `className` to its constructor and a descriptor builder. Adding a
  * new custom effect is a one-entry change here — no edits to the pipeline build loop
@@ -48,8 +48,8 @@ const CUSTOM_EFFECTS: Record<string, CustomEffectDescriptor> = {
   },
 };
 
-/** Cached anime4k-webgpu module (avoids repeated dynamic imports) */
-let cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
+/** Cached anime4k-webgpu-async module (avoids repeated dynamic imports) */
+let cachedAnime4KModule: typeof import('anime4k-webgpu-async') | null = null;
 
 /**
  * Shallow comparison of two params objects.
@@ -122,7 +122,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
 
   // Use the cached module to avoid repeated dynamic imports
   if (!cachedAnime4KModule) {
-    cachedAnime4KModule = await import('anime4k-webgpu');
+    cachedAnime4KModule = await import('anime4k-webgpu-async');
   }
   const anime4kModule = cachedAnime4KModule;
 
@@ -171,7 +171,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
     const effect = effects[i];
     let pipeline: PipelineWithDestroy | null = null;
 
-    // Check for custom effects first (not from anime4k-webgpu library)
+    // Check for custom effects first (not from anime4k-webgpu-async library)
     const custom = CUSTOM_EFFECTS[effect.className];
     if (custom) {
       pipeline = new custom.EffectClass(
@@ -196,7 +196,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
           }
         }
       } else {
-        console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu module.`);
+        console.warn(`[Anime4KWebExt] Effect class "${effect.className}" not found in anime4k-webgpu-async module.`);
       }
     }
 
@@ -250,7 +250,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
     try {
       const warmupEncoder = device.createCommandEncoder();
       for (const pipeline of pipelines) {
-        pipeline.pass(warmupEncoder);
+        await pipeline.pass(warmupEncoder);
       }
       device.queue.submit([warmupEncoder.finish()]);
       // NO onSubmittedWorkDone() — let the GPU process this asynchronously.
@@ -263,7 +263,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   if (pipelines.length === 0) {
     // If no effects are applied, create a dummy pipeline
     pipelines.push({
-      pass: () => { },
+      pass: () => Promise.resolve(),
       getOutputTexture: () => videoFrameTexture,
       updateParam: () => { },
     } as unknown as PipelineWithDestroy);
