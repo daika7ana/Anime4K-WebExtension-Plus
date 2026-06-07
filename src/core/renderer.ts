@@ -1,10 +1,17 @@
 import type { Anime4KPipeline } from 'anime4k-webgpu';
-import type { Dimensions, EnhancementEffect, CustomEffectDescriptor } from '../types';
+import type { Dimensions, EnhancementEffect, CustomEffectDescriptor, RendererOptions } from '../types';
 import { RendererInitializationError, RendererRuntimeError } from './errors';
 import { CAS } from './cas';
 import { Debanding } from './debanding';
 import { yieldToMain } from './yield-utils';
 import { PipelinePreWarmer } from './pipeline-prewarmer';
+import fullscreenTexturedQuadWGSL from '../shaders/fullscreen-textured-quad.wgsl';
+import sampleExternalTextureWGSL from '../shaders/sample-external-texture.wgsl';
+
+/** Anime4KPipeline extended with optional destroy() that some implementations expose */
+interface PipelineWithDestroy extends Anime4KPipeline {
+  destroy?(): void;
+}
 
 /**
  * Registry of custom (non-anime4k-webgpu) effects.
@@ -34,78 +41,6 @@ const CUSTOM_EFFECTS: Record<string, CustomEffectDescriptor> = {
     }),
   },
 };
-
-/**
- * Full-screen textured quad vertex shader
- * Defines vertex positions and UV coordinates for rendering a full-screen texture
- */
-const fullscreenTexturedQuadWGSL = `
-struct VertexOutput {
-  @builtin(position) Position : vec4<f32>,
-  @location(0) fragUV : vec2<f32>,
-}
-
-@vertex
-fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
-  const pos = array(
-    vec2( 1.0,  1.0),  // Top-right
-    vec2( 1.0, -1.0),  // Bottom-right
-    vec2(-1.0, -1.0),  // Bottom-left
-    vec2( 1.0,  1.0),  // Top-right (duplicate)
-    vec2(-1.0, -1.0),  // Bottom-left (duplicate)
-    vec2(-1.0,  1.0),  // Top-left
-  );
-
-  const uv = array(
-    vec2(1.0, 0.0),  // Top-right UV
-    vec2(1.0, 1.0),  // Bottom-right UV
-    vec2(0.0, 1.0),  // Bottom-left UV
-    vec2(1.0, 0.0),  // Top-right UV (duplicate)
-    vec2(0.0, 1.0),  // Bottom-left UV (duplicate)
-    vec2(0.0, 0.0),  // Top-left UV
-  );
-
-  var output : VertexOutput;
-  output.Position = vec4(pos[VertexIndex], 0.0, 1.0);
-  output.fragUV = uv[VertexIndex];
-  return output;
-}
-`;
-
-/**
- * Texture sampling fragment shader
- * Samples color values from a texture and outputs them to the screen
- */
-const sampleExternalTextureWGSL = `
-@group(0) @binding(1) var mySampler: sampler;
-@group(0) @binding(2) var myTexture: texture_2d<f32>;
-
-@fragment
-fn main(@location(0) fragUV : vec2f) -> @location(0) vec4f {
-  // Sample texture with base edge clamping
-  return textureSampleBaseClampToEdge(myTexture, mySampler, fragUV);
-}
-`;
-
-/**
- * RendererOptions defines the configuration required to create a Renderer instance
- */
-export interface RendererOptions {
-  /** Video player element */
-  video: HTMLVideoElement;
-  /** Canvas element used for rendering */
-  canvas: HTMLCanvasElement;
-  /** Array of enhancement effects to apply */
-  effects: EnhancementEffect[];
-  /** Target resolution for rendering */
-  targetDimensions: Dimensions;
-  /** Callback function invoked when a runtime error occurs */
-  onError?: (error: Error) => void;
-  /** Callback function invoked when the first frame is successfully rendered */
-  onFirstFrameRendered?: () => void;
-  /** Initialization progress callback function */
-  onProgress?: (stage: string | null, current?: number, total?: number) => void;
-}
 
 /**
  * The Renderer class encapsulates all WebGPU-related rendering logic.
@@ -143,7 +78,7 @@ export class Renderer {
   /** Intermediate texture used to copy image data from video frames */
   private videoFrameTexture!: GPUTexture;
   /** Effect processing pipeline chain */
-  private pipelines: Anime4KPipeline[] = [];
+  private pipelines: PipelineWithDestroy[] = [];
   /** Generation counter to prevent concurrent buildPipelines() calls from clobbering each other */
   private buildGeneration = 0;
 
@@ -187,6 +122,16 @@ export class Renderer {
             maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
           },
         });
+
+        // Auto-destroy prewarmed device if unclaimed after 30 seconds
+        setTimeout(() => {
+          if (Renderer.prewarmedDevice) {
+            console.log('[Anime4KWebExt] Prewarmed GPU device unclaimed after 30s, releasing.');
+            Renderer.prewarmedDevice.destroy();
+            Renderer.prewarmedDevice = null;
+            Renderer.prewarmedAdapter = null;
+          }
+        }, 30000);
       } catch {
         // Pre-warm is best-effort; errors are non-fatal
       }
@@ -341,13 +286,13 @@ export class Renderer {
     // Safely destroy old pipelines
     for (const p of this.pipelines) {
       try {
-        (p as any).destroy?.();
+        p.destroy?.();
       } catch {
         // Ignore individual pipeline destruction errors
       }
     }
 
-    const pipelines: Anime4KPipeline[] = [];
+    const pipelines: PipelineWithDestroy[] = [];
     let currentTexture = this.videoFrameTexture;
     let curWidth = this.video.videoWidth;
     let curHeight = this.video.videoHeight;
@@ -401,14 +346,14 @@ export class Renderer {
       this.onProgress?.(loadingMsg, i + 1, this.effects.length);
 
       const effect = this.effects[i];
-      let pipeline: Anime4KPipeline | null = null;
+      let pipeline: PipelineWithDestroy | null = null;
 
       // Check for custom effects first (not from anime4k-webgpu library)
       const custom = CUSTOM_EFFECTS[effect.className];
       if (custom) {
         pipeline = new custom.EffectClass(
           custom.getDescriptor(this.device, currentTexture, effect.params),
-        ) as unknown as Anime4KPipeline;
+        ) as unknown as PipelineWithDestroy;
       } else {
         const EffectClass = (anime4kModule as Record<string, any>)[effect.className];
 
@@ -496,7 +441,7 @@ export class Renderer {
         pass: () => { },
         getOutputTexture: () => this.videoFrameTexture,
         updateParam: () => { },
-      } as unknown as Anime4KPipeline);
+      } as unknown as PipelineWithDestroy);
     }
     this.pipelines = pipelines;
 
@@ -583,6 +528,7 @@ export class Renderer {
    */
   private async processFrame(): Promise<boolean> {
     if (this.destroyed) return false;
+    if (this.isRecovering) return false;
 
     try {
       if (this.video.readyState < this.video.HAVE_CURRENT_DATA) {
@@ -902,9 +848,7 @@ export class Renderer {
     // Safely destroy all GPU resources
     try {
       this.pipelines.forEach(pipeline => {
-        if (typeof (pipeline as any).destroy === 'function') {
-          (pipeline as any).destroy();
-        }
+        pipeline.destroy?.();
       });
       this.pendingBitmap?.close();
       this.pendingBitmap = null;

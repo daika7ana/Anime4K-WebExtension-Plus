@@ -51,6 +51,10 @@ module.exports = (env, argv) => {
           test: /\.css$/,
           use: [MiniCssExtractPlugin.loader, "css-loader"],
         },
+        {
+          test: /\.wgsl$/,
+          type: "asset/source",
+        },
       ],
     },
     resolve: {

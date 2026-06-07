@@ -28,7 +28,7 @@ export function stashEnhancer(enhancer: VideoEnhancer): void {
   });
 }
 
-export function findAndunstashEnhancer(video: HTMLVideoElement): VideoEnhancer | null {
+export function findAndUnstashEnhancer(video: HTMLVideoElement): VideoEnhancer | null {
   if (!video.src) return null;
 
   const stashedItem = stash.get(video.src);

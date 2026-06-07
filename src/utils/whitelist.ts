@@ -3,12 +3,7 @@
  * Provides whitelist rule matching, validation, and persistence
  */
 import { getSettings, saveSettings } from './settings';
-
-// Whitelist rule interface
-export interface WhitelistRule {
-  pattern: string; // Wildcard pattern
-  enabled: boolean;
-}
+import type { WhitelistRule } from '../types';
 
 /**
  * Validate whitelist rule syntax
@@ -30,27 +25,28 @@ export function validateRulePattern(pattern: string): boolean {
  */
 export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
   if (!rules || rules.length === 0) return false;
-  
+
   try {
     const parsedUrl = new URL(url);
     // Remove protocol and query parameters
     const baseUrl = parsedUrl.hostname + parsedUrl.pathname;
-    
+
     const result = rules.some(rule => {
       if (!rule.enabled) return false;
-      
+
       // Convert wildcard pattern to regular expression
+      // Escape all regex metacharacters, then convert wildcards to regex equivalents
       const regexPattern = rule.pattern
-        .replace(/\./g, '\\.')
-        .replace(/\*/g, '.*');
-        
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // Escape all regex special chars
+        .replace(/\*/g, '.*');                     // Then convert wildcards to .*
+
       // Create a case-insensitive regular expression
       const regex = new RegExp(regexPattern, 'i');
       const matchResult = regex.test(baseUrl);
-      
+
       return matchResult;
     });
-    
+
     return result;
   } catch (error) {
     console.error('[Whitelist] URL matching failed:', error);

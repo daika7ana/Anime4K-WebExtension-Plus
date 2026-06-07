@@ -1,7 +1,7 @@
 import { VideoEnhancer } from './video-enhancer';
 import { ANIME4K_APPLIED_ATTR } from '../constants';
 import { getSettings } from '../utils/settings';
-import { stashEnhancer, findAndunstashEnhancer } from './enhancer-stash';
+import { stashEnhancer, findAndUnstashEnhancer } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
 import { Renderer } from './renderer';
 
@@ -49,7 +49,7 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
   }
 
   // 3. Prefer restoring from stash
-  const stashedEnhancer = findAndunstashEnhancer(videoEl);
+  const stashedEnhancer = findAndUnstashEnhancer(videoEl);
   if (stashedEnhancer) {
     console.log('[Anime4KWebExt] Re-attaching stashed enhancer.');
     EnhancerMap.associateEnhancer(videoEl, stashedEnhancer);
@@ -159,9 +159,10 @@ export function setupDOMObserver(): MutationObserver {
         element.shadowRoot.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:shadow-dom-scan'));
       }
 
-      // Deep scan: only execute querySelectorAll on non-leaf nodes
-      if (element.querySelector('video')) {
-        element.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
+      // Deep scan: find all nested videos
+      const videos = element.querySelectorAll('video');
+      if (videos.length > 0) {
+        videos.forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
       }
     }
   };

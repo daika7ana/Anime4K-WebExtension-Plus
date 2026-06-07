@@ -1,7 +1,8 @@
 import './options.css';
 import '../common-vars.css';
 import { getSettings, saveSettings, synchronizeEffectsForCustomModes, getEffectsForMode, getLocalSettings, saveLocalSettings } from '../../utils/settings';
-import { WhitelistRule, validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '../../utils/whitelist';
+import type { WhitelistRule } from '../../types';
+import { validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '../../utils/whitelist';
 import { AVAILABLE_EFFECTS } from '../../utils/effects-map';
 import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '../../types';
 import { themeManager } from '../theme-manager';

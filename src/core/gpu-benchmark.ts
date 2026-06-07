@@ -3,7 +3,7 @@
  * Tests using real Anime4K effects
  */
 
-import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect } from '../types';
+import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect, BenchmarkProgress } from '../types';
 import { resolveEffectChain } from '../utils/effect-chain-templates';
 
 // Test configuration
@@ -13,13 +13,6 @@ const TEST_HEIGHT = 1080; // Test input height
 const TARGET_WIDTH = 3840;  // Target 4K
 const TARGET_HEIGHT = 2160;
 const TARGET_FRAME_TIME_24FPS = 1000 / 24; // ~41.67ms
-
-export interface BenchmarkProgress {
-    tier: string;
-    progress: number;
-    completed: boolean;
-    error?: string;
-}
 
 /**
  * Check if the GPU device is still valid

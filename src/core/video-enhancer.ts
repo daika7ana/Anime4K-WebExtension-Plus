@@ -56,12 +56,7 @@ export class VideoEnhancer {
     const isPaused = this.video.paused;
 
     return new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        this.video.oncanplay = null;
-        this.video.onerror = null;
-      };
-
-      this.video.oncanplay = () => {
+      const onCanPlay = () => {
         cleanup();
         this.video.currentTime = currentTime;
         if (!isPaused) {
@@ -71,11 +66,19 @@ export class VideoEnhancer {
         resolve();
       };
 
-      this.video.onerror = (e) => {
+      const onError = (e: Event) => {
         cleanup();
         console.error('[Anime4KWebExt] Failed to reload video after setting crossOrigin.', e);
         reject(new Error('Failed to reload video with cross-origin attribute.'));
       };
+
+      const cleanup = () => {
+        this.video.removeEventListener('canplay', onCanPlay);
+        this.video.removeEventListener('error', onError);
+      };
+
+      this.video.addEventListener('canplay', onCanPlay, { once: true });
+      this.video.addEventListener('error', onError, { once: true });
 
       this.video.src = '';
       this.video.src = originalSrc;
@@ -257,7 +260,7 @@ export class VideoEnhancer {
     const effects = getEffectsForMode(selectedMode, newSettings.performanceTier);
 
     // Call the renderer's unified configuration update method, which intelligently handles changes
-    this.renderer.updateConfiguration({
+    await this.renderer.updateConfiguration({
       effects: effects,
       targetDimensions: newTargetDimensions
     });
@@ -348,7 +351,7 @@ export class VideoEnhancer {
 
     // Update the renderer
     if (this.renderer) {
-      this.renderer.updateVideoSource(newVideo);
+      await this.renderer.updateVideoSource(newVideo);
       // Re-apply the attribute
       this.video.setAttribute(ANIME4K_APPLIED_ATTR, 'true');
     } else {
@@ -386,15 +389,15 @@ export class VideoEnhancer {
    */
   private releaseWebGPUResources(): void {
     if (this.renderer) {
-      console.log('[Debug] Releasing WebGPU resources. Entering release block.');
+      console.log('[Anime4KWebExt] Releasing WebGPU resources. Entering release block.');
       try {
         this.renderer.destroy();
-        console.log('[Debug] renderer.destroy() completed.');
+        console.log('[Anime4KWebExt] renderer.destroy() completed.');
       } catch (e) {
-        console.error('[Debug] Error caught during renderer.destroy():', e);
+        console.error('[Anime4KWebExt] Error caught during renderer.destroy():', e);
       } finally {
         this.renderer = null;
-        console.log('[Debug] renderer set to null.');
+        console.log('[Anime4KWebExt] renderer set to null.');
       }
     }
   }
