@@ -1,16 +1,17 @@
 import './options.css';
 import '../common-vars.css';
-import { getSettings, saveSettings, synchronizeEffectsForCustomModes, getEffectsForMode, getLocalSettings, saveLocalSettings } from '../../utils/settings';
-import { WhitelistRule, validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '../../utils/whitelist';
-import { AVAILABLE_EFFECTS } from '../../utils/effects-map';
-import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '../../types';
+import { getSettings, saveSettings, synchronizeEffectsForCustomModes, getEffectsForMode, getLocalSettings, saveLocalSettings } from '@utils/settings';
+import type { WhitelistRule } from '@/types';
+import { validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
+import { AVAILABLE_EFFECTS } from '@utils/effects-map';
+import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '@/types';
 import { themeManager } from '../theme-manager';
 import { renderParamSliders } from './param-sliders';
 import { Sidebar } from './Sidebar';
-import { runGPUBenchmark } from '../../core/gpu-benchmark';
+import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 
 
-import { Anime4KWebExtSettings } from '../../types';
+import type { Anime4KWebExtSettings } from '@/types';
 
 // --- Global State ---
 let settingsState: Anime4KWebExtSettings;

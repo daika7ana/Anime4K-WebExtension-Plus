@@ -1,4 +1,4 @@
-import { ANIME4K_BUTTON_CLASS } from '../constants';
+import { ANIME4K_BUTTON_CLASS } from '@/constants';
 
 /**
  * OverlayManager
@@ -20,6 +20,7 @@ export class OverlayManager {
   private resizeObserver: ResizeObserver;
   private mutationObserver: MutationObserver;
   private updatePositionRafId: number | null = null;
+  private isFirstPositionUpdate = true;
 
   // Attribute name used to identify overlay host elements
   private static readonly HOST_MARKER_ATTR = 'data-anime4k-overlay-host';
@@ -153,14 +154,14 @@ export class OverlayManager {
       });
     }
 
-    // Briefly show the button on each position update
-    if (this.hideButtonTimeout) {
-      clearTimeout(this.hideButtonTimeout);
+    // Only show button briefly on the first position update (avoid flashing on every resize)
+    if (this.isFirstPositionUpdate) {
+      this.isFirstPositionUpdate = false;
+      this.button.classList.add('show-initially');
+      this.hideButtonTimeout = window.setTimeout(() => {
+        this.button.classList.remove('show-initially');
+      }, 3000);
     }
-    this.button.classList.add('show-initially');
-    this.hideButtonTimeout = window.setTimeout(() => {
-      this.button.classList.remove('show-initially');
-    }, 3000);
   }
 
   /**

@@ -45,3 +45,10 @@ export function dissociateEnhancer(video: HTMLVideoElement): void {
 export function getAllManagedVideos(): HTMLVideoElement[] {
   return Array.from(enhancerMap.keys());
 }
+
+/**
+ * Clear all enhancer associations (bulk cleanup for deinitialization)
+ */
+export function clearAll(): void {
+  enhancerMap.clear();
+}

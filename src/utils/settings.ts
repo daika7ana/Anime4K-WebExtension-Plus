@@ -12,7 +12,6 @@ import type {
   CustomMode,
   EnhancementEffect,
   PerformanceTier,
-  BaseMode,
 } from '../types';
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { resolveEffectChain } from './effect-chain-templates';

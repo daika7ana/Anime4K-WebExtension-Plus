@@ -5,7 +5,7 @@ import { EnhancementEffect } from '../types';
  * This is the single source of truth for all effects in the system.
  * id: Unique identifier used for storage and identification.
  * name: User-friendly display name shown in the UI.
- * className: Corresponds to the class exported by the `anime4k-webgpu` library, used for dynamic instantiation.
+ * className: Corresponds to the class exported by the `anime4k-webgpu-async` library, used for dynamic instantiation.
  */
 export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
   // Sharpen Effects

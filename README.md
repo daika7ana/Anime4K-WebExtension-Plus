@@ -103,4 +103,4 @@ Click the **"Settings"** button at the bottom of the panel to access the detaile
 
 - [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — Original repository this project is forked from
 - [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
-- [Anime4K-WebGPU](https://github.com/Anime4KWebBoost/Anime4K-WebGPU)
+- [Anime4K-WebGPU-Async](https://github.com/daika7ana/Anime4K-WebGPU-Async)

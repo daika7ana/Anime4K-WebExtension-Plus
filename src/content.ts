@@ -2,8 +2,8 @@
  * Content script main entry point
  * Responsible for adding enhancement buttons to page video elements and managing enhancer instances
  */
-import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate } from './core/video-manager';
-import { isUrlWhitelisted, getWhitelistRules } from './utils/whitelist';
+import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate } from '@core/video/video-manager';
+import { isUrlWhitelisted, getWhitelistRules } from '@utils/whitelist';
 
 // Exit early in sub-frames without video to avoid unnecessary storage reads and initialization
 if (window !== window.top && !document.querySelector('video')) {
@@ -14,11 +14,17 @@ let isCurrentlyActive = false; // Track enhancement state for the current page
 
 // Check if the current page is on the whitelist
 async function shouldInitialize(): Promise<boolean> {
-  const settings = await chrome.storage.sync.get(['whitelistEnabled']);
-  if (!settings.whitelistEnabled) return true; // Always initialize when whitelist is disabled
-  
-  const rules = await getWhitelistRules();
-  return isUrlWhitelisted(window.location.href, rules);
+  try {
+    const settings = await chrome.storage.sync.get(['whitelistEnabled']);
+    if (!settings.whitelistEnabled) return true; // Always initialize when whitelist is disabled
+    
+    const rules = await getWhitelistRules();
+    return isUrlWhitelisted(window.location.href, rules);
+  } catch {
+    // Extension context may be invalidated (e.g. extension update).
+    // Default to allowing initialization.
+    return true;
+  }
 }
 
 // Evaluate and apply changes based on whitelist state

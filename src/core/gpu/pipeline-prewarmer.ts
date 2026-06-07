@@ -14,13 +14,13 @@
  * shaders remain cached in the driver.
  */
 
-import type { EnhancementEffect } from '../types';
-import { yieldToMain } from './yield-utils';
+import type { EnhancementEffect } from '@/types';
+import { yieldToMain } from '@core/utils/yield-utils';
 
 export class PipelinePreWarmer {
   private warmedSignatures: Set<string> = new Set();
   private currentWarmId: symbol = Symbol('initial');
-  private cachedAnime4KModule: typeof import('anime4k-webgpu') | null = null;
+  private cachedAnime4KModule: typeof import('anime4k-webgpu-async') | null = null;
 
   /**
    * Pre-warm pipelines for a given effect chain.
@@ -47,7 +47,7 @@ export class PipelinePreWarmer {
     let dummyTexture: GPUTexture | null = null;
     try {
       if (!this.cachedAnime4KModule) {
-        this.cachedAnime4KModule = await import('anime4k-webgpu');
+        this.cachedAnime4KModule = await import('anime4k-webgpu-async');
       }
       const anime4kModule = this.cachedAnime4KModule;
 
@@ -84,7 +84,7 @@ export class PipelinePreWarmer {
 
           if (!EffectClass) {
             EffectClass = (anime4kModule as Record<string, any>)[effect.className];
-            // Default descriptor for anime4k-webgpu library effects
+            // Default descriptor for anime4k-webgpu-async library effects
             descriptor = {
               device,
               inputTexture: dummyTexture,

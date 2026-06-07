@@ -1,9 +1,9 @@
 import { VideoEnhancer } from './video-enhancer';
-import { ANIME4K_APPLIED_ATTR } from '../constants';
-import { getSettings } from '../utils/settings';
-import { stashEnhancer, findAndunstashEnhancer } from './enhancer-stash';
+import { ANIME4K_APPLIED_ATTR } from '@/constants';
+import { getSettings } from '@utils/settings';
+import { stashEnhancer, findAndUnstashEnhancer, clearAllStash } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
-import { Renderer } from './renderer';
+
 
 // Use a Set to track processed documents or ShadowRoots so listeners can be removed
 const processedDocs = new Set<Document | ShadowRoot>();
@@ -49,7 +49,7 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
   }
 
   // 3. Prefer restoring from stash
-  const stashedEnhancer = findAndunstashEnhancer(videoEl);
+  const stashedEnhancer = findAndUnstashEnhancer(videoEl);
   if (stashedEnhancer) {
     console.log('[Anime4KWebExt] Re-attaching stashed enhancer.');
     EnhancerMap.associateEnhancer(videoEl, stashedEnhancer);
@@ -112,17 +112,19 @@ export function initializeOnPage(): void {
     console.warn('[Anime4KWebExt] initializeOnPage called while already initialized. Ignoring.');
     return;
   }
-  // 1. Process the main document
+  // 1. Process the main document for media event delegation
   processDoc(document);
   
-  // 2. Initial scan of existing videos on the page to handle statically loaded videos
-  document.querySelectorAll('video').forEach(video => processVideoElement(video, 'initial-scan'));
+  // 2. Initial scan of existing videos
+  const existingVideos = document.querySelectorAll('video');
+  existingVideos.forEach(video => processVideoElement(video, 'initial-scan'));
 
-  // 3. Set up DOM observer to handle dynamically loaded videos and Shadow DOM
-  domObserver = setupDOMObserver();
-
-  // 4. Pre-warm GPU adapter/device so they're ready when the user clicks Enhance
-  Renderer.preWarmGPU();
+  // 3. Set up DOM observer — use full observer if videos exist, lightweight detection otherwise
+  if (existingVideos.length > 0 || document.querySelector('video')) {
+    domObserver = setupDOMObserver();
+  } else {
+    domObserver = setupLightweightVideoDetection();
+  }
 }
 
 /**
@@ -159,9 +161,10 @@ export function setupDOMObserver(): MutationObserver {
         element.shadowRoot.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:shadow-dom-scan'));
       }
 
-      // Deep scan: only execute querySelectorAll on non-leaf nodes
-      if (element.querySelector('video')) {
-        element.querySelectorAll('video').forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
+      // Deep scan: find all nested videos
+      const videos = element.querySelectorAll('video');
+      if (videos.length > 0) {
+        videos.forEach(video => processVideoElement(video, 'mutation-observer:subtree-scan'));
       }
     }
   };
@@ -201,6 +204,54 @@ export function setupDOMObserver(): MutationObserver {
     document.querySelectorAll('video').forEach(cleanupVideoEnhancer);
   });
   
+  return observer;
+}
+
+/**
+ * Lightweight observer for pages without video. Watches for video elements
+ * to appear, then promotes to the full DOM observer.
+ */
+function setupLightweightVideoDetection(): MutationObserver {
+  let debounceTimer: number | null = null;
+  let pendingNodes: Node[] = [];
+
+  const checkForVideo = () => {
+    const nodes = pendingNodes;
+    pendingNodes = [];
+    debounceTimer = null;
+
+    for (const node of nodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      const el = node as Element;
+      if (el.tagName === 'VIDEO' || el.querySelector('video')) {
+        // Video found! Promote to full observer
+        console.log('[Anime4KWebExt] Video detected on page, activating full observer.');
+        observer.disconnect();
+        // Process any videos that now exist
+        document.querySelectorAll('video').forEach(v => processVideoElement(v, 'lazy-detection'));
+        domObserver = setupDOMObserver();
+        return;
+      }
+    }
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          pendingNodes.push(node);
+        }
+      });
+    }
+    if (debounceTimer !== null) clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(checkForVideo, 100);
+  });
+
+  // Use a try-catch in case document.body doesn't exist yet
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
   return observer;
 }
 
@@ -280,4 +331,8 @@ export function deinitializeOnPage(): void {
       EnhancerMap.dissociateEnhancer(video);
     }
   });
+
+  // Bulk cleanup module-level singletons to prevent stale references
+  EnhancerMap.clearAll();
+  clearAllStash();
 }

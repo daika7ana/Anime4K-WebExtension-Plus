@@ -109,6 +109,32 @@ interface Dimensions {
   height: number;
 }
 
+// ===== GPU Benchmark Progress Interface =====
+interface BenchmarkProgress {
+  tier: string;
+  progress: number;
+  completed: boolean;
+  error?: string;
+}
+
+// ===== Renderer Options Interface =====
+interface RendererOptions {
+  /** Video player element */
+  video: HTMLVideoElement;
+  /** Canvas element used for rendering */
+  canvas: HTMLCanvasElement;
+  /** Array of enhancement effects to apply */
+  effects: EnhancementEffect[];
+  /** Target resolution for rendering */
+  targetDimensions: Dimensions;
+  /** Callback function invoked when a runtime error occurs */
+  onError?: (error: Error) => void;
+  /** Callback function invoked when the first frame is successfully rendered */
+  onFirstFrameRendered?: () => void;
+  /** Initialization progress callback function */
+  onProgress?: (stage: string | null, current?: number, total?: number) => void;
+}
+
 // Export interfaces for use by other modules
 export {
   PerformanceTier,
@@ -126,4 +152,6 @@ export {
   EffectClassName,
   ParamSliderConfig,
   CustomEffectDescriptor,
+  BenchmarkProgress,
+  RendererOptions,
 };

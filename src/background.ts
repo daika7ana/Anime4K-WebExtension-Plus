@@ -1,5 +1,5 @@
-import { getSettings, getLocalSettings } from './utils/settings';
-import { ensureLatestConfig } from './utils/migration';
+import { getSettings, getLocalSettings } from '@utils/settings';
+import { ensureLatestConfig } from '@utils/migration';
 
 const RULESET_ID = 'ruleset_1';
 
