@@ -1,4 +1,4 @@
-name: Build and Package
+name: Build
 
 on:
   push:
@@ -6,140 +6,20 @@ on:
   pull_request:
     branches: [main]
     types: [labeled]
-  workflow_dispatch:
 
 jobs:
   build-chrome:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 23
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build project
-        run: pnpm build:chrome
-
-      - name: Rename dist folder
-        run: |
-          mv dist-chrome anime4k-webextension-plus
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: anime4k-webextension-plus-chrome
-          path: anime4k-webextension-plus
+    uses: ./.github/workflows/_build.yml
+    with:
+      browser: chrome
+    permissions:
+      contents: read
+      actions: write
 
   build-firefox:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 23
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build project
-        run: pnpm build:firefox
-
-      - name: Rename dist folder
-        run: |
-          mv dist-firefox anime4k-webextension-plus
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: anime4k-webextension-plus-firefox
-          path: anime4k-webextension-plus
-
-  release:
-    needs: [build-chrome, build-firefox]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build.yml
+    with:
+      browser: firefox
     permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 23
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Download Chrome artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: anime4k-webextension-plus-chrome
-          path: anime4k-webextension-plus-chrome
-
-      - name: Download Firefox artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: anime4k-webextension-plus-firefox
-          path: anime4k-webextension-plus-firefox
-
-      - name: Create Chrome zip
-        run: |
-          cd anime4k-webextension-plus-chrome && zip -r ../anime4k-webextension-plus-chrome.zip . && cd ..
-
-      - name: Sign Firefox extension
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          npx web-ext sign \
-            --source-dir=anime4k-webextension-plus-firefox \
-            --api-key="$AMO_JWT_ISSUER" \
-            --api-secret="$AMO_JWT_SECRET" \
-            --channel=unlisted
-
-      - name: Get version from manifest
-        id: version
-        run: echo "version=$(node -p "require('./manifest.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Collect release files
-        run: |
-          mkdir -p release-files
-          cp anime4k-webextension-plus-chrome.zip release-files/
-          cp web-ext-artifacts/*.xpi release-files/anime4k-webextension-plus-firefox.xpi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}
-          files: release-files/*
-          generate_release_notes: true
+      contents: read
+      actions: write

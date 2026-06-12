@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-chrome:
+    uses: ./.github/workflows/_build.yml
+    with:
+      browser: chrome
+    permissions:
+      contents: read
+      actions: write
+
+  build-firefox:
+    uses: ./.github/workflows/_build.yml
+    with:
+      browser: firefox
+    permissions:
+      contents: read
+      actions: write
+
+  release:
+    needs: [build-chrome, build-firefox]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 23
+
+      - name: Download Chrome artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: anime4k-webextension-plus-chrome
+          path: anime4k-webextension-plus-chrome
+
+      - name: Download Firefox artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: anime4k-webextension-plus-firefox
+          path: anime4k-webextension-plus-firefox
+
+      - name: Create Chrome zip
+        run: |
+          cd anime4k-webextension-plus-chrome && zip -r ../anime4k-webextension-plus-chrome.zip . && cd ..
+
+      - name: Create Edge zip
+        run: |
+          cd anime4k-webextension-plus-chrome && zip -r ../anime4k-webextension-plus-edge.zip . && cd ..
+
+      - name: Sign Firefox extension
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx web-ext@10.4.0 sign \
+            --source-dir=anime4k-webextension-plus-firefox \
+            --api-key="$AMO_JWT_ISSUER" \
+            --api-secret="$AMO_JWT_SECRET" \
+            --channel=unlisted
+
+      - name: Get version from manifest
+        id: version
+        run: echo "version=$(node -p "require('./manifest.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Upload Edge extension
+        uses: wdzeng/edge-addon@v2
+        with:
+          product-id: ${{ secrets.EDGE_PRODUCT_ID }}
+          zip-path: anime4k-webextension-plus-edge.zip
+          api-key: ${{ secrets.EDGE_API_KEY }}
+          client-id: ${{ secrets.EDGE_CLIENT_ID }}
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          cp anime4k-webextension-plus-chrome.zip release-files/
+          cp anime4k-webextension-plus-edge.zip release-files/
+          cp web-ext-artifacts/*.xpi release-files/anime4k-webextension-plus-firefox.xpi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          files: release-files/*
+          generate_release_notes: true

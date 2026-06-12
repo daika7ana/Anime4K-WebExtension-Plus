@@ -44,7 +44,6 @@ The extension requests the following permissions, used exclusively for video enh
 |------------|---------|
 | `storage` | Save your preferences and settings locally |
 | `tabs` | Detect video elements on web pages |
-| `scripting` | Inject video enhancement shaders |
 | `declarativeNetRequest` | Fix cross-origin video playback issues |
 | `host_permissions` | Access video elements on websites you visit |
 
