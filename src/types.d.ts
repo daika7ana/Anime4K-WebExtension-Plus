@@ -78,6 +78,17 @@ interface GPUBenchmarkResult {
   adapterInfo: string;
 }
 
+// ===== Color Grading Settings =====
+interface ColorGradingSettings {
+  enabled: boolean;
+  brightness: number;  // [-1, 1], default 0
+  gamma: number;       // [0.1, 4], default 1
+  contrast: number;    // [0, 2], default 1
+  saturation: number;  // [0, 2], default 1
+  vibrance: number;    // [-1, 1], default 0
+  exposure: number;    // [-3, 3], default 0 (in stops)
+}
+
 // ===== Cross-device Synced Settings (storage.sync) =====
 interface SyncedSettings {
   selectedModeId: string;
@@ -86,6 +97,7 @@ interface SyncedSettings {
   whitelist: WhitelistRule[];
   customModes: CustomMode[];
   enableCrossOriginFix: boolean;
+  colorGrading: ColorGradingSettings;
 }
 
 // ===== Local-only Settings (storage.local) =====
@@ -142,6 +154,7 @@ export {
   Anime4KWebExtSettings,
   SyncedSettings,
   LocalSettings,
+  ColorGradingSettings,
   Dimensions,
   WhitelistRule,
   EnhancementEffect,

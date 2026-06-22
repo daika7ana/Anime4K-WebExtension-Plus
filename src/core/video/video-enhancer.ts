@@ -1,7 +1,7 @@
 import { getSettings, getEffectsForMode } from '@utils/settings';
 import { Renderer } from '@core/renderer';
 import { ANIME4K_APPLIED_ATTR } from '@/constants';
-import { Dimensions, Anime4KWebExtSettings, EnhancementMode } from '@/types';
+import { Dimensions, Anime4KWebExtSettings, EnhancementMode, EnhancementEffect, ColorGradingSettings } from '@/types';
 import { OverlayManager } from '@core/ui/overlay-manager';
 import { yieldToAnimationFrame } from '@core/utils/yield-utils';
 
@@ -200,7 +200,8 @@ export class VideoEnhancer {
     canvas.height = targetDimensions.height;
 
     // Get the actual effect chain based on mode and performance tier
-    const effects = getEffectsForMode(selectedMode, settings.performanceTier);
+    const baseEffects = getEffectsForMode(selectedMode, settings.performanceTier);
+    const effects = this.getEffectsWithColorGrading(baseEffects, settings.colorGrading);
 
     this.renderer = await Renderer.create({
       video: this.video,
@@ -262,7 +263,8 @@ export class VideoEnhancer {
     }
 
     // Get the actual effect chain based on mode and performance tier
-    const effects = getEffectsForMode(selectedMode, newSettings.performanceTier);
+    const baseEffects = getEffectsForMode(selectedMode, newSettings.performanceTier);
+    const effects = this.getEffectsWithColorGrading(baseEffects, newSettings.colorGrading);
 
     // Call the renderer's unified configuration update method, which intelligently handles changes
     await this.renderer.updateConfiguration({
@@ -321,6 +323,30 @@ export class VideoEnhancer {
     }
 
     return { width, height };
+  }
+
+  /**
+   * Appends a ColorAdjust effect to the end of the effect chain when color grading is enabled.
+   * Color grading is always applied last (after all enhancement effects).
+   */
+  private getEffectsWithColorGrading(
+    effects: EnhancementEffect[],
+    colorGrading: ColorGradingSettings | undefined,
+  ): EnhancementEffect[] {
+    if (!colorGrading?.enabled) return effects;
+    return [...effects, {
+      id: 'anime4k/ColorGrading/ColorAdjust',
+      name: 'Color Grading',
+      className: 'ColorAdjust',
+      params: {
+        brightness: colorGrading.brightness,
+        gamma: colorGrading.gamma,
+        contrast: colorGrading.contrast,
+        saturation: colorGrading.saturation,
+        vibrance: colorGrading.vibrance,
+        exposure: colorGrading.exposure,
+      },
+    }];
   }
 
   /**

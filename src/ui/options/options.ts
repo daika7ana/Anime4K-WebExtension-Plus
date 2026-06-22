@@ -7,6 +7,7 @@ import { AVAILABLE_EFFECTS } from '@utils/effects-map';
 import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '@/types';
 import { themeManager } from '../theme-manager';
 import { renderParamSliders } from './param-sliders';
+import { renderColorGradingSliders, setColorGradingSlidersEnabled } from './color-grading-panel';
 import { Sidebar } from './Sidebar';
 import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 
@@ -27,6 +28,8 @@ const addRuleBtn = document.getElementById('add-rule') as HTMLButtonElement;
 const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
 const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
 const crossOriginFixToggle = document.getElementById('cross-origin-fix-toggle') as HTMLInputElement;
+const colorGradingToggle = document.getElementById('color-grading-toggle') as HTMLInputElement;
+const colorGradingSliders = document.getElementById('color-grading-sliders') as HTMLElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
 const versionNumberSpan = document.getElementById('version-number') as HTMLSpanElement;
 
@@ -571,6 +574,20 @@ const renderAboutSectionUI = () => {
   }
 }
 
+const renderColorGradingUI = () => {
+  colorGradingToggle.checked = settingsState.colorGrading.enabled;
+  renderColorGradingSliders(
+    settingsState.colorGrading,
+    colorGradingSliders,
+    settingsState.colorGrading.enabled,
+    async (updated) => {
+      settingsState.colorGrading = updated;
+      await saveSettings({ colorGrading: updated });
+      notifyUpdate();
+    },
+  );
+};
+
 const setupEventListeners = () => {
   // --- General Settings Listeners ---
   crossOriginFixToggle.addEventListener('change', async (e) => {
@@ -584,6 +601,15 @@ const setupEventListeners = () => {
   themeSelect.addEventListener('change', (e) => {
     const selectedTheme = (e.target as HTMLSelectElement).value as 'light' | 'dark' | 'auto';
     themeManager.setTheme(selectedTheme);
+  });
+
+  // --- Color Grading Listener ---
+  colorGradingToggle.addEventListener('change', async (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    settingsState.colorGrading.enabled = enabled;
+    setColorGradingSlidersEnabled(colorGradingSliders, enabled);
+    await saveSettings({ colorGrading: settingsState.colorGrading });
+    notifyUpdate();
   });
 
   // --- Smart Features Listeners ---
@@ -822,6 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderRulesUI();
   renderGeneralSettingsUI();
   renderAboutSectionUI();
+  renderColorGradingUI();
 
   // Attach all event listeners
   setupEventListeners();

@@ -6,6 +6,10 @@ import { EnhancementEffect } from '../types';
  * id: Unique identifier used for storage and identification.
  * name: User-friendly display name shown in the UI.
  * className: Corresponds to the class exported by the `anime4k-webgpu-async` library, used for dynamic instantiation.
+ *
+ * Note: System-only effects like ColorAdjust (color grading) are intentionally excluded.
+ * They are registered in CUSTOM_EFFECTS in pipeline-builder.ts and injected programmatically
+ * by video-enhancer.ts — not available for users to add to custom effect chains.
  */
 export const AVAILABLE_EFFECTS: EnhancementEffect[] = [
   // Sharpen Effects

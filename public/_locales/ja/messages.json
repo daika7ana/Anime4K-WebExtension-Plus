@@ -371,5 +371,53 @@
   },
   "tipPin": {
     "message": "📌 素早くアクセスするために拡張機能アイコンをツールバーにピン留め"
+  },
+  "colorGrading": {
+    "message": "カラーグレーディング"
+  },
+  "colorGradingDesc": {
+    "message": "露光、明るさ、コントラスト、ガンマ、彩度、鮮やかさを調整します。すべての強化効果の後に適用されます。"
+  },
+  "enableColorGrading": {
+    "message": "カラーグレーディングを有効にする"
+  },
+  "enableColorGradingDesc": {
+    "message": "有効にすると、すべての強化効果の最後のステップとしてカラーグレーディングが適用されます。"
+  },
+  "brightness": {
+    "message": "明るさ"
+  },
+  "gamma": {
+    "message": "ガンマ"
+  },
+  "contrast": {
+    "message": "コントラスト"
+  },
+  "vibrance": {
+    "message": "鮮やかさ"
+  },
+  "saturation": {
+    "message": "彩度"
+  },
+  "exposure": {
+    "message": "露光"
+  },
+  "exposureDesc": {
+    "message": "全体の明るさレベルを調整します。EV 単位で測定。"
+  },
+  "brightnessDesc": {
+    "message": "画像全体の明るさ・暗さを調整します。"
+  },
+  "contrastDesc": {
+    "message": "明るい部分と暗い部分の差を調整します。"
+  },
+  "gammaDesc": {
+    "message": "中間調の明るさを調整します。高い値で明るく、低い値で暗くします。"
+  },
+  "saturationDesc": {
+    "message": "すべての色の強度を均一に調整します。"
+  },
+  "vibranceDesc": {
+    "message": "彩度の低い色を選択的に強調し、すでに鮮やかな色は保持します。"
   }
 }

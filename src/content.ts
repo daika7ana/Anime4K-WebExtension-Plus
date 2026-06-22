@@ -70,7 +70,7 @@ evaluateAndApplyWhitelistState();
 // Listen for settings update messages from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SETTINGS_UPDATED') {
-    handleSettingsUpdate(request.settings, sendResponse);
+    handleSettingsUpdate(request.settings ?? {}, sendResponse);
     return true; // Indicates async response
   } else if (request.type === 'URL_UPDATED') {
     // Re-check whitelist when URL changes

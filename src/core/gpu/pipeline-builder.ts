@@ -11,6 +11,7 @@
 import type { Anime4KPipeline } from 'anime4k-webgpu-async';
 import type { Dimensions, EnhancementEffect, CustomEffectDescriptor } from '@/types';
 import { CAS } from '@core/effects/cas';
+import { ColorAdjust } from '@core/effects/color-adjust';
 import { Debanding } from '@core/effects/debanding';
 import { yieldToMain } from '@core/utils/yield-utils';
 import { PipelinePreWarmer } from './pipeline-prewarmer';
@@ -44,6 +45,19 @@ const CUSTOM_EFFECTS: Record<string, CustomEffectDescriptor> = {
       inputTexture,
       strength: params?.strength ?? 0.5,
       bandThreshold: params?.bandThreshold ?? 0.08,
+    }),
+  },
+  ColorAdjust: {
+    EffectClass: ColorAdjust,
+    getDescriptor: (device, inputTexture, params) => ({
+      device,
+      inputTexture,
+      brightness: params?.brightness ?? 0,
+      gamma: params?.gamma ?? 1,
+      contrast: params?.contrast ?? 1,
+      saturation: params?.saturation ?? 1,
+      vibrance: params?.vibrance ?? 0,
+      exposure: params?.exposure ?? 0,
     }),
   },
 };

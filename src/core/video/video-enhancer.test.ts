@@ -273,6 +273,7 @@ describe('VideoEnhancer', () => {
         whitelist: [],
         whitelistEnabled: false,
         enableCrossOriginFix: false,
+        colorGrading: { enabled: false, brightness: 0, gamma: 1, contrast: 1, saturation: 1, vibrance: 0, exposure: 0 },
       };
 
       await enhancer.updateSettings(newSettings);

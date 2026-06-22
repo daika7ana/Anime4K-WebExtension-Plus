@@ -44,6 +44,23 @@
             </a>
           </li>
           <li>
+            <a class="menu-item" data-section="color-grading">
+              <svg xmlns="http://www.w3.org/2000/svg" class="menu-icon" width="20" height="20" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path>
+                <path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path>
+                <path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path>
+                <path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41 1.41"></path>
+              </svg>
+              <span data-i18n="colorGrading">Color Grading</span>
+            </a>
+          </li>
+          <li>
             <a class="menu-item" data-section="whitelist">
               <svg xmlns="http://www.w3.org/2000/svg" class="menu-icon" width="20" height="20" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -182,6 +199,32 @@
         </div>
         <div id="modes-container" class="modes-container">
           <!-- Mode cards will be dynamically added here -->
+        </div>
+      </section>
+      <section id="color-grading-section" class="content-section">
+        <div class="header">
+          <div>
+            <h1 data-i18n="colorGrading">Color Grading</h1>
+            <p style="margin: 4px 0 0; color: var(--on-surface-variant); font-size: 14px;" data-i18n="colorGradingDesc">Adjust exposure, brightness, contrast, gamma, saturation, and vibrance. Applied after all enhancement effects.</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title" data-i18n="colorGrading">Color Grading</h2>
+          </div>
+          <div class="setting-item">
+            <div class="setting-label">
+              <label data-i18n="enableColorGrading">Enable Color Grading</label>
+              <p class="setting-description" data-i18n="enableColorGradingDesc">When enabled, color grading is applied as the final step after all enhancement effects.</p>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input type="checkbox" id="color-grading-toggle">
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+          <div id="color-grading-sliders" class="color-grading-sliders"></div>
         </div>
       </section>
       <section id="whitelist-section" class="content-section">

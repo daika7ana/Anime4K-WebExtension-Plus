@@ -374,6 +374,54 @@
     "message": "造訪設定以取得進階選項"
   },
   "tipPin": {
-    "message": "📌 將擴充功能圖示釘選到工具列以快速存取"
+    "message": "📌 將擴展圖示固定到工具列以快速存取"
+  },
+  "colorGrading": {
+    "message": "色彩調整"
+  },
+  "colorGradingDesc": {
+    "message": "調整曝光、亮度、對比度、伽馬、飽和度和鮮豔度。在所有增強效果之後套用。"
+  },
+  "enableColorGrading": {
+    "message": "啟用色彩調整"
+  },
+  "enableColorGradingDesc": {
+    "message": "啟用後，色彩調整將作為所有增強效果之後的最後一步套用。"
+  },
+  "brightness": {
+    "message": "亮度"
+  },
+  "gamma": {
+    "message": "伽馬"
+  },
+  "contrast": {
+    "message": "對比度"
+  },
+  "vibrance": {
+    "message": "鮮豔度"
+  },
+  "saturation": {
+    "message": "飽和度"
+  },
+  "exposure": {
+    "message": "曝光"
+  },
+  "exposureDesc": {
+    "message": "控制整體亮度級別。以 EV 為單位。"
+  },
+  "brightnessDesc": {
+    "message": "調整影像的整體明暗程度。"
+  },
+  "contrastDesc": {
+    "message": "控制亮部和暗部之間的差異。"
+  },
+  "gammaDesc": {
+    "message": "調整中間調亮度。值越高越亮，越低越暗。"
+  },
+  "saturationDesc": {
+    "message": "均勻地控制所有顏色的強度。"
+  },
+  "vibranceDesc": {
+    "message": "選擇性地增強低飽和度顏色，同時保留已有的鮮豔色彩。"
   }
 }

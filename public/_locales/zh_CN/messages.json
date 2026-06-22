@@ -370,5 +370,53 @@
   },
   "tipPin": {
     "message": "📌 将扩展图标固定到工具栏以快速访问"
+  },
+  "colorGrading": {
+    "message": "色彩调整"
+  },
+  "colorGradingDesc": {
+    "message": "调整曝光、亮度、对比度、伽马、饱和度和鲜艳度。在所有增强效果之后应用。"
+  },
+  "enableColorGrading": {
+    "message": "启用色彩调整"
+  },
+  "enableColorGradingDesc": {
+    "message": "启用后，色彩调整将作为所有增强效果之后的最后一步应用。"
+  },
+  "brightness": {
+    "message": "亮度"
+  },
+  "gamma": {
+    "message": "伽马"
+  },
+  "contrast": {
+    "message": "对比度"
+  },
+  "vibrance": {
+    "message": "鲜艳度"
+  },
+  "saturation": {
+    "message": "饱和度"
+  },
+  "exposure": {
+    "message": "曝光"
+  },
+  "exposureDesc": {
+    "message": "控制整体亮度级别。以 EV 为单位。"
+  },
+  "brightnessDesc": {
+    "message": "调整图像的整体明暗程度。"
+  },
+  "contrastDesc": {
+    "message": "控制亮部和暗部之间的差异。"
+  },
+  "gammaDesc": {
+    "message": "调整中间调亮度。值越高越亮，越低越暗。"
+  },
+  "saturationDesc": {
+    "message": "均匀地控制所有颜色的强度。"
+  },
+  "vibranceDesc": {
+    "message": "选择性地增强低饱和度颜色，同时保留已有的鲜艳色彩。"
   }
 }

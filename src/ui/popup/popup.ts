@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const addParentPathBtn = document.getElementById('add-parent-path') as HTMLButtonElement;
   const openSettingsBtn = document.getElementById('open-settings') as HTMLButtonElement;
   const statusBadge = document.getElementById('status-badge') as HTMLSpanElement;
+  const colorGradingToggle = document.getElementById('color-grading-toggle') as HTMLInputElement;
 
   if (!modeSelect || !resolutionSelect || !saveButton || !whitelistToggle ||
     !addCurrentPageBtn || !addCurrentDomainBtn || !addParentPathBtn || !openSettingsBtn) {
@@ -148,6 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderModeSelect(currentSettings);
     resolutionSelect.value = currentSettings.targetResolutionSetting;
     whitelistToggle.checked = currentSettings.whitelistEnabled;
+    colorGradingToggle.checked = currentSettings.colorGrading?.enabled ?? false;
     updateStatusBadge('Ready');
     updateSaveButtonState();
 
@@ -270,6 +272,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log('Whitelist enabled:', whitelistToggle.checked);
     } catch (error) {
       console.error('Error saving whitelist toggle:', error);
+    }
+  });
+
+  // Color Grading toggle change handler
+  colorGradingToggle.addEventListener('change', async () => {
+    try {
+      const settings = await getSettings();
+      const colorGrading = { ...settings.colorGrading, enabled: colorGradingToggle.checked };
+      await saveSettings({ colorGrading });
+      console.log('Color grading enabled:', colorGradingToggle.checked);
+
+      // Notify content script
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'SETTINGS_UPDATED' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.warn('Message send error:', chrome.runtime.lastError.message);
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error saving color grading toggle:', error);
     }
   });
 

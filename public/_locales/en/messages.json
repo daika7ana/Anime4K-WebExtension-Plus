@@ -370,5 +370,53 @@
   },
   "tipPin": {
     "message": "📌 Pin the extension icon to your toolbar for quick access"
+  },
+  "colorGrading": {
+    "message": "Color Grading"
+  },
+  "colorGradingDesc": {
+    "message": "Adjust exposure, brightness, contrast, gamma, saturation, and vibrance. Applied after all enhancement effects."
+  },
+  "enableColorGrading": {
+    "message": "Enable Color Grading"
+  },
+  "enableColorGradingDesc": {
+    "message": "When enabled, color grading is applied as the final step after all enhancement effects."
+  },
+  "brightness": {
+    "message": "Brightness"
+  },
+  "gamma": {
+    "message": "Gamma"
+  },
+  "contrast": {
+    "message": "Contrast"
+  },
+  "vibrance": {
+    "message": "Vibrance"
+  },
+  "saturation": {
+    "message": "Saturation"
+  },
+  "exposure": {
+    "message": "Exposure"
+  },
+  "exposureDesc": {
+    "message": "Controls the overall light level. Measured in EV stops."
+  },
+  "brightnessDesc": {
+    "message": "Adjusts the overall lightness or darkness of the image."
+  },
+  "contrastDesc": {
+    "message": "Controls the difference between light and dark areas."
+  },
+  "gammaDesc": {
+    "message": "Adjusts midtone brightness. Higher values brighten, lower values darken."
+  },
+  "saturationDesc": {
+    "message": "Controls the intensity of all colors uniformly."
+  },
+  "vibranceDesc": {
+    "message": "Selectively boosts less-saturated colors while preserving already vivid ones."
   }
 }

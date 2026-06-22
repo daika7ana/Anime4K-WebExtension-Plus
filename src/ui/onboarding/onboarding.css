@@ -44,7 +44,7 @@ body {
     color: var(--on-surface-variant);
 }
 
-/* 步骤指示器 */
+/* Step Indicator */
 .step-indicator {
     display: flex;
     align-items: center;
@@ -83,7 +83,7 @@ body {
     margin: 0 8px;
 }
 
-/* 步骤内容 */
+/* Step Content */
 .step-content {
     display: none;
 }
@@ -117,7 +117,7 @@ body {
     margin-bottom: 24px;
 }
 
-/* 测试状态 */
+/* Test Status */
 .test-status {
     text-align: center;
     padding: 32px;
@@ -131,7 +131,7 @@ body {
     margin-bottom: 16px;
 }
 
-/* 进度条 */
+/* Progress Bar */
 .progress-container {
     margin-bottom: 24px;
 }
@@ -157,7 +157,7 @@ body {
     color: var(--on-surface-variant);
 }
 
-/* 结果卡片 */
+/* Result Card */
 .result-card {
     text-align: center;
     padding: 24px;
@@ -173,19 +173,12 @@ body {
     margin-bottom: 8px;
 }
 
-.result-gpu {
-    font-size: 14px;
-    color: var(--on-primary-container);
-    opacity: 0.8;
-    margin: 0 0 8px 0;
-}
-
 .result-desc {
     margin: 0;
     color: var(--on-primary-container);
 }
 
-/* 档位选项 */
+/* Tier Options */
 .tier-options {
     margin-bottom: 24px;
 }
@@ -225,14 +218,14 @@ body {
     color: var(--on-primary-container);
 }
 
-/* 完成图标 */
+/* Complete Icon */
 .complete-icon {
     text-align: center;
     font-size: 64px;
     margin-bottom: 24px;
 }
 
-/* 快速提示 */
+/* Quick Tips */
 .quick-tips {
     background: var(--surface-container-low);
     border-radius: var(--border-radius-md);
@@ -260,7 +253,7 @@ body {
     margin-bottom: 0;
 }
 
-/* 按钮组 */
+/* Button Group */
 .button-group {
     display: flex;
     gap: 12px;

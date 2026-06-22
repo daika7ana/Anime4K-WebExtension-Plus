@@ -99,6 +99,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SETTINGS_UPDATED') {
     console.log('[Background] Settings updated, checking DNR rules...');
     updateDNRuleset();
+
+    // Forward to all content scripts so active enhancers pick up the change.
+    // The options page sends via chrome.runtime.sendMessage (reaches background),
+    // but content scripts only listen on chrome.runtime.onMessage in their own context,
+    // so we must relay via chrome.tabs.sendMessage to each tab.
+    chrome.tabs.query({}, (tabs) => {
+      for (const tab of tabs) {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, request).catch(() => {
+            // Tab may not have a content script — ignore silently
+          });
+        }
+      }
+    });
   } else if (request.type === 'OPEN_OPTIONS_PAGE') {
     chrome.runtime.openOptionsPage();
   } else if (request.type === 'OPEN_ONBOARDING') {

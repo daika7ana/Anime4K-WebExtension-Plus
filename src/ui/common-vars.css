@@ -36,28 +36,28 @@
   --error-container: var(--md-sys-color-error-container);
   --on-error-container: var(--md-sys-color-on-error-container);
   
-  /* Material Design 3 尺寸和形状 */
+  /* Material Design 3 Dimensions and Shapes */
   --border-radius: 12px; /* Material Design 3 rounded corners */
   --border-radius-sm: 8px;
   --border-radius-lg: 16px;
   --border-radius-xl: 24px;
   
-  /* Material Design 3 阴影 */
+  /* Material Design 3 Shadows */
   --shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
   --shadow-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
   --shadow-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.3);
   --shadow-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.3);
   --shadow-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px 0px rgba(0, 0, 0, 0.3);
   
-  /* 使用 Material Design 阴影 */
+  /* Use Material Design shadows */
   --shadow: var(--shadow-2);
   --box-shadow-sm: var(--shadow-1);
   
-  /* Material Design 3 字体 */
+  /* Material Design 3 Typography */
   --font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-family-display: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Material Design 3 间距系统 (4px base unit) */
+  /* Material Design 3 Spacing System (4px base unit) */
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
@@ -68,7 +68,7 @@
   --spacing-10: 40px;
   --spacing-12: 48px;
   
-  /* 向后兼容的间距变量 */
+  /* Backward-compatible spacing variables */
   --padding-sm: var(--spacing-2);
   --padding-md: var(--spacing-3);
   --padding-lg: var(--spacing-4);
@@ -251,4 +251,100 @@
   font-weight: 500;
   line-height: 16px;
   letter-spacing: 0.5px;
+}
+
+/* ===== Shared Switch/Toggle ===== */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 32px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--surface-variant);
+  transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
+  border-radius: 16px;
+  border: 2px solid var(--outline);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 24px;
+  width: 24px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--outline);
+  transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
+  border-radius: 50%;
+  box-shadow: var(--shadow-1);
+}
+
+input:checked+.slider {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+input:checked+.slider:before {
+  background-color: var(--surface);
+  transform: translateX(20px);
+}
+
+.slider:hover {
+  box-shadow: 0 0 0 8px rgba(137, 180, 250, 0.08);
+}
+
+input:focus+.slider {
+  box-shadow: 0 0 0 8px rgba(137, 180, 250, 0.12);
+}
+
+/* ===== Shared Select Color Scheme ===== */
+/* Let the browser handle dropdown option color scheme */
+select {
+  color-scheme: light dark;
+}
+
+/* Force dark color scheme in dark mode for better contrast */
+@media (prefers-color-scheme: dark) {
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #2d2d2d !important;
+    color: #ffffff !important;
+  }
+}
+
+/* When forcing dark theme */
+:root.dark select {
+  color-scheme: dark;
+}
+
+:root.dark select option {
+  background-color: #2d2d2d !important;
+  color: #ffffff !important;
+}
+
+/* When forcing light theme */
+:root.light select {
+  color-scheme: light;
+}
+
+:root.light select option {
+  background-color: #ffffff !important;
+  color: #000000 !important;
 }
