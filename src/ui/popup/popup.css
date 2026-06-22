@@ -7,8 +7,8 @@ body {
   margin: 0;
   padding: var(--spacing-2);
   color: var(--on-surface);
-  min-width: 320px;
-  max-width: 320px;
+  min-width: 356px;
+  max-width: 356px;
   box-sizing: border-box;
   overflow: hidden;
 }

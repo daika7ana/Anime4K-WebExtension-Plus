@@ -17,9 +17,26 @@ async function shouldInitialize(): Promise<boolean> {
   try {
     const settings = await chrome.storage.sync.get(['whitelistEnabled']);
     if (!settings.whitelistEnabled) return true; // Always initialize when whitelist is disabled
-    
+
     const rules = await getWhitelistRules();
-    return isUrlWhitelisted(window.location.href, rules);
+
+    // Check current frame's URL first
+    if (isUrlWhitelisted(window.location.href, rules)) return true;
+
+    // If we're in an iframe, also check the top-level frame's URL.
+    // This handles the common case where a user whitelists the parent page
+    // but the video is embedded in an iframe from a different domain.
+    if (window !== window.top) {
+      try {
+        // Same-origin: can access top frame's location directly
+        if (isUrlWhitelisted(window.top!.location.href, rules)) return true;
+      } catch {
+        // Cross-origin: fall back to document.referrer (the URL that loaded this iframe)
+        if (document.referrer && isUrlWhitelisted(document.referrer, rules)) return true;
+      }
+    }
+
+    return false;
   } catch {
     // Extension context may be invalidated (e.g. extension update).
     // Default to allowing initialization.
