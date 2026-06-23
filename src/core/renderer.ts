@@ -41,6 +41,13 @@ export class Renderer {
   private rebuilding = false;
   /** Whether a source resize is in progress (prevent concurrent resizes) */
   private resizing = false;
+  /** Whether to use a canvas 2D intermediary for DRM-protected video frames */
+  private useDrmCanvasFallback = false;
+  /** Intermediate canvas for drawing DRM-protected video frames */
+  private drmCanvas: OffscreenCanvas | null = null;
+  private drmCtx: OffscreenCanvasRenderingContext2D | null = null;
+  /** Whether the DRM canvas fallback has produced a valid (non-black) frame */
+  private drmFrameValidated = false;
 
   // --- WebGPU objects ---
   private device!: GPUDevice;
@@ -229,6 +236,20 @@ export class Renderer {
   }
 
   /**
+   * Ensures the DRM intermediary canvas exists and matches the current video dimensions.
+   * Returns the 2D rendering context for drawing.
+   */
+  private ensureDrmCanvas(): OffscreenCanvasRenderingContext2D {
+    const w = this.video.videoWidth;
+    const h = this.video.videoHeight;
+    if (!this.drmCanvas || this.drmCanvas.width !== w || this.drmCanvas.height !== h) {
+      this.drmCanvas = new OffscreenCanvas(w, h);
+      this.drmCtx = this.drmCanvas.getContext('2d')!;
+    }
+    return this.drmCtx!;
+  }
+
+  /**
    * Creates the final render pipeline, which is responsible for drawing the processed texture onto the Canvas.
    */
   private async createRenderPipeline(): Promise<void> {
@@ -310,12 +331,55 @@ export class Renderer {
           [this.video.videoWidth, this.video.videoHeight]
         );
         // Don't close immediately — wait until the next frame to ensure the GPU has finished reading
+      } else if (this.useDrmCanvasFallback) {
+        // DRM canvas 2D intermediary: draw video to canvas, then copy canvas to GPU texture.
+        // This bypasses the "back resource" restriction for software DRM (Widevine L3).
+        const ctx = this.ensureDrmCanvas();
+        ctx.drawImage(this.video, 0, 0);
+        this.device.queue.copyExternalImageToTexture(
+          { source: this.drmCanvas! },
+          { texture: this.videoFrameTexture },
+          [this.video.videoWidth, this.video.videoHeight]
+        );
       } else {
         this.device.queue.copyExternalImageToTexture(
           { source: this.video },
           { texture: this.videoFrameTexture },
           [this.video.videoWidth, this.video.videoHeight]
         );
+      }
+
+      // Validate DRM canvas fallback isn't producing black frames (hardware DRM / Widevine L1)
+      if (this.useDrmCanvasFallback && !this.drmFrameValidated) {
+        try {
+          const ctx = this.drmCtx!;
+          const w = this.video.videoWidth;
+          const h = this.video.videoHeight;
+          const samples = [
+            ctx.getImageData(w >> 2, h >> 2, 1, 1).data,
+            ctx.getImageData(w >> 1, h >> 1, 1, 1).data,
+            ctx.getImageData((w * 3) >> 2, (h * 3) >> 2, 1, 1).data,
+          ];
+          const allBlack = samples.every(d => d[0] === 0 && d[1] === 0 && d[2] === 0);
+          if (allBlack) {
+            console.warn('[Anime4KWebExt] DRM canvas produced all-black frames. Hardware DRM detected — enhancement not possible.');
+            this.lastError = new RendererRuntimeError(
+              'DRM detected. Video enhancement is not supported for this content due to copy protection.',
+              { recoverable: false }
+            );
+            return false;
+          }
+          this.drmFrameValidated = true;
+          console.log('[Anime4KWebExt] DRM canvas fallback validated — producing valid frames.');
+        } catch {
+          // getImageData throws SecurityError if canvas is tainted (software DRM)
+          console.warn('[Anime4KWebExt] DRM canvas is tainted — enhancement not possible.');
+          this.lastError = new RendererRuntimeError(
+            'DRM detected. Video enhancement is not supported for this content due to copy protection.',
+            { recoverable: false }
+          );
+          return false;
+        }
       }
 
 
@@ -351,6 +415,18 @@ export class Renderer {
         if (!this.fixAttempted) {
           console.warn('[Anime4KWebExt] Caught out-of-bounds error. Attempting to recover by resizing resources...');
           this.handleSourceResize();
+        }
+      } else if (error instanceof Error && error.name === 'OperationError' && error.message.includes("doesn't have back resource")) {
+        if (!this.useDrmCanvasFallback) {
+          // DRM-protected video detected — switch to canvas 2D intermediary (works for software DRM / Widevine L3)
+          console.warn('[Anime4KWebExt] DRM-protected video detected. Attempting canvas 2D fallback...');
+          this.useDrmCanvasFallback = true;
+          this.drmFrameValidated = false;
+          this.lastError = new RendererRuntimeError('DRM video detected, switching to canvas 2D fallback.', { cause: error, recoverable: true });
+          // No handleSourceResize needed — resources are fine, just need a different copy path
+        } else {
+          // Canvas fallback also failed — unrecoverable
+          this.lastError = new RendererRuntimeError(`Canvas 2D fallback failed for DRM video: ${error.message}`, { cause: error, recoverable: false });
         }
       } else {
         // For all other errors, treat as unrecoverable and include the original error message
@@ -604,6 +680,8 @@ export class Renderer {
       });
       this.pendingBitmap?.close();
       this.pendingBitmap = null;
+      this.drmCanvas = null;
+      this.drmCtx = null;
       this.videoFrameTexture?.destroy();
       // Disassociate the canvas from the GPU device — critical for subsequent reinitialization
       this.context?.unconfigure();

@@ -171,6 +171,11 @@ export class VideoEnhancer {
    * Initializes the renderer, including loading settings, loading modules, and creating the Renderer instance
    */
   private async initRenderer(): Promise<void> {
+    // Detect DRM-protected content early (EME sets mediaKeys on the video element)
+    if ((this.video as any).mediaKeys) {
+      throw new Error('DRM detected. Video enhancement is not supported for DRM-protected content.');
+    }
+
     // Ensure metadata is loaded before initializing the renderer
     if (this.video.readyState < 1) { // HAVE_METADATA
       this.button.innerText = chrome.i18n.getMessage('waitingVideoLoad') || '⏳ Waiting for video...';
@@ -211,9 +216,12 @@ export class VideoEnhancer {
       onError: async (error: Error) => {
         console.error('[Anime4KWebExt] Renderer runtime error:', error);
         const isCrossOriginError = error.name === 'SecurityError' && error.message.includes('tainted');
+        const isDrmError = error.message.includes('DRM') || error.message.includes('copy protection');
         const settings = await getSettings();
 
-        if (isCrossOriginError && !settings.enableCrossOriginFix) {
+        if (isDrmError) {
+          this.showErrorModal('This video uses DRM copy protection. Video enhancement is not supported for DRM-protected content.');
+        } else if (isCrossOriginError && !settings.enableCrossOriginFix) {
           this.showErrorModal(chrome.i18n.getMessage('crossOriginHint') || 'Enhancement failed due to cross-origin restrictions. Please enable Compatibility Mode in the options.', true);
         } else {
           this.showErrorModal(chrome.i18n.getMessage('renderError') || 'A rendering error occurred.');
