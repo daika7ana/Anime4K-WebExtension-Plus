@@ -128,7 +128,7 @@ The four performance tiers (Fast / Balanced / Quality / Ultra) are a **GPU budge
 
 ### Target Resolution
 
-`Match Display` is the recommended default target: it sizes the chain to your monitor at the device-pixel ratio (capped at 8K). Fixed targets (720p / 1080p / 2K / 4K), multipliers (x2 / x4 / x8) and a `Native` target are available when you want to force a specific output size.
+The default target is the `x2` multiplier. `Match Display` is an option you can select: it sizes the chain to your monitor at the device-pixel ratio (capped at 8K). Fixed targets (720p / 1080p / 2K / 4K), other multipliers (x4 / x8) and a `Native` target are available when you want to force a specific output size.
 
 ### Optional Effects & Notes
 

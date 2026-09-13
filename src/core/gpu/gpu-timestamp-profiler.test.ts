@@ -558,6 +558,25 @@ describe('GpuTimestampProfiler', () => {
         expect(snapshot.passes).toEqual([]);
     });
 
+    it('reset() reclaims an in-flight slot so profiling does not stall', () => {
+        const device = new FakeDevice();
+        const profiler = createProfiler(device, { ringSize: 1 });
+        const encoder = new FakeEncoder();
+
+        // Claim the only ring slot and deliberately never end the frame.
+        const first = profiler.beginFrame(encoder.asEncoder());
+        expect(first).not.toBeNull();
+
+        profiler.reset();
+
+        // The slot must have been reclaimed: a later beginFrame() still gets a
+        // slot instead of permanently returning null because one stayed
+        // 'pending' forever.
+        const second = profiler.beginFrame(encoder.asEncoder());
+        expect(second).not.toBeNull();
+        expect(second).not.toBe(first);
+    });
+
     it('reset() re-arms a degraded profiler', async () => {
         const device = new FakeDevice();
         const profiler = createProfiler(device, { ringSize: 1 });

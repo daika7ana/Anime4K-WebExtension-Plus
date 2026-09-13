@@ -10,6 +10,11 @@
  * Every function here models the rgba16float output of a Downscale-style
  * kernel (`binding 0`: rgba8unorm input, `binding 1`: rgba16float storage
  * output, entry point `computeMain`, 8x8 workgroups).
+ *
+ * NOTE (intentional remaining duplication): `halfToFloat` is re-declared inside
+ * each of the three `page.evaluate` callbacks below. Playwright serialises the
+ * callback source and runs it in the page, so the callback cannot close over
+ * this module's scope; the copies are byte-exact and must stay in sync.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -80,13 +85,30 @@ function contentTypeFor(filePath: string): string {
   return 'application/octet-stream';
 }
 
-export function startSecureOrigin(): Promise<{ server: Server; origin: string }> {
+export interface SecureOriginOptions {
+  /**
+   * When true (default) the linked library's `dist/` tree is served under
+   * {@link VENDOR_PREFIX} so a page can `import()` the real compiled package.
+   * Specs that only dispatch inline WGSL pass `false` to keep their server
+   * minimal (behaviorally identical to their pre-dedup local implementation).
+   */
+  serveVendor?: boolean;
+  /** Response body for non-vendor requests. Defaults to {@link PAGE_HTML}. */
+  pageHtml?: string;
+}
+
+export function startSecureOrigin(
+  options: SecureOriginOptions = {},
+): Promise<{ server: Server; origin: string }> {
+  const { serveVendor = true, pageHtml = PAGE_HTML } = options;
   let distDir: string | null = null;
-  try {
-    distDir = resolveLibraryDistDir();
-  } catch {
-    // The vendor route is simply unavailable; the page still loads.
-    distDir = null;
+  if (serveVendor) {
+    try {
+      distDir = resolveLibraryDistDir();
+    } catch {
+      // The vendor route is simply unavailable; the page still loads.
+      distDir = null;
+    }
   }
 
   const created = createServer((req, res) => {
@@ -112,7 +134,7 @@ export function startSecureOrigin(): Promise<{ server: Server; origin: string }>
       return;
     }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(PAGE_HTML);
+    res.end(pageHtml);
   });
   return new Promise((resolve, reject) => {
     created.once('error', reject);

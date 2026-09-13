@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ensureLatestConfig } from './migration';
+import { AVAILABLE_EFFECTS } from './effects-map';
 import { DEFAULT_COLOR_GRADING } from './validation';
 import type { CustomMode } from '../types';
 
@@ -84,6 +85,7 @@ function expectV3SyncedDefaults(): void {
   expect(syncStore['customModes']).toEqual([]);
   expect(syncStore['enableCrossOriginFix']).toBe(false);
   expect(syncStore['autoEnableOnWhitelist']).toBe(false);
+  expect(syncStore['autoEnableSettleMs']).toBe(300);
   expect(syncStore['enableHotkey']).toBe(true);
   expect(syncStore['colorGrading']).toEqual(DEFAULT_COLOR_GRADING);
 }
@@ -136,14 +138,33 @@ describe('ensureLatestConfig', () => {
     await ensureLatestConfig();
 
     expect(syncStore['_configVersion']).toBe(3);
-    // Missing fields are backfilled with defaults
+    // Missing fields are backfilled with defaults (synced bucket)
     expect(syncStore['autoEnableOnWhitelist']).toBe(false);
+    expect(syncStore['autoEnableSettleMs']).toBe(300);
     // Existing values are untouched
     expect(syncStore['enableHotkey']).toBe(false);
     expect(syncStore['colorGrading']).toEqual(existingGrading);
-    // Local backfill
+    // Local backfill (local bucket)
     expect(localStore['showDiagnostics']).toBe(false);
+    expect(localStore['diagnosticsDetail']).toBe('auto');
+    expect(localStore['preserveDetail']).toBe(true);
     expect(localStore['performanceTier']).toBe('quality');
+  });
+
+  it('does not overwrite existing v3 fields during v2 → v3', async () => {
+    syncStore['_configVersion'] = 2;
+    syncStore['autoEnableSettleMs'] = 750;
+    localStore['diagnosticsDetail'] = 'expanded';
+    localStore['preserveDetail'] = false;
+
+    await ensureLatestConfig();
+
+    expect(syncStore['_configVersion']).toBe(3);
+    // Existing synced values preserved
+    expect(syncStore['autoEnableSettleMs']).toBe(750);
+    // Existing local values preserved
+    expect(localStore['diagnosticsDetail']).toBe('expanded');
+    expect(localStore['preserveDetail']).toBe(false);
   });
 
   it('does not overwrite an existing showDiagnostics during v2 → v3', async () => {
@@ -330,6 +351,8 @@ describe('ensureLatestConfig', () => {
     expect(localStore['gpuAdapterInfo']).toBeNull();
     expect(localStore['hasCompletedOnboarding']).toBe(false);
     expect(localStore['showDiagnostics']).toBe(false);
+    expect(localStore['diagnosticsDetail']).toBe('auto');
+    expect(localStore['preserveDetail']).toBe(true);
   });
 
   // ── Local defaults when performanceTier already set ──────────
@@ -369,5 +392,140 @@ describe('ensureLatestConfig', () => {
 
     expect(chrome.storage.sync.set).not.toHaveBeenCalled();
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  // ── Robustness against corrupt stored config ─────────────────
+  it('treats a non-array string enhancementModes as empty without throwing', async () => {
+    syncStore['enhancementModes'] = 'corrupt-not-an-array';
+
+    await expect(ensureLatestConfig()).resolves.toBeUndefined();
+
+    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['customModes']).toEqual([]);
+    expect(syncStore['enhancementModes']).toBeUndefined();
+  });
+
+  it('treats a non-array object enhancementModes as empty without throwing', async () => {
+    syncStore['enhancementModes'] = { bogus: true };
+
+    await expect(ensureLatestConfig()).resolves.toBeUndefined();
+
+    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['customModes']).toEqual([]);
+  });
+
+  it('skips null/non-object mode entries without throwing', async () => {
+    syncStore['enhancementModes'] = [
+      null,
+      undefined,
+      'not-a-mode',
+      42,
+      { id: 'my-custom', name: 'Custom', isBuiltIn: false, effects: [] },
+    ];
+
+    await expect(ensureLatestConfig()).resolves.toBeUndefined();
+
+    const customModes = syncStore['customModes'] as CustomMode[];
+    expect(syncStore['_configVersion']).toBe(3);
+    expect(customModes).toHaveLength(1);
+    expect(customModes[0].id).toBe('my-custom');
+  });
+
+  it('skips a custom mode whose effects array is missing or malformed', async () => {
+    syncStore['enhancementModes'] = [
+      { id: 'no-effects', name: 'No Effects', isBuiltIn: false },
+      { id: 'string-effects', name: 'String Effects', isBuiltIn: false, effects: 'nope' },
+      { id: 'valid', name: 'Valid', isBuiltIn: false, effects: [] },
+    ];
+
+    await expect(ensureLatestConfig()).resolves.toBeUndefined();
+
+    const customModes = syncStore['customModes'] as CustomMode[];
+    expect(syncStore['_configVersion']).toBe(3);
+    expect(customModes).toHaveLength(1);
+    expect(customModes[0].id).toBe('valid');
+    expect(customModes[0].effects).toEqual([]);
+  });
+
+  it('keeps a valid mode while dropping malformed effect entries', async () => {
+    syncStore['enhancementModes'] = [
+      {
+        id: 'my-custom',
+        name: 'Custom',
+        isBuiltIn: false,
+        effects: [
+          null,
+          { name: 'missing id' },
+          { id: 'anime4k/Removed/Effect', name: 'Gone', className: 'Gone' },
+          { id: 'anime4k/Sharpen/CAS', name: 'CAS', className: 'CAS' },
+        ],
+      },
+    ];
+
+    await expect(ensureLatestConfig()).resolves.toBeUndefined();
+
+    const customModes = syncStore['customModes'] as CustomMode[];
+    expect(customModes).toHaveLength(1);
+    expect(customModes[0].effects).toHaveLength(1);
+    expect(customModes[0].effects[0].id).toBe('anime4k/Sharpen/CAS');
+  });
+
+  it('merges customized v1 effect params over catalog defaults', async () => {
+    const dogCatalog = AVAILABLE_EFFECTS.find(e => e.id === 'anime4k/Deblur/DoG')!;
+    const bilateralCatalog = AVAILABLE_EFFECTS.find(
+      e => e.id === 'anime4k/Denoise/BilateralMean',
+    )!;
+
+    syncStore['enhancementModes'] = [
+      {
+        id: 'my-custom',
+        name: 'Custom',
+        isBuiltIn: false,
+        effects: [
+          { id: 'anime4k/Deblur/DoG', name: 'DoG', className: 'DoG', params: { strength: 9 } },
+          {
+            id: 'anime4k/Denoise/BilateralMean',
+            name: 'BilateralMean',
+            className: 'BilateralMean',
+            params: { strength: 0.9 },
+          },
+        ],
+      },
+    ];
+
+    await ensureLatestConfig();
+
+    const customModes = syncStore['customModes'] as CustomMode[];
+    const dog = customModes[0].effects.find(e => e.id === 'anime4k/Deblur/DoG')!;
+    const bilateral = customModes[0].effects.find(
+      e => e.id === 'anime4k/Denoise/BilateralMean',
+    )!;
+
+    // Stored user value wins over the catalog default…
+    expect(dog.params?.strength).toBe(9);
+    expect(dog.params).toEqual({ ...(dogCatalog.params ?? {}), strength: 9 });
+    expect(bilateral.params?.strength).toBe(0.9);
+    // …while unmodified catalog defaults are preserved.
+    expect(bilateral.params).toEqual({ ...(bilateralCatalog.params ?? {}), strength: 0.9 });
+    expect(bilateral.params).toHaveProperty('strength2', bilateralCatalog.params?.strength2);
+  });
+
+  it('keeps catalog defaults when a v1 effect has no params', async () => {
+    const dogCatalog = AVAILABLE_EFFECTS.find(e => e.id === 'anime4k/Deblur/DoG')!;
+    if (!dogCatalog.params) return; // no defaults to assert against
+
+    syncStore['enhancementModes'] = [
+      {
+        id: 'my-custom',
+        name: 'Custom',
+        isBuiltIn: false,
+        effects: [{ id: 'anime4k/Deblur/DoG', name: 'DoG', className: 'DoG' }],
+      },
+    ];
+
+    await ensureLatestConfig();
+
+    const customModes = syncStore['customModes'] as CustomMode[];
+    expect(customModes[0].effects[0].params).toEqual(dogCatalog.params);
   });
 });

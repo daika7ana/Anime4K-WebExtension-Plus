@@ -573,35 +573,6 @@ export function sanitizeColorGrading(input: unknown): ColorGradingSettings {
   return result;
 }
 
-/** Strict color grading validator (used when data must be rejected rather than coerced). */
-export function validateColorGrading(input: unknown): ValidationResult<ColorGradingSettings> {
-  const issues: ValidationIssue[] = [];
-  if (!isRecord(input)) {
-    return { ok: false, issues: [{ path: 'colorGrading', message: 'Must be an object' }] };
-  }
-  if (typeof input.enabled !== 'boolean') {
-    issues.push({ path: 'colorGrading.enabled', message: 'Must be a boolean' });
-  }
-  for (const key of Object.keys(COLOR_GRADING_BOUNDS) as Array<
-    keyof typeof COLOR_GRADING_BOUNDS
-  >) {
-    const raw = input[key];
-    const bound = COLOR_GRADING_BOUNDS[key];
-    if (raw === undefined) {
-      issues.push({ path: `colorGrading.${key}`, message: 'Missing required value' });
-      continue;
-    }
-    if (!isFiniteNumber(raw) || raw < bound.min || raw > bound.max) {
-      issues.push({
-        path: `colorGrading.${key}`,
-        message: `Must be a number between ${bound.min} and ${bound.max}`,
-      });
-    }
-  }
-  if (issues.length > 0) return { ok: false, issues };
-  return { ok: true, value: sanitizeColorGrading(input) };
-}
-
 /** Lenient normalization of whitelist rules read from storage; invalid rules are dropped. */
 export function sanitizeWhitelist(input: unknown): WhitelistRule[] {
   if (input === undefined || input === null) return [];

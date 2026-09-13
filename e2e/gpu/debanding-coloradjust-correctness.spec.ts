@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { readFileSync } from 'node:fs';
+import type { Server } from 'node:http';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { referenceCas } from '../../src/core/effects/reference/cas';
@@ -9,6 +9,13 @@ import {
 } from '../../src/core/effects/reference/color-adjust';
 import { referenceDebanding } from '../../src/core/effects/reference/debanding';
 import { compareRgba, formatComparison } from '../../src/core/effects/reference/compare';
+import {
+  guardGpu,
+  startSecureOrigin,
+  writeArtifacts,
+  type GpuFailure,
+  type GpuResult,
+} from './downscale-harness';
 import { colorSweep, hardEdge, hardGradient, type RgbaImage } from './fixtures-effects';
 
 /**
@@ -46,23 +53,6 @@ interface GpuRequest {
   stages: StageRequest[];
 }
 
-interface GpuSuccess {
-  ok: true;
-  width: number;
-  height: number;
-  data: number[];
-  adapterInfo: string;
-  software: boolean;
-}
-
-interface GpuFailure {
-  ok: false;
-  kind: 'unavailable' | 'validation';
-  error: string;
-}
-
-type GpuResult = GpuSuccess | GpuFailure;
-
 type Oracle = (input: Uint8Array, width: number, height: number) => Uint8Array;
 
 interface EffectStage {
@@ -76,8 +66,6 @@ interface EffectCase {
   stages: EffectStage[];
   exact: boolean;
 }
-
-const ALLOW_GPU_SKIP = process.env.ALLOW_GPU_SKIP === '1';
 
 const DEBANDING_WGSL = readFileSync(
   path.resolve(__dirname, '..', '..', 'src', 'shaders', 'debanding.wgsl'),
@@ -243,24 +231,6 @@ const CASES: EffectCase[] = [
 let server: Server | undefined;
 let origin = '';
 let preflight: GpuResult | null = null;
-
-function startSecureOrigin(): Promise<{ server: Server; origin: string }> {
-  const created = createServer((_req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(PAGE_HTML);
-  });
-  return new Promise((resolve, reject) => {
-    created.once('error', reject);
-    created.listen(0, '127.0.0.1', () => {
-      const address = created.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('failed to determine loopback port'));
-        return;
-      }
-      resolve({ server: created, origin: `http://127.0.0.1:${address.port}/` });
-    });
-  });
-}
 
 /**
  * Run a chain of compute stages (input -> stage0 -> stage1 -> ...) and read
@@ -436,18 +406,6 @@ async function runGpuChain(page: Page, request: GpuRequest): Promise<GpuResult> 
   }, request);
 }
 
-function guardGpu(): void {
-  if (!preflight || preflight.ok) return;
-  console.warn(
-    `[gpu] environment cannot run debanding/color-adjust compute: ${preflight.error}`
-    + (ALLOW_GPU_SKIP ? ' (ALLOW_GPU_SKIP=1 -> skipping)' : ''),
-  );
-  test.skip(ALLOW_GPU_SKIP, `environment cannot run debanding/color-adjust compute: ${preflight.error}`);
-  throw new Error(
-    `environment cannot run debanding/color-adjust compute (${preflight.kind}): ${preflight.error}`,
-  );
-}
-
 /** Apply the case's oracles in order, threading the intermediate RGBA8. */
 function expectedFor(effectCase: EffectCase): Uint8Array {
   let current = effectCase.image.data;
@@ -457,29 +415,8 @@ function expectedFor(effectCase: EffectCase): Uint8Array {
   return current;
 }
 
-function writeArtifacts(
-  caseName: string,
-  expected: Uint8Array,
-  actual: Uint8Array,
-  manifest: Record<string, unknown>,
-): string {
-  const dir = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    'test-results',
-    'debanding-coloradjust-correctness',
-    caseName,
-  );
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, 'expected.rgba'), Buffer.from(expected));
-  writeFileSync(path.join(dir, 'actual.rgba'), Buffer.from(actual));
-  writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  return dir;
-}
-
 test.beforeAll(async ({ browser }) => {
-  const started = await startSecureOrigin();
+  const started = await startSecureOrigin({ serveVendor: false, pageHtml: PAGE_HTML });
   server = started.server;
   origin = started.origin;
 
@@ -521,7 +458,7 @@ test.afterAll(async () => {
 
 for (const effectCase of CASES) {
   test(effectCase.name, async ({ page }) => {
-    guardGpu();
+    guardGpu(preflight, 'debanding/color-adjust compute');
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
 
     const { image } = effectCase;
@@ -568,7 +505,7 @@ for (const effectCase of CASES) {
 
     if (!dimensionsOk || badAlphaCount > 0 || !metricsOk) {
       const adapter = preflight && preflight.ok ? preflight.adapterInfo : 'unknown';
-      const dir = writeArtifacts(effectCase.name, expected, actual, {
+      const dir = writeArtifacts('debanding-coloradjust-correctness', effectCase.name, expected, actual, {
         case: effectCase.name,
         width: image.width,
         height: image.height,

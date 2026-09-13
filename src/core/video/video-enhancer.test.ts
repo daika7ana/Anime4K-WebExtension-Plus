@@ -369,6 +369,53 @@ describe('VideoEnhancer', () => {
       expect(mockRenderer.updateConfiguration).not.toHaveBeenCalled();
       enhancer.destroy();
     });
+
+    it('does not throw or update a nulled renderer when destroy() lands during getLocalSettings()', async () => {
+      const enhancer = VideoEnhancer.create(video);
+      await enhancer.toggleEnhancement();
+
+      let resolveLocal!: (value: { showDiagnostics: boolean }) => void;
+      const localPromise = new Promise<{ showDiagnostics: boolean }>((resolve) => {
+        resolveLocal = resolve;
+      });
+      let markRequested!: () => void;
+      const requested = new Promise<void>((resolve) => {
+        markRequested = resolve;
+      });
+      (getLocalSettings as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        markRequested();
+        return localPromise;
+      });
+
+      mockRenderer.updateConfiguration.mockClear();
+
+      const settings = {
+        selectedModeId: 'builtin-mode-a',
+        enhancementModes: [
+          { id: 'builtin-mode-a', baseMode: 'A' as const, name: 'Mode A', isBuiltIn: true as const },
+        ],
+        targetResolutionSetting: 'x4',
+        performanceTier: 'quality' as const,
+        customModes: [],
+        whitelist: [],
+        whitelistEnabled: false,
+        enableCrossOriginFix: false,
+        autoEnableOnWhitelist: false,
+        autoEnableSettleMs: 300,
+        enableHotkey: true,
+        colorGrading: { enabled: false, brightness: 0, gamma: 1, contrast: 1, saturation: 1, vibrance: 0, exposure: 0 },
+      };
+
+      const update = enhancer.updateSettings(settings as any);
+
+      // destroy() nulls this.renderer via releaseWebGPUResources() mid-await.
+      await requested;
+      enhancer.destroy();
+      resolveLocal({ showDiagnostics: false });
+
+      await expect(update).resolves.toBeUndefined();
+      expect(mockRenderer.updateConfiguration).not.toHaveBeenCalled();
+    });
   });
 
   describe('reapply()', () => {
@@ -742,6 +789,11 @@ describe('VideoEnhancer', () => {
           requestAdapter: vi.fn().mockResolvedValue(null),
         },
       });
+      // Reset the local-settings implementation (clearAllMocks does not do this)
+      // so diagnostics tests cannot leak showDiagnostics=true into each other.
+      (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        showDiagnostics: false,
+      });
     });
 
     it('creates diagnostics overlay when showDiagnostics is true', async () => {
@@ -836,6 +888,98 @@ describe('VideoEnhancer', () => {
       // Use mockDiagnosticsOverlay.show to verify overlay was not created
       expect(mockDiagnosticsOverlay.show).not.toHaveBeenCalled();
       enhancer.destroy();
+    });
+
+    it('does not create a diagnostics overlay when destroy() lands during getAdapterInfo()', async () => {
+      let resolveAdapter!: (value: null) => void;
+      const adapterPromise = new Promise<null>((resolve) => {
+        resolveAdapter = resolve;
+      });
+      let markRequested!: () => void;
+      const requested = new Promise<void>((resolve) => {
+        markRequested = resolve;
+      });
+      vi.stubGlobal('navigator', {
+        ...navigator,
+        gpu: {
+          requestAdapter: vi.fn(() => {
+            markRequested();
+            return adapterPromise;
+          }),
+        },
+      });
+      (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        showDiagnostics: true,
+      });
+
+      const enhancer = VideoEnhancer.create(video);
+      const toggle = enhancer.toggleEnhancement();
+
+      // destroy() lands while initRenderer() is awaiting the adapter probe.
+      await requested;
+      enhancer.destroy();
+      resolveAdapter(null);
+      await toggle;
+
+      expect(DiagnosticsOverlay.create).not.toHaveBeenCalled();
+      expect(mockDiagnosticsOverlay.show).not.toHaveBeenCalled();
+    });
+
+    it('does not re-create a diagnostics overlay when destroy() lands during updateSettings() getAdapterInfo()', async () => {
+      const enhancer = VideoEnhancer.create(video);
+      // Default local settings have showDiagnostics=false, so no overlay exists.
+      await enhancer.toggleEnhancement();
+      expect(DiagnosticsOverlay.create).not.toHaveBeenCalled();
+
+      (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        showDiagnostics: true,
+      });
+
+      let resolveAdapter!: (value: null) => void;
+      const adapterPromise = new Promise<null>((resolve) => {
+        resolveAdapter = resolve;
+      });
+      let markRequested!: () => void;
+      const requested = new Promise<void>((resolve) => {
+        markRequested = resolve;
+      });
+      vi.stubGlobal('navigator', {
+        ...navigator,
+        gpu: {
+          requestAdapter: vi.fn(() => {
+            markRequested();
+            return adapterPromise;
+          }),
+        },
+      });
+
+      const settings = {
+        selectedModeId: 'builtin-mode-a',
+        enhancementModes: [
+          { id: 'builtin-mode-a', baseMode: 'A' as const, name: 'Mode A', isBuiltIn: true as const },
+        ],
+        targetResolutionSetting: 'x2',
+        performanceTier: 'balanced' as const,
+        customModes: [],
+        whitelist: [],
+        whitelistEnabled: false,
+        enableCrossOriginFix: false,
+        autoEnableOnWhitelist: false,
+        autoEnableSettleMs: 300,
+        enableHotkey: true,
+        colorGrading: { enabled: false, brightness: 0, gamma: 1, contrast: 1, saturation: 1, vibrance: 0, exposure: 0 },
+      };
+
+      const update = enhancer.updateSettings(settings as any);
+
+      // destroy() lands while updateSettings() is awaiting the adapter probe.
+      await requested;
+      enhancer.destroy();
+      resolveAdapter(null);
+      await update;
+
+      expect(DiagnosticsOverlay.create).not.toHaveBeenCalled();
+      expect(mockDiagnosticsOverlay.show).not.toHaveBeenCalled();
     });
 
     it('destroys diagnostics overlay on disableEnhancement', async () => {

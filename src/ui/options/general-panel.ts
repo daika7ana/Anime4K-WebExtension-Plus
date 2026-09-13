@@ -141,6 +141,9 @@ export function initGeneralPanel(
   preserveDetailToggle.addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;
     await saveLocalSettings({ preserveDetail: enabled });
+    // The options page never receives its own cross-context update, so refresh
+    // the modes panel here to update the restore-policy note immediately.
+    ctx.refreshModesPanel?.();
     ctx.notifyUpdate();
   });
 

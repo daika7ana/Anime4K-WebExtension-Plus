@@ -22,8 +22,6 @@ import { extensionEffectDescriptors } from '../core/engines/descriptors';
 export interface ResolvedEffect {
   descriptor: EffectDescriptor;
   reference: EffectReference;
-  /** Legacy-shaped effect for storage/builder use. */
-  legacy: EnhancementEffect;
 }
 
 export type EffectResolution =
@@ -31,12 +29,16 @@ export type EffectResolution =
   | { status: 'unresolved'; reference: EffectReference } // well-formed new-style ref, backend not registered
   | { status: 'unknown' }; // legacy entry with unknown id/className
 
-/** Backend-local keys of the extension-owned core effects, keyed by legacy className. */
-const CORE_CLASS_ALIASES: Readonly<Record<string, string>> = {
-  CAS: 'CAS',
-  Debanding: 'Debanding',
-  ColorAdjust: 'ColorAdjust',
-};
+/**
+ * Backend-local keys of the extension-owned core effects, keyed by legacy
+ * className. A `Map` (not a plain object) so untrusted classNames such as
+ * `'__proto__'`/`'constructor'` cannot consult `Object.prototype`.
+ */
+const CORE_CLASS_ALIASES = new Map<string, string>([
+  ['CAS', 'CAS'],
+  ['Debanding', 'Debanding'],
+  ['ColorAdjust', 'ColorAdjust'],
+]);
 
 const ANIME4K_BACKEND_ID = 'anime4k';
 const CORE_BACKEND_ID = 'core';
@@ -64,10 +66,6 @@ export function listEffectDescriptors(
 
 export function getEffectDescriptorById(id: string): EffectDescriptor | undefined {
   return DESCRIPTORS_BY_ID.get(id);
-}
-
-export function isKnownEffectId(id: string): boolean {
-  return DESCRIPTORS_BY_ID.has(id);
 }
 
 /** Whether a backend id is one the extension currently knows about. */
@@ -114,7 +112,6 @@ function resolved(
     effect: {
       descriptor,
       reference: buildReference(effect, descriptor),
-      legacy: descriptorToLegacyEffect(descriptor),
     },
   };
 }
@@ -136,7 +133,7 @@ export function resolveEffectReference(effect: EnhancementEffect): EffectResolut
   const byAnime4k = DESCRIPTORS_BY_BACKEND_KEY.get(`${ANIME4K_BACKEND_ID}:${effect.className}`);
   if (byAnime4k) return resolved(byAnime4k, effect);
 
-  const coreKey = CORE_CLASS_ALIASES[effect.className];
+  const coreKey = CORE_CLASS_ALIASES.get(effect.className);
   if (coreKey) {
     const byCore = DESCRIPTORS_BY_BACKEND_KEY.get(`${CORE_BACKEND_ID}:${coreKey}`);
     if (byCore) return resolved(byCore, effect);

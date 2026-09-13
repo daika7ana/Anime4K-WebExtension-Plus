@@ -25,6 +25,14 @@ export interface AppContext {
   setTier(tier: PerformanceTier): void;
   refresh(): Promise<void>;
   notifyUpdate(modifiedModeId?: string): void;
+  /**
+   * Set by {@link initModesPanel}. Other panels (notably the General panel's
+   * "Fast mode" toggle) call this to re-render the modes panel immediately
+   * after a local-settings change that affects the preserve-detail policy note.
+   * The options page's own cross-context listener never receives the options
+   * page's own `SETTINGS_UPDATED` message, so an explicit refresh is required.
+   */
+  refreshModesPanel?: () => void;
 }
 
 export function initModesPanel(
@@ -496,6 +504,10 @@ export function initModesPanel(
       builtInModes.forEach(renderModeCard);
     }
   }
+
+  // Expose the renderer through the shared context so other panels can refresh
+  // the preserve-detail policy note immediately after a local-settings change.
+  ctx.refreshModesPanel = render;
 
   // -----------------------------------------------------------------------
   //  Add Mode

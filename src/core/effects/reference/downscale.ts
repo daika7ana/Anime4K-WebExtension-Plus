@@ -31,6 +31,7 @@
  *         weighted without linearization
  *   - the rgba16float store is modeled by scaling to 8 bits and rounding
  */
+import { clamp01 } from './math';
 
 const INV_255 = 1 / 255;
 const MAX_CHANNEL = 255;
@@ -42,12 +43,6 @@ const SHARP_W = 0.5 + SHARP_A;
 /** `sharp_weight(o)` for taps `o in {-1, 0, 1, 2}`. */
 function sharpWeight(o: number): number {
   return o === -1 || o === 2 ? -SHARP_A : SHARP_W;
-}
-
-function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
 }
 
 /** Model an 8-bit unorm read/write: clamp to [0,1], scale and round. NaN -> 0. */

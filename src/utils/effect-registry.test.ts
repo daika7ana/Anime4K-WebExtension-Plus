@@ -6,7 +6,6 @@ import type { EffectDescriptor } from 'anime4k-webgpu-async';
 import {
   descriptorToLegacyEffect,
   getEffectDescriptorById,
-  isKnownEffectId,
   listEffectDescriptors,
   resolveEffectReference,
 } from './effect-registry';
@@ -114,6 +113,39 @@ describe('resolveEffectReference', () => {
       resolveEffectReference({ id: 'nope/does/not/exist', name: 'Nope', className: 'Nope' }),
     ).toEqual({ status: 'unknown' });
   });
+
+  // PRE-3: the className alias lookup must be prototype-safe. A plain-object
+  // table would return inherited `Object.prototype` members (truthy functions /
+  // objects) for these names instead of `undefined`.
+  it.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty'])(
+    'does not consult Object.prototype for className %s',
+    (className) => {
+      // Legacy entry (no backendId): unknown id + unknown className → unknown.
+      const legacy = resolveEffectReference({
+        id: 'legacy/unknown-id',
+        name: 'Prototype probe',
+        className,
+      });
+      expect(legacy.status).toBe('unknown');
+
+      // New-style entry: the same className must not be taken as a core alias,
+      // so it is preserved as `unresolved`.
+      const newStyle = resolveEffectReference({
+        id: 'probe/Prototype/Probe',
+        name: 'Prototype probe',
+        className,
+        backendId: 'probe',
+        key: className,
+      });
+      expect(newStyle.status).toBe('unresolved');
+      if (newStyle.status !== 'unresolved') throw new Error('unreachable');
+      expect(newStyle.reference).toEqual({
+        id: 'probe/Prototype/Probe',
+        backendId: 'probe',
+        key: className,
+      });
+    },
+  );
 });
 
 describe('descriptorToLegacyEffect', () => {
@@ -158,9 +190,7 @@ describe('catalog helpers', () => {
     expect(allIds).toHaveLength(18);
   });
 
-  it('reports known ids and returns descriptors by id', () => {
-    expect(isKnownEffectId('anime4k/ColorGrading/ColorAdjust')).toBe(true);
-    expect(isKnownEffectId('artcnn/ArtCNN/C4F16')).toBe(false);
+  it('returns descriptors by id', () => {
     expect(getEffectDescriptorById('anime4k/Debanding/Debanding')?.backendId).toBe('core');
     expect(getEffectDescriptorById('artcnn/ArtCNN/C4F16')).toBeUndefined();
   });

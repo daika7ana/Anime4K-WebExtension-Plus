@@ -9,7 +9,6 @@ import {
   MODE_DESCRIPTIONS,
   getModeDescription,
   initModeGuidance,
-  isDoubledMode,
 } from './mode-guidance';
 
 const ALL_MODES: BaseMode[] = ['A', 'B', 'C', 'A+A', 'B+B', 'C+A'];
@@ -43,12 +42,6 @@ describe('mode descriptions', () => {
     for (const mode of SINGLE_MODES) {
       expect(MODE_DESCRIPTIONS[mode].fallback).not.toContain('Doubled modes');
     }
-  });
-});
-
-describe('isDoubledMode', () => {
-  it('flags exactly the doubled modes', () => {
-    expect(ALL_MODES.filter(isDoubledMode)).toEqual(DOUBLED_MODES);
   });
 });
 

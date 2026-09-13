@@ -14,7 +14,7 @@
  * / `engines/anime4k` barrels in particular — eagerly pulls the Anime4K
  * backends, constructors and pipelines (~3.3 MiB) and must stay behind the
  * builder's dynamic import. `import type { ... } from 'anime4k-webgpu-async'`
- * stays allowed because ts-loader erases it.
+ * stays allowed because esbuild-loader erases it.
  *
  * `core/engines/registry` (the composed backend registry) must likewise never
  * be imported at runtime from the seam.

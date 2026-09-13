@@ -55,6 +55,12 @@
   "addParentPath": {
     "message": "パス"
   },
+  "removeFromWhitelist": {
+    "message": "ホワイトリストから削除"
+  },
+  "removedFromWhitelist": {
+    "message": "ホワイトリストから削除しました"
+  },
   "openSettings": {
     "message": "設定"
   },
@@ -488,6 +494,12 @@
   },
   "autoEnableOnWhitelistDesc": {
     "message": "ホワイトリストに登録されたサイトで、「超解像」ボタンをクリックせずに動画を自動的に拡張します。"
+  },
+  "autoEnableSettleMs": {
+    "message": "自動有効化の遅延 (ms)"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "動画を自動で有効化するまでの待機時間（ミリ秒）。一時的なプレーヤーをスキップするために使用します。0 にすると遅延を無効にします。"
   },
   "showDiagnostics": {
     "message": "診断情報を表示"

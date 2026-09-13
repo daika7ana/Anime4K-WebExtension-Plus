@@ -101,8 +101,13 @@ export class DiagnosticsOverlay {
   private static readonly TIMING_THROTTLE_MS = 250;
   /** Fallback display budget: one 60 Hz refresh interval. */
   private static readonly DEFAULT_FRAME_BUDGET_MS = 16.667;
-  /** Lower/upper clamp for a display refresh interval measured by the probe. */
-  private static readonly MIN_FRAME_BUDGET_MS = 6;
+  /**
+   * Accept/reject window for a display refresh interval measured by the probe
+   * (not a clamp: values outside it are discarded). The 2–50 ms range covers
+   * roughly 20–500 Hz; anything outside is implausible and the probe keeps the
+   * 60 Hz fallback.
+   */
+  private static readonly MIN_FRAME_BUDGET_MS = 2;
   private static readonly MAX_FRAME_BUDGET_MS = 50;
   /** rAF deltas sampled by the one-time display-refresh probe. */
   private static readonly BUDGET_PROBE_SAMPLES = 6;
@@ -113,8 +118,6 @@ export class DiagnosticsOverlay {
    * `while` loop would spin forever.
    */
   private static readonly RESOLUTION_PROBE_MAX_ITERATIONS = 10;
-  /** Below this wall-clock FPS the display-refresh budget is not a fault signal. */
-  private static readonly OVER_BUDGET_MIN_FPS = 45;
   /** Videos smaller than this fall back to the compact HUD in 'auto' mode. */
   private static readonly COMPACT_MIN_WIDTH = 480;
   private static readonly COMPACT_MIN_HEIGHT = 270;
@@ -160,7 +163,6 @@ export class DiagnosticsOverlay {
   /** False when `performance.now()` is too coarse for per-pass CPU timing. */
   private cpuTimingReliable = false;
   private lastBudgetState: BudgetState = 'ok';
-  private lastBudgetGated = true;
   private video: HTMLVideoElement;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -301,9 +303,6 @@ export class DiagnosticsOverlay {
       }
       .metric--frame[data-state="over"] + .budget-bar .budget-fill {
         background: var(--a4k-over);
-      }
-      .metric--frame[data-gated="false"] + .budget-bar .budget-fill {
-        background: var(--a4k-label);
       }
       @media (prefers-reduced-motion: reduce) {
         .budget-fill { transition: none; }
@@ -465,7 +464,6 @@ export class DiagnosticsOverlay {
     const ftRow = document.createElement('div');
     ftRow.className = 'metric metric--frame';
     ftRow.setAttribute('data-state', 'ok');
-    ftRow.setAttribute('data-gated', 'true');
     const ftLabel = document.createElement('span');
     ftLabel.className = 'metric-label';
     ftLabel.textContent = this.frameLabelText(true);
@@ -801,11 +799,6 @@ export class DiagnosticsOverlay {
     }
   }
 
-  /** Current display frame budget in milliseconds (probe-resolved or 60 Hz). */
-  public getFrameBudgetMs(): number {
-    return this.frameBudgetMs;
-  }
-
   /**
    * Update one or more read-only configuration rows. Safe to call after
    * {@link destroy}: missing elements are simply skipped.
@@ -870,6 +863,10 @@ export class DiagnosticsOverlay {
     const currentFrameTime = this.frameTimes.length > 0
       ? this.frameTimes[this.frameTimes.length - 1]
       : 0;
+    // Per-frame processing cost is the larger of the CPU time already measured
+    // for this frame and the GPU p50 reported by the profiler (0 when absent).
+    const gpuMs = snapshot?.totalGpuP50 ?? 0;
+    const processingMs = Math.max(frameTime, gpuMs);
 
     if (this.fpsEl) {
       this.fpsEl.textContent = fps.toFixed(2);
@@ -887,38 +884,30 @@ export class DiagnosticsOverlay {
       this.pipelineCountEl.textContent = String(pipelineCount);
     }
 
-    this.updateBudgetState(currentFrameTime, fps);
+    this.updateBudgetState(processingMs);
     this.updateTimingSection(snapshot, now);
   }
 
   /**
-   * Encode the current frame period relative to the display budget via the bar
-   * fill and the frame row's `data-state`/`data-gated` attributes (which also
-   * drive the health dot). The red/amber "fault" state is gated to high-cadence
-   * content: at 24–30 fps the display-refresh interval is the wrong reference,
-   * so the bar stays muted rather than falsely alarming the user.
+   * Encode the current per-frame processing cost relative to the display budget
+   * via the bar fill and the frame row's `data-state` attribute (which also
+   * drives the health dot). The cost is the larger of the CPU frame time and
+   * the profiler's `totalGpuP50`, so the state reflects whether the renderer's
+   * per-frame processing fits one display refresh interval.
    */
-  private updateBudgetState(currentFrameTime: number, fps: number): void {
-    const gateBudget = fps > DiagnosticsOverlay.OVER_BUDGET_MIN_FPS;
+  private updateBudgetState(processingMs: number): void {
     const rawPct = this.frameBudgetMs > 0
-      ? (currentFrameTime / this.frameBudgetMs) * 100
+      ? (processingMs / this.frameBudgetMs) * 100
       : 0;
 
     let state: BudgetState = 'ok';
-    if (gateBudget) {
-      if (rawPct > 100) state = 'over';
-      else if (rawPct >= 90) state = 'warn';
-    }
+    if (rawPct > 100) state = 'over';
+    else if (rawPct >= 90) state = 'warn';
 
     if (state !== this.lastBudgetState) {
       this.lastBudgetState = state;
       this.containerEl?.setAttribute('data-state', state);
       this.frameRowEl?.setAttribute('data-state', state);
-    }
-
-    if (gateBudget !== this.lastBudgetGated) {
-      this.lastBudgetGated = gateBudget;
-      this.frameRowEl?.setAttribute('data-gated', gateBudget ? 'true' : 'false');
     }
 
     if (this.budgetFillEl) {
@@ -1158,6 +1147,5 @@ export class DiagnosticsOverlay {
     this.lastSnapshot = null;
     this.isCompact = false;
     this.lastBudgetState = 'ok';
-    this.lastBudgetGated = true;
   }
 }

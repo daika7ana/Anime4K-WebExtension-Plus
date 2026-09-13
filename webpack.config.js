@@ -147,6 +147,9 @@ module.exports = (env, argv) => {
           compress: {
             // Remove console.log and console.warn in production (keep console.error)
             pure_funcs: ["console.log", "console.warn"],
+            // Match webpack's default of 2 compression passes (overriding
+            // minimizeOptions is not merged with the defaults).
+            passes: 2,
           },
         },
       },

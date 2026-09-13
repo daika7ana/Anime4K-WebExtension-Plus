@@ -3,7 +3,6 @@ import {
   foldFrequency,
   idealBoxMtf,
   makeGrating,
-  makeImpulseTrain,
   makeStepEdge,
   measureEdgeResponse,
   measureFundamental,
@@ -29,6 +28,27 @@ function grayImage(
     }
   }
   return { width, height, data };
+}
+
+/**
+ * Local DEV/TEST helper (moved out of the production `signal` module): a
+ * single-pixel impulse train at a fixed spacing (grayscale). Used to probe
+ * sub-period / broadband behaviour when a pure tone cannot represent it.
+ */
+function makeImpulseTrain(options: {
+  width: number;
+  height: number;
+  period: number;
+  axis?: 'x' | 'y';
+  dc?: number;
+  amplitude?: number;
+}): { width: number; height: number; data: Uint8Array } {
+  const { width, height, period, axis = 'x', dc = 96, amplitude = 64 } = options;
+  if (!(period > 0)) throw new Error(`makeImpulseTrain: period must be > 0 (got ${period})`);
+  return grayImage(width, height, (x, y) => {
+    const n = axis === 'x' ? x : y;
+    return n % period === 0 ? dc + amplitude : dc;
+  });
 }
 
 describe('makeGrating / measureFundamental', () => {

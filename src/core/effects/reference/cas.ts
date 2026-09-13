@@ -11,6 +11,7 @@
  * the final `mix(e, outColor, sharpness)`), then models the `rgba8unorm`
  * texture store by clamping to [0,1] and rounding to 8 bits.
  */
+import { clamp01 } from './math';
 
 /** Parameters accepted by {@link referenceCas}. */
 export interface CasParams {
@@ -26,12 +27,6 @@ const MAX_CHANNEL = 255;
  * (`0 * Infinity` -> NaN).
  */
 const MAX_SUM_EPSILON = 1e-8;
-
-function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-}
 
 /**
  * Model an `rgba8unorm` `textureStore`: clamp to [0,1], scale to 8-bit and

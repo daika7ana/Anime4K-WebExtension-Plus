@@ -576,45 +576,38 @@ describe('DiagnosticsOverlay', () => {
         ?.querySelector('.diagnostics') as HTMLElement;
     }
 
-    it('marks a 60 fps frame over budget via the bar (no percent badge)', () => {
+    it('does not flag healthy 60 fps content with small processing cost', () => {
       const video = createTestVideo();
       const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
 
-      overlay.update(0, 4);
+      // 60 fps wall-clock cadence, trivial per-frame processing cost.
+      overlay.update(1, 4);
       currentTime = 16.67; // 59.99 fps, one display interval
-      overlay.update(0, 4);
+      overlay.update(1, 4);
 
       const container = containerOf(video);
       const row = container.querySelector('.metric--frame') as HTMLElement;
-      expect(row.getAttribute('data-gated')).toBe('true');
-      expect(row.getAttribute('data-state')).toBe('over');
-      expect(container.getAttribute('data-state')).toBe('over');
+      expect(row.getAttribute('data-state')).toBe('ok');
+      expect(container.getAttribute('data-state')).toBe('ok');
 
       // The numeric badge was removed; the bar is the only budget indicator.
       expect(row.querySelector('.metric-badge')).toBeNull();
       const fill = container.querySelector('.budget-fill') as HTMLElement;
-      expect(fill.style.width).toBe('100%');
+      expect(parseFloat(fill.style.width)).toBeLessThan(90);
 
       overlay.destroy();
     });
 
-    it('clamps the budget bar and shows warn before the over threshold', () => {
+    it('shows warn when processing cost is 90-100% of the budget', () => {
       const video = createTestVideo();
       const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
 
-      // Ten fast (100 fps) frames keep the gated state meaningful, then a
-      // single 15.5 ms frame lands at ~93% of the 16.7 ms budget → warn.
-      overlay.update(0, 4);
-      for (let i = 0; i < 10; i++) {
-        currentTime += 10;
-        overlay.update(0, 4);
-      }
-      currentTime += 15.5;
-      overlay.update(0, 4);
+      // 15.5 ms of processing against the 16.7 ms budget → ~93% → warn.
+      overlay.update(15.5, 4);
+      overlay.update(15.5, 4);
 
       const container = containerOf(video);
       const row = container.querySelector('.metric--frame') as HTMLElement;
-      expect(row.getAttribute('data-gated')).toBe('true');
       expect(row.getAttribute('data-state')).toBe('warn');
 
       const fill = container.querySelector('.budget-fill') as HTMLElement;
@@ -625,40 +618,51 @@ describe('DiagnosticsOverlay', () => {
       overlay.destroy();
     });
 
-    it('clamps the budget bar at 100% for a frame far over budget', () => {
+    it('clamps the budget bar at 100% for processing far over budget', () => {
       const video = createTestVideo();
       const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
 
-      // Ten 10 ms frames keep fps well above the 45 fps gate, then a 40 ms
-      // spike is ~240% of the budget but must never overflow the bar.
-      overlay.update(0, 4);
-      for (let i = 0; i < 10; i++) {
-        currentTime += 10;
-        overlay.update(0, 4);
-      }
-      currentTime += 40;
-      overlay.update(0, 4);
+      // 40 ms of processing is ~240% of the budget but must never overflow.
+      overlay.update(40, 4);
+      overlay.update(40, 4);
 
       const container = containerOf(video);
       const row = container.querySelector('.metric--frame') as HTMLElement;
-      expect(row.getAttribute('data-gated')).toBe('true');
       expect(row.getAttribute('data-state')).toBe('over');
       expect((container.querySelector('.budget-fill') as HTMLElement).style.width).toBe('100%');
 
       overlay.destroy();
     });
 
-    it('keeps 24 fps content neutral (display budget is not a fault signal)', () => {
+    it('reflects processing cost at any content cadence (no fps gate)', () => {
       const video = createTestVideo();
       const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
 
+      // 24 fps wall-clock content with an over-budget processing cost is still a
+      // renderer fault: the display budget is a valid reference at any cadence.
       overlay.update(0, 4);
       currentTime = 1000 / 24;
-      overlay.update(0, 4);
+      overlay.update(20, 4);
 
       const row = containerOf(video).querySelector('.metric--frame') as HTMLElement;
-      expect(row.getAttribute('data-gated')).toBe('false');
+      expect(row.getAttribute('data-state')).toBe('over');
+
+      overlay.destroy();
+    });
+
+    it('uses GPU p50 as processing cost when it exceeds CPU frame time', () => {
+      const video = createTestVideo();
+      const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
+
+      // CPU cost alone (2 ms) would be well under the 16.7 ms budget...
+      overlay.update(2, 4, activeSnapshot({ totalGpuP50: 2 }));
+      let row = containerOf(video).querySelector('.metric--frame') as HTMLElement;
       expect(row.getAttribute('data-state')).toBe('ok');
+
+      // ...but the GPU-derived cost (20 ms) pushes the same frame over budget.
+      overlay.update(2, 4, activeSnapshot({ totalGpuP50: 20 }));
+      row = containerOf(video).querySelector('.metric--frame') as HTMLElement;
+      expect(row.getAttribute('data-state')).toBe('over');
 
       overlay.destroy();
     });
@@ -687,6 +691,79 @@ describe('DiagnosticsOverlay', () => {
       expect(Number(small.style.getPropertyValue('--heat'))).toBeLessThan(0.1);
 
       overlay.destroy();
+    });
+  });
+
+  describe('display-refresh probe (MIN-1)', () => {
+    /**
+     * The one-time probe is driven by captured `requestAnimationFrame`
+     * callbacks; each timestamp feeds one frame. The label rendered by the
+     * expanded HUD (`Frame · <budget> ms`) is the public observable for the
+     * accepted/rejected measurement.
+     */
+    function frameLabel(video: HTMLVideoElement): string {
+      const host = video.parentElement?.querySelector('div') as HTMLElement;
+      return (
+        host.shadowRoot?.querySelector('.metric--frame .metric-label')?.textContent ?? ''
+      );
+    }
+
+    /**
+     * Install a capturing rAF: created overlay schedules a callback, then each
+     * invoked callback schedules the next until the probe completes. Returns a
+     * pump that feeds one timestamp per scheduled frame.
+     */
+    function installCapturingRaf(): (timestamps: number[]) => void {
+      const queue: FrameRequestCallback[] = [];
+      vi.stubGlobal(
+        'requestAnimationFrame',
+        vi.fn((callback: FrameRequestCallback): number => {
+          queue.push(callback);
+          return queue.length;
+        }),
+      );
+      return (timestamps: number[]): void => {
+        for (const timestamp of timestamps) {
+          const callback = queue.shift();
+          if (!callback) break;
+          callback(timestamp);
+        }
+      };
+    }
+
+    /**
+     * Create an overlay, run the six-frame probe at a fixed cadence, and return
+     * the resulting frame-label text.
+     */
+    function runProbe(intervalMs: number): string {
+      const video = createTestVideo();
+      const pump = installCapturingRaf();
+      const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
+
+      // Six frames yield five deltas; the first timestamp is only the baseline.
+      pump(Array.from({ length: 6 }, (_, index) => index * intervalMs));
+
+      const label = frameLabel(video);
+      overlay.destroy();
+      return label;
+    }
+
+    it('accepts a ~280 Hz interval (~3.57 ms) and records it as the budget', () => {
+      // 1000 / 280 ≈ 3.57 ms, inside the [2, 50] ms accept window.
+      expect(runProbe(1000 / 280)).toBe('Frame \u00b7 3.6 ms');
+    });
+
+    it('accepts a ~240 Hz interval (~4.17 ms) and records it as the budget', () => {
+      // 1000 / 240 ≈ 4.17 ms, inside the [2, 50] ms accept window.
+      expect(runProbe(1000 / 240)).toBe('Frame \u00b7 4.2 ms');
+    });
+
+    it('rejects an interval below the 2 ms floor and keeps the 60 Hz fallback', () => {
+      expect(runProbe(1)).toBe('Frame \u00b7 16.7 ms');
+    });
+
+    it('rejects an interval above the 50 ms ceiling and keeps the 60 Hz fallback', () => {
+      expect(runProbe(60)).toBe('Frame \u00b7 16.7 ms');
     });
   });
 

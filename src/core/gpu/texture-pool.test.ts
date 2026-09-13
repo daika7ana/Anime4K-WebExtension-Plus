@@ -4,6 +4,8 @@
  *
  * Uses the shared WebGPU mock from `@/test/webgpu-mock` (which provides
  * `createTexture` textures with spy-able `destroy`) — it is not modified here.
+ * Assertions observe allocation/reuse via the `createTexture` spy and eviction
+ * via `destroy` calls (the pool exposes no statistics API).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installGPUMock, removeGPUMock } from '@/test/webgpu-mock';
@@ -27,6 +29,11 @@ function destroySpy(texture: GPUTexture): ReturnType<typeof vi.fn> {
     return (texture as unknown as MockGPUTexture).destroy;
 }
 
+/** The device's `createTexture` spy (used to observe allocations/reuse). */
+function createTextureSpy(device: GPUDevice): ReturnType<typeof vi.fn> {
+    return device.createTexture as unknown as ReturnType<typeof vi.fn>;
+}
+
 describe('TexturePool', () => {
     let mock: MockGPUObjects;
     let device: GPUDevice;
@@ -40,40 +47,40 @@ describe('TexturePool', () => {
         removeGPUMock();
     });
 
-    // ── Reuse / hit accounting ──
+    // ── Reuse / hit behavior ──
 
-    it('returns the SAME texture after acquire → release → acquire and counts a hit', () => {
+    it('returns the SAME texture after acquire → release → acquire without reallocating', () => {
         const pool = new TexturePool(device);
         const descriptor = makeDescriptor();
+        const createTexture = createTextureSpy(device);
 
         const first = pool.acquire(descriptor);
-        expect(pool.stats().misses).toBe(1);
-        expect(pool.stats().checkedOut).toBe(1);
+        expect(createTexture).toHaveBeenCalledTimes(1);
 
         pool.release(first);
-        expect(pool.stats().free).toBe(1);
-        expect(pool.stats().checkedOut).toBe(0);
 
         const second = pool.acquire(descriptor);
         expect(second).toBe(first);
-        expect(pool.stats().hits).toBe(1);
-        expect(pool.stats().misses).toBe(1);
+        // A reuse must not allocate a second texture.
+        expect(createTexture).toHaveBeenCalledTimes(1);
     });
 
     it('treats label as part of the identity (label group)', () => {
         const pool = new TexturePool(device);
+        const createTexture = createTextureSpy(device);
 
         const unlabelled = pool.acquire(makeDescriptor());
         const labelled = pool.acquire(makeDescriptor({ label: 'tier-input' }));
 
         expect(labelled).not.toBe(unlabelled);
-        expect(pool.stats().misses).toBe(2);
+        expect(createTexture).toHaveBeenCalledTimes(2);
     });
 
     // ── Distinct descriptors ──
 
-    it('allocates distinct textures for size, format and usage differences', () => {
+    it('allocates distinct textures for size, format, usage and sampleCount differences', () => {
         const pool = new TexturePool(device);
+        const createTexture = createTextureSpy(device);
 
         const base = pool.acquire(makeDescriptor());
         const bigger = pool.acquire(makeDescriptor({ width: 20 }));
@@ -81,11 +88,10 @@ describe('TexturePool', () => {
         const otherUsage = pool.acquire(
             makeDescriptor({ usage: GPUTextureUsage.TEXTURE_BINDING }),
         );
+        const multisampled = pool.acquire(makeDescriptor({ sampleCount: 4 }));
 
-        expect(new Set([base, bigger, otherFormat, otherUsage]).size).toBe(4);
-        expect(pool.stats().misses).toBe(4);
-        expect(pool.stats().hits).toBe(0);
-        expect(pool.stats().checkedOut).toBe(4);
+        expect(new Set([base, bigger, otherFormat, otherUsage, multisampled]).size).toBe(5);
+        expect(createTexture).toHaveBeenCalledTimes(5);
     });
 
     // ── In-flight safety ──
@@ -93,29 +99,13 @@ describe('TexturePool', () => {
     it('never hands out a texture that is still checked out', () => {
         const pool = new TexturePool(device);
         const descriptor = makeDescriptor();
+        const createTexture = createTextureSpy(device);
 
         const first = pool.acquire(descriptor);
         const second = pool.acquire(descriptor);
 
         expect(second).not.toBe(first);
-        expect(pool.stats().checkedOut).toBe(2);
-        expect(pool.stats().hits).toBe(0);
-        expect(pool.stats().misses).toBe(2);
-    });
-
-    // ── Byte accounting ──
-
-    it('accounts bytes from size/format/sampleCount (rgba8unorm = 4 Bpp)', () => {
-        const pool = new TexturePool(device);
-
-        pool.acquire(makeDescriptor()); // 10 × 10 × 4 = 400
-        expect(pool.stats().bytes).toBe(400);
-
-        pool.acquire(makeDescriptor({ width: 20 })); // 20 × 10 × 4 = 800
-        expect(pool.stats().bytes).toBe(1200);
-
-        pool.acquire(makeDescriptor({ sampleCount: 4 })); // 10 × 10 × 4 × 4 = 1600
-        expect(pool.stats().bytes).toBe(2800);
+        expect(createTexture).toHaveBeenCalledTimes(2);
     });
 
     // ── LRU eviction under budget ──
@@ -127,26 +117,22 @@ describe('TexturePool', () => {
 
         pool.release(x);
         pool.release(y);
-        expect(pool.stats().free).toBe(2);
-        expect(pool.stats().bytes).toBe(800); // within budget → no eviction yet
+        // 800 bytes is within the 900-byte budget → nothing evicted yet.
+        expect(destroySpy(x)).not.toHaveBeenCalled();
+        expect(destroySpy(y)).not.toHaveBeenCalled();
 
-        // A third, distinct texture pushes total bytes to 1200 (> budget) while
-        // x and y remain free. Releasing it must evict the OLDEST free texture
-        // (x), not the texture that was just released.
+        // A third, distinct 400-byte texture pushes the total to 1200 (> budget)
+        // while x and y remain free. Releasing it must evict the OLDEST free
+        // texture (x), not the texture that was just released.
         const z = pool.acquire(makeDescriptor({ label: 'z' }));
-        expect(pool.stats().bytes).toBe(1200);
-
         pool.release(z);
-        expect(pool.stats().evictions).toBe(1);
-        expect(pool.stats().free).toBe(2);
-        expect(pool.stats().bytes).toBeLessThanOrEqual(pool.stats().budgetBytes);
 
         expect(destroySpy(x)).toHaveBeenCalledTimes(1);
         expect(destroySpy(y)).not.toHaveBeenCalled();
         expect(destroySpy(z)).not.toHaveBeenCalled();
     });
 
-    it('evicts checked-out-free textures in LRU order until within budget', () => {
+    it('evicts free textures in LRU order until within budget', () => {
         const pool = new TexturePool(device, 500); // room for a single 400-byte texture
         const descriptor = makeDescriptor();
 
@@ -157,8 +143,6 @@ describe('TexturePool', () => {
         pool.release(b);
         pool.release(c);
 
-        expect(pool.stats().bytes).toBeLessThanOrEqual(pool.stats().budgetBytes);
-        expect(pool.stats().evictions).toBe(2);
         expect(destroySpy(a)).toHaveBeenCalledTimes(1);
         expect(destroySpy(b)).toHaveBeenCalledTimes(1);
         expect(destroySpy(c)).not.toHaveBeenCalled();
@@ -166,7 +150,7 @@ describe('TexturePool', () => {
 
     // ── dispose ──
 
-    it('dispose destroys all free textures and resets stats', () => {
+    it('dispose destroys all free textures', () => {
         const pool = new TexturePool(device);
         const descriptor = makeDescriptor();
 
@@ -174,20 +158,11 @@ describe('TexturePool', () => {
         const b = pool.acquire(descriptor);
         pool.release(a);
         pool.release(b);
-        expect(pool.stats().free).toBe(2);
 
         pool.dispose();
 
         expect(destroySpy(a)).toHaveBeenCalledTimes(1);
         expect(destroySpy(b)).toHaveBeenCalledTimes(1);
-        expect(pool.stats()).toMatchObject({
-            free: 0,
-            checkedOut: 0,
-            bytes: 0,
-            evictions: 0,
-            hits: 0,
-            misses: 0,
-        });
     });
 
     it('dispose leaves checked-out textures untouched and forgets them', () => {
@@ -197,11 +172,10 @@ describe('TexturePool', () => {
         pool.dispose();
 
         expect(destroySpy(texture)).not.toHaveBeenCalled();
-        expect(pool.stats().checkedOut).toBe(0);
 
         // A release after dispose is a safe no-op (ownership was forgotten).
         expect(() => pool.release(texture)).not.toThrow();
-        expect(pool.stats().free).toBe(0);
+        expect(destroySpy(texture)).not.toHaveBeenCalled();
     });
 
     // ── release safety ──
@@ -220,10 +194,11 @@ describe('TexturePool', () => {
         expect(() => pool.release(foreign)).not.toThrow();
 
         pool.release(owned);
-        expect(pool.stats().free).toBe(1);
+        // The released texture is immediately reusable.
+        expect(pool.acquire(descriptor)).toBe(owned);
+        pool.release(owned);
 
         expect(() => pool.release(owned)).not.toThrow();
-        expect(pool.stats().free).toBe(1);
 
         expect(destroySpy(owned)).not.toHaveBeenCalled();
         expect(destroySpy(foreign)).not.toHaveBeenCalled();

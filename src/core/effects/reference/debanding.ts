@@ -17,6 +17,7 @@
  * Parameters match the `Debanding` wrapper uniform layout: `vec2<f32>` where
  * `.x = strength` and `.y = bandThreshold`.
  */
+import { clamp01 } from './math';
 
 /** Parameters accepted by {@link referenceDebanding}. */
 export interface DebandingParams {
@@ -34,12 +35,6 @@ const BAYER4: readonly number[] = [
   3, 11, 1, 9,
   15, 7, 13, 5,
 ];
-
-function clamp01(value: number): number {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-}
 
 /**
  * Model an `rgba8unorm` `textureStore`: clamp to [0,1], scale to 8-bit and

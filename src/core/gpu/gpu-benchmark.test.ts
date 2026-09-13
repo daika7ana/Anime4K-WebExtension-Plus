@@ -20,65 +20,40 @@ vi.mock('@utils/effect-chain-templates', () => ({
 }));
 
 // ─── Mock anime4k-webgpu-async (library effects) ───
-class MockLibEffect {
-  descriptor: any;
-  constructor(descriptor: any) { this.descriptor = descriptor; }
-  pass(_encoder: any) { return Promise.resolve(); }
-  getOutputTexture() { return this.descriptor.inputTexture; }
-  updateParam() {}
-  destroy() {}
-}
-vi.mock('anime4k-webgpu-async', () => ({
-  ClampHighlights: MockLibEffect,
-  CNNM: MockLibEffect,
-  CNNx2M: MockLibEffect,
-  CNNVL: MockLibEffect,
-  CNNx2VL: MockLibEffect,
-  CNNUL: MockLibEffect,
-  CNNx2UL: MockLibEffect,
-  CNNSoftM: MockLibEffect,
-  CNNSoftVL: MockLibEffect,
-  DoG: MockLibEffect,
-  DenoiseCNNx2VL: MockLibEffect,
-  Downscale: MockLibEffect,
-}));
+// Every key resolves to the shared mock effect; the benchmark's registry path
+// constructs it for all effects.
+vi.mock('anime4k-webgpu-async', async () => {
+  const { MockLibEffect } = await import('./__test-helpers__/fake-backend.js');
+  return {
+    ClampHighlights: MockLibEffect,
+    CNNM: MockLibEffect,
+    CNNx2M: MockLibEffect,
+    CNNVL: MockLibEffect,
+    CNNx2VL: MockLibEffect,
+    CNNUL: MockLibEffect,
+    CNNx2UL: MockLibEffect,
+    CNNSoftM: MockLibEffect,
+    CNNSoftVL: MockLibEffect,
+    DoG: MockLibEffect,
+    DenoiseCNNx2VL: MockLibEffect,
+    Downscale: MockLibEffect,
+  };
+});
 
 // ─── Mock backend registry (engine dispatch) ───
 // Since registry dispatch is unconditional, the benchmark's lazy registry load
 // must resolve to a fake Anime4K backend that constructs the mock classes.
-vi.mock('@core/engines/registry.js', () => {
-  const scaleByKey: Record<string, number> = {
-    CNNx2M: 2,
-    CNNx2VL: 2,
-    DenoiseCNNx2VL: 2,
-    CNNx2UL: 2,
-  };
+vi.mock('@core/engines/registry.js', async () => {
+  const {
+    createFakeAnime4kBackend,
+    MockLibEffect,
+  } = await import('./__test-helpers__/fake-backend.js');
 
-  const anime4kBackend = {
-    backendId: 'anime4k',
+  const anime4kBackend = createFakeAnime4kBackend({
     displayName: 'Anime4K (benchmark-test fake)',
-    listEffects: () => [],
-    async compileEffect(ref: any, ctx: any) {
-      const pipeline = new MockLibEffect({
-        device: ctx.device,
-        inputTexture: ctx.inputTexture,
-        nativeDimensions: ctx.currentDimensions,
-        targetDimensions: ctx.targetDimensions,
-      });
-      const scale = scaleByKey[ref.key] ?? 1;
-      return {
-        pipeline,
-        outputTexture: pipeline.getOutputTexture(),
-        outputDimensions: scale > 1
-          ? {
-            width: ctx.currentDimensions.width * scale,
-            height: ctx.currentDimensions.height * scale,
-          }
-          : ctx.currentDimensions,
-        profileLabel: ref.key,
-      };
-    },
-  };
+    missingCtorPrefix: '[benchmark-test-fake]',
+    resolveCtor: () => MockLibEffect,
+  });
 
   const registry = {
     register: vi.fn(),

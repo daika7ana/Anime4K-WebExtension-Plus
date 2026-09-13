@@ -2,9 +2,9 @@
  * Revisioned settings snapshot store.
  *
  * Holds the last merged `Anime4KWebExtSettings` value produced by `getSettings`
- * together with a monotonically increasing `revision`. Consumers can subscribe
- * to be notified when the snapshot is invalidated (a relevant `chrome.storage`
- * area changed) or republished (a fresh merged value was produced).
+ * together with a monotonically increasing `revision`. A relevant
+ * `chrome.storage` area change invalidates the snapshot; the next publish bumps
+ * the revision with a fresh merged value.
  *
  * The store is deliberately decoupled from `settings.ts`: it knows nothing about
  * how the value is built, it only stores the latest value and tracks staleness.
@@ -22,14 +22,9 @@ export interface SettingsSnapshot {
   readonly value: Anime4KWebExtSettings;
 }
 
-/** Listener notified on invalidate/publish. Receives the current (possibly stale) snapshot. */
-export type SettingsSnapshotListener = (snapshot: SettingsSnapshot | null) => void;
-
 let snapshot: SettingsSnapshot | null = null;
 let revisionCounter = 0;
 let stale = false;
-
-const listeners = new Set<SettingsSnapshotListener>();
 
 type StorageChangedListener = (
   changes: Record<string, chrome.storage.StorageChange>,
@@ -38,12 +33,6 @@ type StorageChangedListener = (
 
 let storageChangedListener: StorageChangedListener | null = null;
 let storageListenerAttached = false;
-
-function notify(): void {
-  for (const listener of listeners) {
-    listener(snapshot);
-  }
-}
 
 /**
  * Attach the `chrome.storage.onChanged` listener that invalidates the snapshot
@@ -74,30 +63,14 @@ function ensureStorageListener(): void {
 }
 
 /**
- * Subscribe to snapshot lifecycle events. The listener is invoked with the
- * current snapshot (or `null` before the first publish) whenever the snapshot is
- * invalidated or republished.
- *
- * @returns an unsubscribe function that removes the listener.
- */
-export function subscribe(listener: SettingsSnapshotListener): () => void {
-  ensureStorageListener();
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-/**
- * Mark the current snapshot as stale and notify subscribers. Does not change the
- * stored value or its revision; the revision advances on the next `setSnapshot`
- * (i.e. the next settings read). Calling this repeatedly while already stale is a
- * no-op so that multiple storage listeners cannot double-notify.
+ * Mark the current snapshot as stale. Does not change the stored value or its
+ * revision; the revision advances on the next `setSnapshot` (i.e. the next
+ * settings read). Calling this repeatedly while already stale is a no-op so that
+ * multiple storage-area changes cannot re-invalidate.
  */
 export function invalidate(): void {
   if (stale) return;
   stale = true;
-  notify();
 }
 
 /** Whether the snapshot has been invalidated since it was last published. */
@@ -106,8 +79,8 @@ export function isStale(): boolean {
 }
 
 /**
- * Publish a freshly merged settings value. Bumps the revision, clears the stale
- * flag, and notifies subscribers.
+ * Publish a freshly merged settings value. Bumps the revision and clears the
+ * stale flag.
  *
  * @returns the newly published snapshot.
  */
@@ -116,7 +89,6 @@ export function setSnapshot(value: Anime4KWebExtSettings): SettingsSnapshot {
   revisionCounter += 1;
   snapshot = { revision: revisionCounter, value };
   stale = false;
-  notify();
   return snapshot;
 }
 
@@ -126,24 +98,4 @@ export function setSnapshot(value: Anime4KWebExtSettings): SettingsSnapshot {
  */
 export function getSnapshot(): SettingsSnapshot | null {
   return snapshot;
-}
-
-/**
- * Tear down the store: remove the storage listener, drop all subscribers, and
- * clear the stored snapshot. The revision counter is intentionally retained so
- * revisions remain monotonic if the store is reused after disposal.
- */
-export function dispose(): void {
-  if (storageChangedListener) {
-    try {
-      chrome?.storage?.onChanged?.removeListener?.(storageChangedListener);
-    } catch {
-      // Ignore teardown failures; the listener reference is discarded below.
-    }
-  }
-  storageChangedListener = null;
-  storageListenerAttached = false;
-  listeners.clear();
-  snapshot = null;
-  stale = false;
 }

@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 23
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -33,6 +33,16 @@ jobs:
 
       - name: Build Chrome extension
         run: pnpm build:chrome
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Chromium (full build required for extension support)
         run: pnpm exec playwright install --with-deps chromium

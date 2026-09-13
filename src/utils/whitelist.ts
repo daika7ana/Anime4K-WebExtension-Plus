@@ -50,8 +50,8 @@ export function getMatchingWhitelistRules(
         .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // Escape all regex special chars
         .replace(/\*/g, '.*');                     // Then convert wildcards to .*
 
-      // Create a case-insensitive regular expression
-      const regex = new RegExp(regexPattern, 'i');
+      // Create a case-insensitive, fully anchored regular expression
+      const regex = new RegExp(`^${regexPattern}$`, 'i');
       return regex.test(baseUrl);
     });
   } catch (error) {
@@ -80,14 +80,26 @@ export async function addWhitelistRule(pattern: string, enabled: boolean = true)
 
   const newWhitelist = whitelist || [];
 
-  // Avoid duplicate entries
-  if (!newWhitelist.some(r => r.pattern === pattern)) {
-    newWhitelist.push(newRule);
+  const existingRule = newWhitelist.find(r => r.pattern === pattern);
+
+  if (existingRule) {
+    // Already enabled — nothing to do.
+    if (existingRule.enabled) return;
+
+    // Re-enable the previously disabled rule and persist the change.
+    existingRule.enabled = true;
     await saveSettings({ whitelist: newWhitelist });
 
     // Notify that the whitelist has been updated
     sendMessage({ type: 'WHITELIST_UPDATED' });
+    return;
   }
+
+  newWhitelist.push(newRule);
+  await saveSettings({ whitelist: newWhitelist });
+
+  // Notify that the whitelist has been updated
+  sendMessage({ type: 'WHITELIST_UPDATED' });
 }
 
 /**

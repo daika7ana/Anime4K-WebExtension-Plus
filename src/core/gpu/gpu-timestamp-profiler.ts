@@ -174,7 +174,7 @@ interface FrameRecording {
  * methods become safe no-ops. It never throws, even after the profiler is
  * destroyed.
  */
-export class GpuFrameRecorder {
+class GpuFrameRecorder {
     constructor(
         private readonly onMark: (label: string) => void,
         private readonly onRecordCpu: (label: string, ms: number) => void,
@@ -544,6 +544,12 @@ export class GpuTimestampProfiler {
      * recover; a destroyed or unsupported profiler is left as-is.
      */
     reset(): void {
+        // Reclaim any in-flight ring slot before dropping the frame records.
+        // beginFrame() marks the slot 'pending', so nulling currentFrame alone
+        // would strand it as permanently busy and silently stop profiling after
+        // ringSize such resets. abortFrame() releases the slot and clears both
+        // frame records; it is a no-op when nothing is in flight.
+        this.abortFrame();
         this.gpuStats.clear();
         this.cpuStats.clear();
         this.totalStats.clear();
@@ -551,8 +557,6 @@ export class GpuTimestampProfiler {
         this.labels = [];
         this.framesSampled = 0;
         this.consecutiveFailures = 0;
-        this.currentFrame = null;
-        this.submittedFrame = null;
         if (this.state === 'degraded') this.state = 'active';
     }
 

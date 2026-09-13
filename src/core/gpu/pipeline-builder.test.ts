@@ -21,149 +21,33 @@ vi.mock('@core/utils/yield-utils', () => ({
   yieldToMain: vi.fn().mockResolvedValue(undefined),
 }));
 
-// ─── Hoisted fake library classes + construction recorder ───
-// Shared by the mocked `anime4k-webgpu-async` module (legacy path) and the
-// mocked backend registry (registry path) so parity compares the same classes.
-const mocks = vi.hoisted(() => {
-  interface ConstructedRecord {
-    effectName: string;
-    descriptor: any;
-    paramUpdates: Array<[string, any]>;
-  }
-  const constructed: ConstructedRecord[] = [];
-
-  function makeEffectClass(effectName: string) {
-    return class MockEffect {
-      static effectName = effectName;
-      descriptor: any;
-      paramUpdates: Array<[string, any]> = [];
-      constructor(descriptor: any) {
-        this.descriptor = descriptor;
-        constructed.push({ effectName, descriptor, paramUpdates: this.paramUpdates });
-      }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return this.descriptor.inputTexture; }
-      updateParam(key: string, value: any) { this.paramUpdates.push([key, value]); }
-      destroy() {}
-    };
-  }
-
-  /**
-   * Two-stage epilogue node: its `getOutputTexture()` is a DISTINCT marker
-   * object so tests can prove the apply stage is the new chain tail (rather
-   * than the pass-through stats node's input texture).
-   */
-  function makeApplyClass() {
-    return class MockClampHighlightsApply {
-      static effectName = 'ClampHighlightsApply';
-      descriptor: any;
-      outputTexture: { width: number; height: number; kind: string };
-      constructor(descriptor: any) {
-        this.descriptor = descriptor;
-        this.outputTexture = {
-          width: descriptor.inputTexture?.width ?? 0,
-          height: descriptor.inputTexture?.height ?? 0,
-          kind: 'clamp-apply',
-        };
-        constructed.push({ effectName: 'ClampHighlightsApply', descriptor, paramUpdates: [] });
-      }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return this.outputTexture; }
-      updateParam() {}
-      destroy() {}
-    };
-  }
-
-  const ClampHighlightsApplyClass = makeApplyClass();
-
-  // Mirror the shipped two-stage ClampHighlights: the stats node returns the
-  // apply node bound to the chain's final input texture.
-  const ClampHighlightsClass = class extends makeEffectClass('ClampHighlights') {
-    getDeferredPipeline(finalInputTexture: any) {
-      return new ClampHighlightsApplyClass({ inputTexture: finalInputTexture });
-    }
-  };
-
-  const libraryClasses: Record<string, any> = {
-    ClampHighlights: ClampHighlightsClass,
-    CNNM: makeEffectClass('CNNM'),
-    CNNSoftM: makeEffectClass('CNNSoftM'),
-    CNNSoftVL: makeEffectClass('CNNSoftVL'),
-    CNNVL: makeEffectClass('CNNVL'),
-    CNNUL: makeEffectClass('CNNUL'),
-    GANUUL: makeEffectClass('GANUUL'),
-    CNNx2M: makeEffectClass('CNNx2M'),
-    CNNx2VL: makeEffectClass('CNNx2VL'),
-    DenoiseCNNx2VL: makeEffectClass('DenoiseCNNx2VL'),
-    CNNx2UL: makeEffectClass('CNNx2UL'),
-    GANx3L: makeEffectClass('GANx3L'),
-    GANx4UUL: makeEffectClass('GANx4UUL'),
-    DoG: makeEffectClass('DoG'),
-    BilateralMean: makeEffectClass('BilateralMean'),
-    ClampHighlightsApply: ClampHighlightsApplyClass,
-    Downscale: makeEffectClass('Downscale'),
-  };
-
-  return { constructed, libraryClasses, backendCompiles: 0 };
+// ─── Fake library classes + construction recorder ───
+// Shared by the mocked `anime4k-webgpu-async` module and the mocked backend
+// registry so both dispatch paths construct the same classes and record the
+// same construction order.
+vi.mock('anime4k-webgpu-async', async () => {
+  const { libraryClasses } = await import('./__test-helpers__/fake-backend.js');
+  return { ...libraryClasses };
 });
 
-vi.mock('anime4k-webgpu-async', () => ({ ...mocks.libraryClasses }));
-
 // ─── Mock backend registry (engine dispatch) ───
-// The fake Anime4K backend constructs the hoisted classes; the core backend is
+// The fake Anime4K backend constructs the shared classes; the core backend is
 // the real `createCoreBackend` (CAS/Debanding/ColorAdjust), so the builder's
 // registry dispatch is exercised for both backends. `resolveEffectReference` is
 // real (static descriptors).
 vi.mock('@core/engines/registry.js', async () => {
+  const { createFakeAnime4kBackend } = await import('./__test-helpers__/fake-backend.js');
   const { createCoreBackend } = await import('@core/engines/core-backend.js');
 
   // `ref.key` is the descriptor key for every resolved reference, so the fake
   // anime4k backend needs no descriptor table — only the known upscale scale
   // factors.
-  const scaleByKey: Record<string, number> = {
-    CNNx2M: 2,
-    CNNx2VL: 2,
-    DenoiseCNNx2VL: 2,
-    CNNx2UL: 2,
-    GANx3L: 3,
-    GANx4UUL: 4,
-  };
-
-  const anime4kBackend = {
-    backendId: 'anime4k',
+  const anime4kBackend = createFakeAnime4kBackend({
     displayName: 'Anime4K (golden fake)',
-    listEffects: () => [],
-    async compileEffect(ref: any, ctx: any) {
-      const Ctor = mocks.libraryClasses[ref.key];
-      if (!Ctor) throw new Error(`[golden-fake] no constructor for "${ref.key}"`);
-      mocks.backendCompiles += 1;
-
-      const pipeline = new Ctor({
-        device: ctx.device,
-        inputTexture: ctx.inputTexture,
-        nativeDimensions: ctx.currentDimensions,
-        targetDimensions: ctx.targetDimensions,
-      });
-      if (ctx.params) {
-        for (const [key, value] of Object.entries(ctx.params)) pipeline.updateParam(key, value);
-      }
-
-      const scale = scaleByKey[ref.key] ?? 1;
-      const outputDimensions = scale > 1
-        ? {
-          width: Math.ceil(ctx.currentDimensions.width * scale),
-          height: Math.ceil(ctx.currentDimensions.height * scale),
-        }
-        : ctx.currentDimensions;
-
-      return {
-        pipeline,
-        outputTexture: pipeline.getOutputTexture(),
-        outputDimensions,
-        profileLabel: ref.key,
-      };
-    },
-  };
+    missingCtorPrefix: '[golden-fake]',
+    applyParams: true,
+    ceilScaledDimensions: true,
+  });
 
   const coreBackend = createCoreBackend();
 
@@ -186,6 +70,7 @@ vi.mock('@core/engines/registry.js', async () => {
 
 // ─── Import the module under test AFTER mocks are set up ───
 import { paramsEqual, buildEffectPipelines } from './pipeline-builder';
+import { constructed, libraryClasses, normalizeStep, state } from './__test-helpers__/fake-backend';
 
 // ─── Helpers ───
 
@@ -351,6 +236,37 @@ describe('buildEffectPipelines', () => {
 
     const pipelines = await buildEffectPipelines(params);
     expect(pipelines).toEqual([]);
+  });
+
+  it('destroys the partially built pipelines when the compile is superseded', async () => {
+    // The effect class is constructed for real, then the chain-level stale check
+    // fires after the main loop. The built pipeline owns an output texture and
+    // must be destroyed rather than dropped alive.
+    const destroySpy = vi.spyOn(libraryClasses.DoG.prototype, 'destroy');
+    try {
+      const labels: string[] = [];
+      // Call order: builder's pre-destroy check (1), post-prewarm check (2),
+      // then the chain compiler's post-loop check (3).
+      let staleChecks = 0;
+      const params = buildParams({
+        effects: [mkEffect('DoG')],
+        labels,
+        isStale: () => ++staleChecks >= 3,
+      });
+      // No-op pre-warmer so the dummy probe does not add destroy calls.
+      (params as { preWarmer: PipelinePreWarmer }).preWarmer = {
+        warm: vi.fn().mockResolvedValue(undefined),
+        invalidate: vi.fn(),
+      } as unknown as PipelinePreWarmer;
+
+      const pipelines = await buildEffectPipelines(params);
+
+      expect(pipelines).toEqual([]);
+      expect(labels).toEqual([]);
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+    } finally {
+      destroySpy.mockRestore();
+    }
   });
 
   // ── Old pipelines destroyed ──
@@ -1026,19 +942,6 @@ describe('buildEffectPipelines', () => {
 
 // ─── Golden: engine registry dispatch ───
 
-/** Comparable projection of one constructed pipeline descriptor. */
-function normalizeStep(record: { effectName: string; descriptor: any }) {
-  const descriptor = record.descriptor ?? {};
-  return {
-    effectName: record.effectName,
-    nativeDimensions: descriptor.nativeDimensions ?? null,
-    targetDimensions: descriptor.targetDimensions ?? null,
-    inputTexture: descriptor.inputTexture
-      ? { width: descriptor.inputTexture.width, height: descriptor.inputTexture.height }
-      : null,
-  };
-}
-
 describe('buildEffectPipelines golden (engine registry)', () => {
   let mock: MockGPUObjects;
   // A no-op pre-warmer isolates Phase 1 construction so the snapshot only
@@ -1050,7 +953,7 @@ describe('buildEffectPipelines golden (engine registry)', () => {
 
   beforeEach(() => {
     mock = installGPUMock();
-    mocks.constructed.length = 0;
+    constructed.length = 0;
   });
 
   afterEach(() => {
@@ -1076,19 +979,19 @@ describe('buildEffectPipelines golden (engine registry)', () => {
   }
 
   async function run(effects: EnhancementEffect[]) {
-    mocks.constructed.length = 0;
-    mocks.backendCompiles = 0;
+    constructed.length = 0;
+    state.backendCompiles = 0;
     const labels: string[] = [];
     const pipelines = await buildEffectPipelines(buildParams(effects, labels));
     return {
       pipelineCount: pipelines.length,
       labels: [...labels],
-      classSequence: mocks.constructed.map((record) => record.effectName),
-      constructors: mocks.constructed.map(normalizeStep),
-      paramUpdates: mocks.constructed.map((record) =>
+      classSequence: constructed.map((record) => record.effectName),
+      constructors: constructed.map(normalizeStep),
+      paramUpdates: constructed.map((record) =>
         record.paramUpdates.map(([key, value]) => [key, value]),
       ),
-      backendCompiles: mocks.backendCompiles,
+      backendCompiles: state.backendCompiles,
     };
   }
 
@@ -1144,8 +1047,8 @@ describe('buildEffectPipelines golden (engine registry)', () => {
       { id: 'anime4k/Upscale/CNNx2M', name: 'Upscale CNN x2 (M)', className: 'CNNx2M', upscaleFactor: 2 },
     ];
 
-    mocks.constructed.length = 0;
-    mocks.backendCompiles = 0;
+    constructed.length = 0;
+    state.backendCompiles = 0;
     const labels: string[] = [];
     const video = { videoWidth: 7680, videoHeight: 4320 } as HTMLVideoElement;
     const pipelines = await buildEffectPipelines({
@@ -1165,8 +1068,8 @@ describe('buildEffectPipelines golden (engine registry)', () => {
     expect({
       pipelineCount: pipelines.length,
       labels: [...labels],
-      classSequence: mocks.constructed.map((record) => record.effectName),
-      backendCompiles: mocks.backendCompiles,
+      classSequence: constructed.map((record) => record.effectName),
+      backendCompiles: state.backendCompiles,
     }).toEqual({
       pipelineCount: 1,
       labels: ['Downscale'],

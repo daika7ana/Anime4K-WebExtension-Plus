@@ -15,12 +15,10 @@ const capturedOnChanged = (
   chrome.storage.onChanged.addListener as unknown as { mock: { calls: unknown[][] } }
 ).mock.calls[0]?.[0] as (() => void) | undefined;
 import {
-  dispose as disposeSnapshot,
   getSnapshot,
   invalidate,
   isStale,
   setSnapshot,
-  subscribe,
 } from './settings-snapshot';
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { resolveEffectChain } from './effect-chain-templates';
@@ -491,7 +489,6 @@ describe('settings snapshot store', () => {
   });
 
   afterEach(() => {
-    disposeSnapshot();
     vi.restoreAllMocks();
   });
 
@@ -505,13 +502,7 @@ describe('settings snapshot store', () => {
     }
   }
 
-  it('starts with no snapshot before anything has been published', () => {
-    disposeSnapshot();
-    expect(getSnapshot()).toBeNull();
-  });
-
   it('publishes a snapshot with an increasing revision on each read', async () => {
-    disposeSnapshot();
     await getSettings();
     const first = getSnapshot();
     expect(first).not.toBeNull();
@@ -523,28 +514,7 @@ describe('settings snapshot store', () => {
     expect(second!.revision).toBeGreaterThan(first!.revision);
   });
 
-  it('notifies subscribers on publish and invalidate and stops after unsubscribe', async () => {
-    disposeSnapshot();
-    const listener = vi.fn();
-    const unsubscribe = subscribe(listener);
-
-    await getSettings();
-    expect(listener).toHaveBeenCalledTimes(1);
-
-    invalidate();
-    expect(listener).toHaveBeenCalledTimes(2);
-
-    // Repeated invalidation while already stale must not double-notify.
-    invalidate();
-    expect(listener).toHaveBeenCalledTimes(2);
-
-    unsubscribe();
-    await getSettings();
-    expect(listener).toHaveBeenCalledTimes(2);
-  });
-
   it('invalidates on a sync/local storage change and re-reads immediately', async () => {
-    disposeSnapshot();
     let storedMode = 'builtin-mode-a';
     (chrome.storage.sync.get as any).mockImplementation((_keys: any, cb: any) =>
       cb?.({ selectedModeId: storedMode }),
@@ -571,7 +541,6 @@ describe('settings snapshot store', () => {
   });
 
   it('ignores onChanged events for unrelated storage areas', async () => {
-    disposeSnapshot();
     await getSettings();
     expect(isStale()).toBe(false);
 
@@ -589,11 +558,9 @@ describe('settings snapshot store', () => {
   });
 
   it('never throws when chrome.storage.onChanged is unavailable', () => {
-    disposeSnapshot();
     const original = (chrome.storage as any).onChanged;
     try {
       delete (chrome.storage as any).onChanged;
-      expect(() => subscribe(() => {})).not.toThrow();
       expect(() => setSnapshot({} as any)).not.toThrow();
     } finally {
       (chrome.storage as any).onChanged = original;

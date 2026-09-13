@@ -168,6 +168,18 @@ describe('Renderer', () => {
     removeGPUMock();
   });
 
+  /**
+   * Force `canvas.getContext('webgpu')` to return null so initialization fails
+   * after the device lease has already been acquired.
+   */
+  function failWebGpuContext(): void {
+    const orig = HTMLCanvasElement.prototype.getContext;
+    (HTMLCanvasElement.prototype as any).getContext = function (ctxId: string, ...args: unknown[]) {
+      if (ctxId === 'webgpu') return null;
+      return (orig as any).apply(this, [ctxId, ...args]);
+    };
+  }
+
   async function createRenderer(overrides: Record<string, unknown> = {}): Promise<Renderer> {
     const r = await Renderer.create({
       video: (overrides.video as HTMLVideoElement) ?? video,
@@ -222,12 +234,55 @@ describe('Renderer', () => {
     });
 
     it('throws RendererInitializationError when WebGPU context unavailable', async () => {
-      const orig = HTMLCanvasElement.prototype.getContext;
-      (HTMLCanvasElement.prototype as any).getContext = function (ctxId: string, ...args: unknown[]) {
-        if (ctxId === 'webgpu') return null;
-        return (orig as any).apply(this, [ctxId, ...args]);
-      };
+      failWebGpuContext();
       await expect(createRenderer()).rejects.toThrow(RendererInitializationError);
+    });
+
+    it('releases the acquired lease when the WebGPU context is unavailable', async () => {
+      failWebGpuContext();
+
+      await expect(createRenderer()).rejects.toThrow(RendererInitializationError);
+
+      // Without the lease release the shared device's refCount would leak for
+      // the life of the page (the renderer instance is never returned).
+      expect(defaultLease.release).toHaveBeenCalledTimes(1);
+      expect(mockInvalidatePreWarm).toHaveBeenCalled();
+    });
+
+    it('returns the shared device refCount to its pre-acquire value when init fails', async () => {
+      let refCount = 0;
+      const sharedDevice = mock.device;
+      const lease = createMockLease(sharedDevice, mock.adapter, {
+        onRelease: () => {
+          refCount -= 1;
+          if (refCount === 0) (sharedDevice.destroy as unknown as () => void)();
+        },
+      });
+      refCount = 1; // this renderer's lease
+      mockAcquireGPUDevice.mockResolvedValueOnce(lease);
+      failWebGpuContext();
+
+      await expect(createRenderer()).rejects.toThrow(RendererInitializationError);
+
+      expect(refCount).toBe(0);
+      // The last holder releasing destroyed the device exactly once.
+      expect(sharedDevice.destroy).toHaveBeenCalledTimes(1);
+    });
+
+    it('tears down partial GPU state when a post-acquire build step fails', async () => {
+      mockBuildEffectPipelines.mockRejectedValueOnce(new Error('pipeline build failed'));
+
+      await expect(createRenderer()).rejects.toThrow(RendererInitializationError);
+
+      expect(defaultLease.release).toHaveBeenCalledTimes(1);
+      expect(mock.context.unconfigure).toHaveBeenCalled();
+      expect(mockInvalidatePreWarm).toHaveBeenCalled();
+
+      // The frame texture created before the failing step must be destroyed.
+      const textures = mock.device.createTexture.mock.results.map((result) => result.value);
+      const frameTexture = textures.find((t) => t.width === 1920 && t.height === 1080);
+      expect(frameTexture).toBeDefined();
+      expect(frameTexture!.destroy).toHaveBeenCalled();
     });
 
     it('throws RendererInitializationError when acquireGPUDevice fails', async () => {
@@ -389,6 +444,64 @@ describe('Renderer', () => {
       await Promise.resolve(); await Promise.resolve();
       r.destroy();
     });
+
+    it('releases a lease acquired after destroy() while recovery was suspended', async () => {
+      let resolveAcquire!: (lease: GpuDeviceLease) => void;
+      const hangingAcquire = new Promise<GpuDeviceLease>((res) => { resolveAcquire = res; });
+
+      const r = await createRenderer();
+      mockAcquireGPUDevice.mockClear();
+      mockAcquireGPUDevice.mockReturnValue(hangingAcquire);
+
+      // Start recovery; it suspends awaiting the replacement device.
+      mock.deviceLostDeferred.resolve({ reason: 'unknown', message: 'lost' });
+      await Promise.resolve();
+
+      // destroy() runs here while this.lease is still null, so it cannot release
+      // the lease recovery is about to acquire. Without the post-await guard the
+      // shared device's refCount would leak permanently.
+      r.destroy();
+
+      const replacement = createMockLease(mock.device, mock.adapter, {});
+      resolveAcquire(replacement);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+
+      const internal = r as unknown as { isRecovering: boolean; lease: GpuDeviceLease | null };
+      expect(replacement.release).toHaveBeenCalledTimes(1);
+      expect(internal.lease).toBeNull();
+      expect(internal.isRecovering).toBe(false);
+    });
+
+    it('tears down resources rebuilt after destroy() lands mid-recovery', async () => {
+      let resolveBuild!: (pipelines: unknown[]) => void;
+      const hangingBuild = new Promise<unknown[]>((res) => { resolveBuild = res; });
+
+      const replacement = createMockLease(mock.device, mock.adapter, {});
+      mockAcquireGPUDevice.mockResolvedValueOnce(replacement);
+
+      const r = await createRenderer();
+      mockBuildEffectPipelines.mockClear();
+      mockBuildEffectPipelines.mockReturnValueOnce(hangingBuild as never);
+
+      mock.deviceLostDeferred.resolve({ reason: 'unknown', message: 'lost' });
+      // Drain microtasks until recovery is suspended inside buildPipelines().
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      expect(mockBuildEffectPipelines).toHaveBeenCalledTimes(1);
+
+      r.destroy();
+
+      // Settling the build after destroy() makes recovery assign fresh pipelines
+      // post-teardown; the abort path must destroy them and release the lease.
+      const rebuiltPipeline = createMockPipeline();
+      resolveBuild([rebuiltPipeline]);
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+
+      const internal = r as unknown as { isRecovering: boolean; lease: GpuDeviceLease | null };
+      expect(rebuiltPipeline.destroy).toHaveBeenCalled();
+      expect(replacement.release).toHaveBeenCalledTimes(1);
+      expect(internal.lease).toBeNull();
+      expect(internal.isRecovering).toBe(false);
+    });
   });
 
   describe('updateConfiguration()', () => {
@@ -452,6 +565,71 @@ describe('Renderer', () => {
       mockBuildEffectPipelines.mockClear();
       await r.updateConfiguration({ effects: [], targetDimensions: DEFAULT_DIMENSIONS });
       expect(mockBuildEffectPipelines).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('buildPipelines generation guard', () => {
+    const EFFECTS_A: EnhancementEffect[] = [{ id: 't/a', name: 'A', className: 'A', params: {} }];
+    const EFFECTS_B: EnhancementEffect[] = [{ id: 't/b', name: 'B', className: 'B', params: {} }];
+
+    it('does not let a superseded build clear the busy flag or overwrite the winner', async () => {
+      const r = await createRenderer();
+      mockBuildEffectPipelines.mockClear();
+
+      let resolveLoser!: (pipelines: unknown[]) => void;
+      let resolveWinner!: (pipelines: unknown[]) => void;
+      mockBuildEffectPipelines
+        .mockReturnValueOnce(new Promise<unknown[]>((res) => { resolveLoser = res; }))
+        .mockReturnValueOnce(new Promise<unknown[]>((res) => { resolveWinner = res; }));
+
+      const loserPipeline = createMockPipeline();
+      const winnerPipeline = createMockPipeline();
+
+      // Start two overlapping rebuilds; the second increments the generation and
+      // therefore supersedes the first.
+      const first = r.updateConfiguration({ effects: EFFECTS_A, targetDimensions: DEFAULT_DIMENSIONS });
+      const second = r.updateConfiguration({ effects: EFFECTS_B, targetDimensions: DEFAULT_DIMENSIONS });
+
+      const internal = r as unknown as { rebuilding: boolean; pipelines: unknown[] };
+
+      // Both builds are in flight: the render loop must stay gated.
+      expect(internal.rebuilding).toBe(true);
+
+      // The losing (first) build settles while the winner is still running.
+      resolveLoser([loserPipeline]);
+      await first;
+
+      // The loser must neither clear the flag nor apply its pipelines; its
+      // result must be destroyed instead of dropped.
+      expect(internal.rebuilding).toBe(true);
+      expect(internal.pipelines).not.toContain(loserPipeline);
+      expect(loserPipeline.destroy).toHaveBeenCalledTimes(1);
+
+      // The winner settles, applies, and clears the flag.
+      resolveWinner([winnerPipeline]);
+      await second;
+
+      expect(internal.rebuilding).toBe(false);
+      expect(internal.pipelines).toContain(winnerPipeline);
+      expect(winnerPipeline.destroy).not.toHaveBeenCalled();
+
+      r.destroy();
+    });
+
+    it('applies a normal (non-superseded) build and clears the busy flag', async () => {
+      const r = await createRenderer();
+      mockBuildEffectPipelines.mockClear();
+
+      const pipeline = createMockPipeline();
+      mockBuildEffectPipelines.mockResolvedValueOnce([pipeline]);
+
+      await r.updateConfiguration({ effects: EFFECTS_A, targetDimensions: DEFAULT_DIMENSIONS });
+
+      const internal = r as unknown as { rebuilding: boolean; pipelines: unknown[] };
+      expect(internal.rebuilding).toBe(false);
+      expect(internal.pipelines).toContain(pipeline);
+
+      r.destroy();
     });
   });
 

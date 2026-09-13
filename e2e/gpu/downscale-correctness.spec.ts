@@ -1,14 +1,19 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import type { Server } from 'node:http';
+import { expect, test } from '@playwright/test';
 import {
   referenceBilinearDownscale,
   referenceDownscale,
 } from '../../src/core/effects/reference/downscale';
 import { compareRgba, formatComparison } from '../../src/core/effects/reference/compare';
+import {
+  guardGpu,
+  loadDownscaleWgsl,
+  resolveDownscaleWgslPath,
+  runGpuCase,
+  startSecureOrigin,
+  writeArtifacts,
+  type GpuResult,
+} from './downscale-harness';
 import { fineChecker, gradient, impulse, type RgbaImage } from './fixtures';
 
 /**
@@ -24,34 +29,6 @@ import { fineChecker, gradient, impulse, type RgbaImage } from './fixtures';
  * Launched with `playwright.gpu.config.ts` / `pnpm test:gpu`; the config's
  * `testDir: './e2e/gpu'` picks this file up automatically.
  */
-
-interface GpuRequest {
-  wgsl: string;
-  srcWidth: number;
-  srcHeight: number;
-  outWidth: number;
-  outHeight: number;
-  pixels: number[];
-}
-
-interface GpuSuccess {
-  ok: true;
-  width: number;
-  height: number;
-  data: number[];
-  adapterInfo: string;
-  software: boolean;
-}
-
-interface GpuFailure {
-  ok: false;
-  kind: 'unavailable' | 'validation';
-  error: string;
-}
-
-type GpuResult = GpuSuccess | GpuFailure;
-
-const ALLOW_GPU_SKIP = process.env.ALLOW_GPU_SKIP === '1';
 
 // Trivial rgba16float passthrough (identity) used to probe that this
 // environment can create a device, dispatch compute, store to an rgba16float
@@ -96,261 +73,13 @@ let origin = '';
 let preflight: GpuResult | null = null;
 let downscaleWgsl = '';
 
-/**
- * Resolve the compiled WGSL module robustly: resolve the package entry, then
- * look for the shader text module next to `dist/index.js`. Works for both the
- * linked local repo and a published tarball.
- */
-function resolveDownscaleWgslPath(): string {
-  const require = createRequire(__filename);
-  let entry: string;
-  try {
-    entry = require.resolve('anime4k-webgpu-async');
-  } catch (error) {
-    throw new Error(
-      `downscale-correctness: cannot resolve 'anime4k-webgpu-async': ${String(error)}`,
-      { cause: error },
-    );
-  }
-  const candidate = path.join(
-    path.dirname(entry),
-    'pipelines',
-    'helpers',
-    'Downscale',
-    'shaders',
-    'downscale.wgsl.js',
-  );
-  if (!existsSync(candidate)) {
-    throw new Error(`downscale-correctness: Downscale WGSL module not found at ${candidate}`);
-  }
-  return candidate;
-}
-
-function startSecureOrigin(): Promise<{ server: Server; origin: string }> {
-  const created = createServer((_req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(PAGE_HTML);
-  });
-  return new Promise((resolve, reject) => {
-    created.once('error', reject);
-    created.listen(0, '127.0.0.1', () => {
-      const address = created.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('failed to determine loopback port'));
-        return;
-      }
-      resolve({ server: created, origin: `http://127.0.0.1:${address.port}/` });
-    });
-  });
-}
-
-/** Run one Downscale dispatch + rgba16float readback entirely inside the page. */
-async function runGpuCase(page: Page, request: GpuRequest): Promise<GpuResult> {
-  return page.evaluate(async (req): Promise<GpuResult> => {
-    const unavailable = (message: string): GpuFailure => ({
-      ok: false,
-      kind: 'unavailable',
-      error: message,
-    });
-    const validation = (message: string): GpuFailure => ({
-      ok: false,
-      kind: 'validation',
-      error: message,
-    });
-
-    if (typeof navigator === 'undefined' || !navigator.gpu) {
-      return unavailable('navigator.gpu is not defined');
-    }
-
-    // Prefer the software fallback adapter, then fall back to any adapter.
-    let adapter: GPUAdapter | null = null;
-    try {
-      adapter = await navigator.gpu.requestAdapter({ forceFallbackAdapter: true });
-    } catch {
-      // Fall through to the generic adapter request below.
-    }
-    if (!adapter) {
-      try {
-        adapter = await navigator.gpu.requestAdapter();
-      } catch (error) {
-        return unavailable(`requestAdapter() threw: ${String(error)}`);
-      }
-    }
-    if (!adapter) {
-      return unavailable('requestAdapter() returned null');
-    }
-
-    let device: GPUDevice;
-    try {
-      device = await adapter.requestDevice();
-    } catch (error) {
-      return unavailable(`requestDevice() threw: ${String(error)}`);
-    }
-
-    const adapterInfo = JSON.stringify({
-      vendor: adapter.info.vendor,
-      architecture: adapter.info.architecture,
-      device: adapter.info.device,
-    });
-    const software =
-      adapter.info.isFallbackAdapter || /swiftshader|llvmpipe|software/i.test(adapterInfo);
-
-    // Minimal IEEE-754 binary16 -> float32 decoder. `Float16Array` is not
-    // universally available in the headless Chromium build, so decode by hand.
-    const halfToFloat = (h: number): number => {
-      const sign = (h & 0x8000) !== 0 ? -1 : 1;
-      const exponent = (h >> 10) & 0x1f;
-      const mantissa = h & 0x3ff;
-      if (exponent === 0) {
-        // Subnormal (or signed zero) half.
-        return sign * Math.pow(2, -14) * (mantissa / 1024);
-      }
-      if (exponent === 0x1f) {
-        return mantissa === 0 ? sign * Infinity : NaN;
-      }
-      return sign * Math.pow(2, exponent - 15) * (1 + mantissa / 1024);
-    };
-
-    const { srcWidth, srcHeight, outWidth, outHeight } = req;
-    const bytesPerRow = Math.ceil((outWidth * 8) / 256) * 256; // rgba16float = 8 B/px
-
-    device.pushErrorScope('validation');
-    let scopeOpen = true;
-    let failure: GpuFailure | null = null;
-    let output: number[] = [];
-
-    try {
-      const module = device.createShaderModule({ code: req.wgsl, label: 'downscale-under-test' });
-      const pipeline = device.createComputePipeline({
-        layout: 'auto',
-        compute: { module, entryPoint: 'computeMain' },
-      });
-
-      const inputTexture = device.createTexture({
-        size: { width: srcWidth, height: srcHeight },
-        format: 'rgba8unorm',
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      });
-      const outputTexture = device.createTexture({
-        size: { width: outWidth, height: outHeight },
-        format: 'rgba16float',
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
-      });
-      const readback = device.createBuffer({
-        size: bytesPerRow * outHeight,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-      });
-
-      device.queue.writeTexture(
-        { texture: inputTexture },
-        new Uint8Array(req.pixels),
-        { bytesPerRow: srcWidth * 4, rowsPerImage: srcHeight },
-        { width: srcWidth, height: srcHeight },
-      );
-
-      const bindGroup = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: inputTexture.createView() },
-          { binding: 1, resource: outputTexture.createView() },
-        ],
-      });
-
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginComputePass();
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, bindGroup);
-      pass.dispatchWorkgroups(Math.ceil(outWidth / 8), Math.ceil(outHeight / 8));
-      pass.end();
-      encoder.copyTextureToBuffer(
-        { texture: outputTexture },
-        { buffer: readback, bytesPerRow, rowsPerImage: outHeight },
-        { width: outWidth, height: outHeight },
-      );
-      device.queue.submit([encoder.finish()]);
-
-      const validationError = await device.popErrorScope();
-      scopeOpen = false;
-      if (validationError) {
-        failure = validation(validationError.message);
-      } else {
-        await readback.mapAsync(GPUMapMode.READ);
-        const view = new DataView(readback.getMappedRange());
-        const decoded: number[] = [];
-        for (let y = 0; y < outHeight; y++) {
-          for (let x = 0; x < outWidth; x++) {
-            const offset = y * bytesPerRow + x * 8;
-            for (let channel = 0; channel < 4; channel++) {
-              const value = halfToFloat(view.getUint16(offset + channel * 2, true));
-              const clamped = Math.min(1, Math.max(0, value));
-              decoded.push(Math.round(clamped * 255));
-            }
-          }
-        }
-        readback.unmap();
-        output = decoded;
-      }
-    } catch (error) {
-      failure = validation(String(error));
-    } finally {
-      if (scopeOpen) {
-        try {
-          await device.popErrorScope();
-        } catch {
-          // Ignore; the device/page may already be gone.
-        }
-      }
-    }
-
-    if (failure) return failure;
-    return { ok: true, width: outWidth, height: outHeight, data: output, adapterInfo, software };
-  }, request);
-}
-
-function guardGpu(): void {
-  if (!preflight || preflight.ok) return;
-  console.warn(
-    `[gpu] environment cannot run downscale compute: ${preflight.error}`
-    + (ALLOW_GPU_SKIP ? ' (ALLOW_GPU_SKIP=1 -> skipping)' : ''),
-  );
-  test.skip(ALLOW_GPU_SKIP, `environment cannot run downscale compute: ${preflight.error}`);
-  throw new Error(`environment cannot run downscale compute (${preflight.kind}): ${preflight.error}`);
-}
-
-function writeArtifacts(
-  caseName: string,
-  expected: Uint8Array,
-  actual: Uint8Array,
-  manifest: Record<string, unknown>,
-): string {
-  const dir = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    'test-results',
-    'downscale-correctness',
-    caseName,
-  );
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, 'expected.rgba'), Buffer.from(expected));
-  writeFileSync(path.join(dir, 'actual.rgba'), Buffer.from(actual));
-  writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  return dir;
-}
-
 test.beforeAll(async ({ browser }) => {
   // Fail loudly (before touching the GPU) if the shipped shader module is gone.
-  const modulePath = resolveDownscaleWgslPath();
-  const imported = (await import(pathToFileURL(modulePath).href)) as { default?: unknown };
-  if (typeof imported.default !== 'string' || !imported.default.includes('fn computeMain')) {
-    throw new Error(
-      `downscale-correctness: ${modulePath} did not export the Downscale WGSL source string`,
-    );
-  }
-  downscaleWgsl = imported.default;
+  const modulePath = resolveDownscaleWgslPath('downscale-correctness');
+  downscaleWgsl = await loadDownscaleWgsl('downscale-correctness');
   console.log(`[gpu] loaded Downscale WGSL from ${modulePath}`);
 
-  const started = await startSecureOrigin();
+  const started = await startSecureOrigin({ serveVendor: false, pageHtml: PAGE_HTML });
   server = started.server;
   origin = started.origin;
 
@@ -388,7 +117,7 @@ test.afterAll(async () => {
 
 for (const gpuCase of DOWNSCALE_CASES) {
   test(gpuCase.name, async ({ page }) => {
-    guardGpu();
+    guardGpu(preflight, 'downscale compute');
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
 
     const { image, outWidth, outHeight } = gpuCase;
@@ -431,7 +160,7 @@ for (const gpuCase of DOWNSCALE_CASES) {
 
     if (!dimensionsOk || !metricsOk || !contrastOk) {
       const adapter = preflight && preflight.ok ? preflight.adapterInfo : 'unknown';
-      const dir = writeArtifacts(gpuCase.name, expected, actual, {
+      const dir = writeArtifacts('downscale-correctness', gpuCase.name, expected, actual, {
         case: gpuCase.name,
         srcWidth: image.width,
         srcHeight: image.height,

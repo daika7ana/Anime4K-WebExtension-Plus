@@ -290,6 +290,9 @@ export class VideoEnhancer {
     const showDiagnostics = localSettings.showDiagnostics;
     if (showDiagnostics) {
       const adapterInfo = await this.getAdapterInfo();
+      // destroy() may have landed during the adapter probe. Never attach a
+      // diagnostics overlay to a torn-down enhancer.
+      if (this.destroyed) return;
       const diagnosticsInfo: DiagnosticsInfo = {
         mode: getDiagnosticsModeLabel(selectedMode),
         performanceTier: settings.performanceTier,
@@ -376,6 +379,9 @@ export class VideoEnhancer {
    */
   public async updateSettings(newSettings: Anime4KWebExtSettings): Promise<void> {
     if (!this.renderer) return;
+    // Capture the renderer identity so the awaits below can detect a teardown:
+    // destroy() nulls this.renderer via releaseWebGPUResources().
+    const renderer = this.renderer;
 
     console.log('[Anime4KWebExt] Updating renderer with new settings...');
     const { selectedModeId, enhancementModes, targetResolutionSetting } = newSettings;
@@ -409,12 +415,21 @@ export class VideoEnhancer {
     // chain rebuilds.
     const localSettings = await getLocalSettings();
 
+    // State can change across the await: destroy() releases the renderer, while
+    // a disable/enable cycle replaces it. Bail rather than dereferencing a
+    // nulled or stale instance.
+    if (this.destroyed || this.renderer !== renderer) return;
+
     // Call the renderer's unified configuration update method, which intelligently handles changes
-    await this.renderer.updateConfiguration({
+    await renderer.updateConfiguration({
       effects: effects,
       targetDimensions: newTargetDimensions,
       preserveDetail: localSettings.preserveDetail ?? true,
     });
+
+    // The renderer may have been torn down while updateConfiguration() was in
+    // flight; do not mutate enhancer state or touch the diagnostics overlay.
+    if (this.destroyed || this.renderer !== renderer) return;
 
     this.currentModeId = selectedMode.id;
     this.updateDisplayResizeListeners(targetResolutionSetting);
@@ -434,6 +449,9 @@ export class VideoEnhancer {
     if (localSettings.showDiagnostics) {
       if (!this.diagnosticsOverlay) {
         const adapterInfo = await this.getAdapterInfo();
+        // destroy() may have landed during the adapter probe; never re-create
+        // a diagnostics overlay on a torn-down enhancer.
+        if (this.destroyed || this.renderer !== renderer) return;
         this.diagnosticsOverlay = DiagnosticsOverlay.create(
           this.video,
           adapterInfo,

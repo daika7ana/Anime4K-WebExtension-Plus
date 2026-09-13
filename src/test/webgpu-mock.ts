@@ -74,13 +74,6 @@ export interface MockGPUTexture {
   destroy: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUQuerySet {
-  type: string;
-  count: number;
-  label: string;
-  destroy: ReturnType<typeof vi.fn>;
-}
-
 export interface MockGPUBuffer {
   size: number;
   usage: number;

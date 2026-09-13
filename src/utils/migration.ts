@@ -12,12 +12,41 @@ import type { CustomMode, EnhancementEffect, PerformanceTier } from '../types';
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { DEFAULT_COLOR_GRADING } from './validation';
 
-// v1 mode definitions (legacy format)
+// v1 mode definitions (legacy format). Stored data is untrusted, so every
+// field is treated as optional/unknown until validated at runtime.
 interface V1EnhancementMode {
-    id: string;
-    name: string;
-    isBuiltIn: boolean;
-    effects: EnhancementEffect[];
+    id?: unknown;
+    name?: unknown;
+    isBuiltIn?: unknown;
+    effects?: unknown;
+}
+
+/**
+ * Map a single stored v1 effect onto its catalog entry.
+ *
+ * Malformed entries (null, missing/non-string id, or an id not present in the
+ * catalog) are dropped rather than throwing. When the catalog effect declares
+ * default params, the stored user params are merged over them so customized
+ * values win and are not silently lost.
+ */
+function syncV1Effect(raw: unknown): EnhancementEffect | undefined {
+    if (!raw || typeof raw !== 'object') return undefined;
+
+    const effect = raw as { id?: unknown; params?: unknown };
+    if (typeof effect.id !== 'string') return undefined;
+
+    const catalogEffect = AVAILABLE_EFFECTS.find(ae => ae.id === effect.id);
+    if (!catalogEffect) return undefined;
+
+    const merged: EnhancementEffect = { ...catalogEffect };
+    const storedParams = effect.params;
+    if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
+        merged.params = {
+            ...(catalogEffect.params ?? {}),
+            ...(storedParams as Record<string, number>),
+        };
+    }
+    return merged;
 }
 
 // Config version
@@ -39,25 +68,32 @@ async function migrateV1ToV2(): Promise<void> {
         'enableCrossOriginFix',
     ]);
 
-    const oldModes = syncData.enhancementModes as V1EnhancementMode[] | undefined;
+    const oldModes = syncData.enhancementModes as unknown;
 
-    // Extract user custom modes (preserve full effect chains)
+    // Extract user custom modes (preserve full effect chains). A corrupt or
+    // non-array value is treated as "no legacy modes" instead of throwing.
     const customModes: CustomMode[] = [];
-    if (oldModes) {
-        for (const mode of oldModes) {
-            if (!mode.isBuiltIn) {
-                // Sync effect definitions, removing effects that no longer exist
-                const syncedEffects = mode.effects
-                    .map(e => AVAILABLE_EFFECTS.find(ae => ae.id === e.id))
-                    .filter((e): e is EnhancementEffect => !!e);
+    if (Array.isArray(oldModes)) {
+        for (const rawMode of oldModes) {
+            if (!rawMode || typeof rawMode !== 'object') continue;
 
-                customModes.push({
-                    id: mode.id,
-                    name: mode.name,
-                    isBuiltIn: false,
-                    effects: syncedEffects,
-                });
-            }
+            const mode = rawMode as V1EnhancementMode;
+            if (mode.isBuiltIn) continue;
+
+            // Skip malformed modes: a stable string id and an effects array are
+            // required to build a valid CustomMode.
+            if (typeof mode.id !== 'string' || !Array.isArray(mode.effects)) continue;
+
+            const syncedEffects = mode.effects
+                .map(e => syncV1Effect(e))
+                .filter((e): e is EnhancementEffect => !!e);
+
+            customModes.push({
+                id: mode.id,
+                name: typeof mode.name === 'string' ? mode.name : mode.id,
+                isBuiltIn: false,
+                effects: syncedEffects,
+            });
         }
     }
 
@@ -111,8 +147,9 @@ async function migrateV1ToV2(): Promise<void> {
 /**
  * Execute migration from v2 to v3.
  *
- * v3 introduced `autoEnableOnWhitelist`, `enableHotkey` and `colorGrading`
- * (synced) plus `showDiagnostics` (local). Only fields that are absent are
+ * v3 introduced the synced fields `autoEnableOnWhitelist`, `autoEnableSettleMs`,
+ * `enableHotkey` and `colorGrading`, plus the local fields `showDiagnostics`,
+ * `diagnosticsDetail` and `preserveDetail`. Only fields that are absent are
  * backfilled with defaults; existing values are never overwritten.
  */
 async function migrateV2ToV3(): Promise<void> {
@@ -120,6 +157,7 @@ async function migrateV2ToV3(): Promise<void> {
 
     const syncData = await chrome.storage.sync.get([
         'autoEnableOnWhitelist',
+        'autoEnableSettleMs',
         'enableHotkey',
         'colorGrading',
     ]);
@@ -130,6 +168,9 @@ async function migrateV2ToV3(): Promise<void> {
     if (syncData.autoEnableOnWhitelist === undefined) {
         syncBackfill.autoEnableOnWhitelist = false;
     }
+    if (syncData.autoEnableSettleMs === undefined) {
+        syncBackfill.autoEnableSettleMs = 300;
+    }
     if (syncData.enableHotkey === undefined) {
         syncBackfill.enableHotkey = true;
     }
@@ -139,9 +180,23 @@ async function migrateV2ToV3(): Promise<void> {
 
     await chrome.storage.sync.set(syncBackfill);
 
-    const localData = await chrome.storage.local.get(['showDiagnostics']);
+    const localData = await chrome.storage.local.get([
+        'showDiagnostics',
+        'diagnosticsDetail',
+        'preserveDetail',
+    ]);
+    const localBackfill: Record<string, unknown> = {};
     if (localData.showDiagnostics === undefined) {
-        await chrome.storage.local.set({ showDiagnostics: false });
+        localBackfill.showDiagnostics = false;
+    }
+    if (localData.diagnosticsDetail === undefined) {
+        localBackfill.diagnosticsDetail = 'auto';
+    }
+    if (localData.preserveDetail === undefined) {
+        localBackfill.preserveDetail = true;
+    }
+    if (Object.keys(localBackfill).length > 0) {
+        await chrome.storage.local.set(localBackfill);
     }
 
     console.log('[Migration] v2 to v3 migration completed');
@@ -159,6 +214,7 @@ async function initializeDefaultConfig(): Promise<void> {
         whitelist: [],
         enableCrossOriginFix: false,
         autoEnableOnWhitelist: false,
+        autoEnableSettleMs: 300,
         enableHotkey: true,
         colorGrading: { ...DEFAULT_COLOR_GRADING },
         _configVersion: CURRENT_CONFIG_VERSION,
@@ -170,6 +226,8 @@ async function initializeDefaultConfig(): Promise<void> {
         gpuAdapterInfo: null,
         hasCompletedOnboarding: false,
         showDiagnostics: false,
+        diagnosticsDetail: 'auto',
+        preserveDetail: true,
     });
 
     console.log('[Migration] Initialized new config with defaults');

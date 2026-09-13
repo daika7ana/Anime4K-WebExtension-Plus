@@ -105,6 +105,25 @@ export interface CompileEffectChainResult {
 }
 
 /**
+ * Destroy every pipeline built during a (possibly superseded) compile attempt
+ * exactly once, ignoring individual failures.
+ *
+ * Centralizes the superseded-build cleanup: a stale build's pipelines each own
+ * an output texture, so dropping the array without destroying its members leaks
+ * GPU textures. Both the chain compiler's stale returns and the renderer's
+ * superseded-build result path go through this helper.
+ */
+export function destroyPipelines(pipelines: readonly DestroyablePipeline[]): void {
+  for (const pipeline of pipelines) {
+    try {
+      pipeline.destroy?.();
+    } catch {
+      // Ignore individual pipeline destruction errors.
+    }
+  }
+}
+
+/**
  * `Downscale`'s descriptor accepts only `{ device, inputTexture, targetDimensions }`,
  * while {@link PipelineCtor} also lists `nativeDimensions`. Construct through this
  * narrower alias so the descriptor `Downscale` expects (no `nativeDimensions`) is passed.
@@ -170,6 +189,22 @@ export async function compileEffectChain(
   let curWidth = sourceDimensions.width;
   let curHeight = sourceDimensions.height;
 
+  /**
+   * A stale build must not hand its partially built pipelines to the caller
+   * (the contract is an empty list), but those pipelines own output textures and
+   * must be destroyed rather than dropped. Centralizing both stale returns here
+   * guarantees every created pipeline is destroyed exactly once.
+   */
+  const supersededResult = (): CompileEffectChainResult => {
+    destroyPipelines(pipelines);
+    return {
+      pipelines: [],
+      labels: [],
+      outputDimensions: { width: curWidth, height: curHeight },
+      superseded: true,
+    };
+  };
+
   // Deferred two-stage epilogues (ClampHighlights -> apply), recorded in append
   // order and materialized once the geometry is final after the loop.
   const deferredFactories: Array<(tail: GPUTexture) => DestroyablePipeline | null> = [];
@@ -195,6 +230,8 @@ export async function compileEffectChain(
         pipelines.push(finalDownscale);
         labels.push('Downscale');
         currentTexture = finalDownscale.getOutputTexture();
+        curWidth = geometryPreview.finalDownscale.width;
+        curHeight = geometryPreview.finalDownscale.height;
       }
       await yieldToMain();
       continue;
@@ -279,6 +316,8 @@ export async function compileEffectChain(
       pipelines.push(finalDownscale);
       labels.push('Downscale');
       currentTexture = finalDownscale.getOutputTexture();
+      curWidth = geometryPreview.finalDownscale.width;
+      curHeight = geometryPreview.finalDownscale.height;
     }
 
     // Yield to let the browser process input events between synchronous GPU
@@ -287,14 +326,10 @@ export async function compileEffectChain(
   }
 
   if (isStale?.()) {
-    // Discard everything; the caller keeps its `labels` out-param consistent
-    // with the empty pipeline list.
-    return {
-      pipelines: [],
-      labels: [],
-      outputDimensions: { width: curWidth, height: curHeight },
-      superseded: true,
-    };
+    // Discard everything; destroy the partially built pipelines (they own
+    // output textures) and keep the caller's `labels` out-param consistent with
+    // the empty pipeline list.
+    return supersededResult();
   }
 
   // --- Deferred epilogue ---
@@ -314,6 +349,13 @@ export async function compileEffectChain(
   // is applied to the fully enhanced + clamped frame. Preserves effect order.
   for (let i = 0; i < effects.length; i++) {
     if (!postEpilogueFlags?.[i]) continue;
+    // Honor the same safe-geometry suppression guard the main loop applies, so a
+    // flagged effect that would have been skipped there is not compiled here.
+    // Suppression is therefore honored exactly once for both passes.
+    if (isSuppressedIndex(geometryPreview, upscaleFactors, i)) {
+      await yieldToMain();
+      continue;
+    }
     onEffectStart?.(i, effects.length);
     const step = await compileEffect({
       effect: effects[i],
@@ -333,7 +375,7 @@ export async function compileEffectChain(
   }
 
   if (isStale?.()) {
-    return { pipelines: [], labels: [], outputDimensions: { width: curWidth, height: curHeight }, superseded: true };
+    return supersededResult();
   }
 
   return {

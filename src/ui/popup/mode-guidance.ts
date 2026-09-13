@@ -49,13 +49,6 @@ export function getModeDescription(baseMode: BaseMode): string {
   return t(entry.key, entry.fallback);
 }
 
-const DOUBLED_MODES: ReadonlySet<BaseMode> = new Set<BaseMode>(['A+A', 'B+B', 'C+A']);
-
-/** Whether `baseMode` is one of the doubled modes governed by the 2× rule. */
-export function isDoubledMode(baseMode: BaseMode): boolean {
-  return DOUBLED_MODES.has(baseMode);
-}
-
 /**
  * Keep the description in sync with the selected mode. Returns an `update`
  * function so callers can refresh after populating the select programmatically

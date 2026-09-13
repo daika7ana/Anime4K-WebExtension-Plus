@@ -10,6 +10,7 @@ import { resolveEffectReference, type EffectResolution } from '@utils/effect-reg
 import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 import { TexturePool } from './texture-pool';
 import { compileEffectChain } from './effect-chain-compiler';
+import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
 
 // Test configuration
 const TEST_TIMEOUT_MS = 20000; // Individual test timeout
@@ -457,22 +458,17 @@ export async function runEffectChainTest(
     }
     const registry = cachedBenchmarkRegistry;
 
-    const upscaleFactors = effects.map((effect, i) => {
-        const resolution = resolutions[i];
-        if (resolution.status === 'resolved') {
-            return resolution.effect.descriptor.dimensionBehavior.scale ?? 1;
-        }
-        return effect.upscaleFactor ?? 1;
-    });
+    const upscaleFactors = deriveUpscaleFactors(effects, resolutions);
 
     // Mirror the renderer's default restore policy (V2) so benchmark geometry
     // matches what the pipeline builder emits. The role flags come from the
     // resolved descriptor category (helpers are never restores).
-    const restoreFlags = resolutions.map(
-        (resolution) =>
-            resolution.status === 'resolved'
-            && resolution.effect.descriptor.category === 'restore',
-    );
+    const restoreFlags = deriveRestoreFlags(resolutions);
+
+    // Color-category effects (color grading) must run AFTER the deferred
+    // ClampHighlightsApply epilogue, exactly as the renderer's pipeline builder
+    // derives it, so benchmark and renderer share the same ordering.
+    const postEpilogueFlags = derivePostEpilogueFlags(resolutions);
 
     const result = await compileEffectChain({
         device,
@@ -483,43 +479,27 @@ export async function runEffectChainTest(
         upscaleFactors,
         downscaleCtor: DownscaleClass,
         restoreFlags,
+        postEpilogueFlags,
         restoreSuppression: 'trailing',
-        compileEffect: async ({ effect, index, inputTexture: stepInput, currentDimensions }) => {
-            try {
-                const resolution = resolutions[index];
-                if (resolution.status === 'resolved') {
-                    const { descriptor, reference } = resolution.effect;
-                    try {
-                        const backend = await registry.getBackendAsync(descriptor.backendId);
-                        const node = await backend.compileEffect(reference, {
-                            device,
-                            inputTexture: stepInput,
-                            sourceDimensions,
-                            currentDimensions,
-                            targetDimensions,
-                            params: effect.params,
-                            resources: gpuResourceCache,
-                            isStale: () => false,
-                        });
-                        return {
-                            pipeline: node.pipeline,
-                            label: node.profileLabel,
-                            scaleApplied: descriptor.dimensionBehavior.kind === 'scale',
-                            postDimensions: node.outputDimensions,
-                        };
-                    } catch (e) {
-                        console.warn(`[GPUBenchmark] Registry compile failed for ${effect.className}:`, e);
-                        return null;
-                    }
-                }
-
-                console.warn(`[GPUBenchmark] ${resolution.status === 'unresolved' ? 'Unresolved' : 'Unknown'} effect "${effect.className}"; skipping.`);
-                return null;
-            } catch (e) {
-                console.warn(`[GPUBenchmark] Failed to create ${effect.className}:`, e);
-                return null;
-            }
-        },
+        compileEffect: createEffectCompiler({
+            device,
+            registry,
+            resolutions,
+            resources: gpuResourceCache,
+            sourceDimensions,
+            isStale: () => false,
+            logging: {
+                registryFailure: (effect, _backendId, error) => {
+                    console.warn(`[GPUBenchmark] Registry compile failed for ${effect.className}:`, error);
+                },
+                skipped: (effect, status) => {
+                    console.warn(`[GPUBenchmark] ${status === 'unresolved' ? 'Unresolved' : 'Unknown'} effect "${effect.className}"; skipping.`);
+                },
+                unexpected: (effect, error) => {
+                    console.warn(`[GPUBenchmark] Failed to create ${effect.className}:`, error);
+                },
+            },
+        }),
     });
 
     const pipelines = result.pipelines;

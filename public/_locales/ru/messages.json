@@ -55,6 +55,12 @@
   "addParentPath": {
     "message": "Путь"
   },
+  "removeFromWhitelist": {
+    "message": "Удалить из белого списка"
+  },
+  "removedFromWhitelist": {
+    "message": "Удалено из белого списка"
+  },
   "openSettings": {
     "message": "Настройки"
   },
@@ -487,6 +493,12 @@
   },
   "autoEnableOnWhitelistDesc": {
     "message": "Автоматически улучшать видео на сайтах из белого списка без нажатия кнопки Enhance."
+  },
+  "autoEnableSettleMs": {
+    "message": "Задержка авто-включения (мс)"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "Время ожидания в миллисекундах перед авто-включением видео, чтобы пропустить временные плееры. Установите 0, чтобы отключить задержку."
   },
   "showDiagnostics": {
     "message": "Показать диагностику"

@@ -52,17 +52,6 @@ export interface StepEdgeOptions {
   position?: number;
 }
 
-export interface ImpulseTrainOptions {
-  width: number;
-  height: number;
-  /** Spacing of the impulses in pixels along `axis`. */
-  period: number;
-  axis?: Axis;
-  dc?: number;
-  /** Amplitude of each impulse in 8-bit levels. Defaults to 64. */
-  amplitude?: number;
-}
-
 export interface FundamentalOptions {
   /** Period in pixels. Supply either `period` or `frequency`. */
   period?: number;
@@ -154,19 +143,6 @@ export function makeStepEdge(options: StepEdgeOptions): RgbaImage {
   return createImage(width, height, (x, y) => {
     const n = alongValue(axis, x, y);
     return n >= position ? high : low;
-  });
-}
-
-/**
- * Single-pixel impulse train at a fixed spacing (grayscale). Used to probe
- * sub-period / broadband behaviour when a pure tone cannot represent it.
- */
-export function makeImpulseTrain(options: ImpulseTrainOptions): RgbaImage {
-  const { width, height, period, axis = 'x', dc = 96, amplitude = 64 } = options;
-  if (!(period > 0)) throw new Error(`makeImpulseTrain: period must be > 0 (got ${period})`);
-  return createImage(width, height, (x, y) => {
-    const n = alongValue(axis, x, y);
-    return n % period === 0 ? dc + amplitude : dc;
   });
 }
 

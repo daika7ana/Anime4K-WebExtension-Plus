@@ -7,6 +7,7 @@ import type { GpuDeviceLease } from '@core/gpu/gpu-device-manager';
 import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 import { GpuTimestampProfiler, type ProfilerSnapshot } from '@core/gpu/gpu-timestamp-profiler';
 import { buildEffectPipelines, paramsEqual } from '@core/gpu/pipeline-builder';
+import { destroyPipelines } from '@core/gpu/effect-chain-compiler';
 import fullscreenTexturedQuadWGSL from '@shaders/fullscreen-textured-quad.wgsl';
 import sampleExternalTextureWGSL from '@shaders/sample-external-texture.wgsl';
 
@@ -181,10 +182,65 @@ export class Renderer {
       };
       document.addEventListener('visibilitychange', this.onVisibilityChange);
     } catch (error) {
+      // Any failure after the lease was acquired must release it (and tear down
+      // whatever was built on it) or the shared device's refCount leaks for the
+      // lifetime of the page. Failures before acquisition have nothing to undo.
+      if (this.lease) {
+        this.cleanupAfterFailedInitialization();
+      }
       if (error instanceof RendererInitializationError) {
         throw error;
       }
       throw new RendererInitializationError('An unexpected error occurred during renderer initialization.', { cause: error as Error });
+    }
+  }
+
+  /**
+   * Tears down every GPU resource acquired during a failed {@link initialize}
+   * and releases the device lease. Mirrors the resource half of {@link destroy}
+   * (cancelling a loop that may already have been armed, destroying the
+   * profiler, pipelines and frame texture, and unconfiguring the canvas) and
+   * additionally drops the per-device resource cache.
+   *
+   * Safe on a partially constructed renderer: every access is optional and
+   * {@link releaseLease} plus {@link GpuDeviceLease.release} are idempotent, so
+   * a device shared with other renderers is never destroyed out from under
+   * them — it is only destroyed once the last lease is released.
+   */
+  private cleanupAfterFailedInitialization(): void {
+    // Mark as destroyed first so any in-flight first-frame work (armed by
+    // renderFirstFrameAndStartLoop before a late failure) stops and a loss
+    // emitted by the final lease release cannot re-enter recovery.
+    this.destroyed = true;
+    const device = this.device;
+    try {
+      if (this.animationFrameId !== null) {
+        this.video.cancelVideoFrameCallback(this.animationFrameId);
+        this.animationFrameId = null;
+      }
+      if (this.onVisibilityChange) {
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        this.onVisibilityChange = null;
+      }
+      this.profiler?.destroy();
+      this.profiler = null;
+      this.pipelines.forEach((pipeline) => pipeline.destroy?.());
+      this.pipelines = [];
+      this.pipelineLabels = [];
+      this.pendingBitmap?.close();
+      this.pendingBitmap = null;
+      this.videoFrameTexture?.destroy();
+      // Disassociate the canvas from the partially configured device.
+      this.context?.unconfigure();
+      // The next device has a separate shader cache.
+      GPUDeviceManager.invalidatePreWarm();
+      if (device) gpuResourceCache.release(device);
+    } catch (cleanupError) {
+      console.error('[Anime4KWebExt] Error cleaning up after failed initialization:', cleanupError);
+    } finally {
+      // Release the lease last, once its device resources are gone. Other
+      // holders keep the shared device alive.
+      this.releaseLease();
     }
   }
 
@@ -266,8 +322,16 @@ export class Renderer {
    * Builds Anime4K processing pipelines based on the current effect chain (this.effects).
    * Delegates to PipelineBuilder for the actual construction.
    * Sets rebuilding flag to prevent processFrame() from using stale pipelines.
+   *
+   * Builds are generation-guarded: a newer call supersedes any older in-flight
+   * build. A superseded invocation destroys its own result and must not clear the
+   * `rebuilding` flag or overwrite the winner's pipelines.
+   *
+   * @returns `true` when this invocation's result was applied, `false` when it
+   *   was superseded (the caller must then skip any dependent resources such as
+   *   the render bind group, which the winner's caller owns).
    */
-  private async buildPipelines(): Promise<void> {
+  private async buildPipelines(): Promise<boolean> {
     const generation = ++this.buildGeneration;
     this.rebuilding = true; // Prevent render loop from processing frames during rebuild
     const oldPipelines = this.pipelines;
@@ -287,14 +351,25 @@ export class Renderer {
         preserveDetail: this.preserveDetail,
         labels, // Out-param filled with one label per built pipeline, in encode order
       });
-      if (this.buildGeneration !== generation) return; // Superseded
+      if (this.buildGeneration !== generation) {
+        // Superseded: never apply the result, and destroy it (it owns output
+        // textures). The winning invocation owns `this.pipelines` now.
+        destroyPipelines(pipelines);
+        return false;
+      }
       this.pipelines = pipelines;
       this.pipelineLabels = labels;
       // The effect chain changed, so previously accumulated per-label timings
       // no longer map to the current pipelines.
       this.profiler?.reset();
+      return true;
     } finally {
-      this.rebuilding = false; // Allow render loop to resume
+      // Only the current (winning) generation may clear the busy flag. A losing
+      // invocation clearing it would let processFrame() run against
+      // `this.pipelines = []` while the winner is still building.
+      if (this.buildGeneration === generation) {
+        this.rebuilding = false; // Allow render loop to resume
+      }
     }
   }
 
@@ -404,6 +479,11 @@ export class Renderer {
     if (this.isRecovering) return false;
     if (this.rebuilding) return false; // Skip frames during pipeline rebuild
     if (this.resizing) return false; // Skip frames during resize
+    // Defensive: a successfully applied build always ends with at least a
+    // passthrough pipeline, so an empty chain means a rebuild is (or should be)
+    // in progress. Never encode frames against an empty chain while the render
+    // bind group may still reference destroyed textures.
+    if (this.pipelines.length === 0) return false;
     if (document.visibilityState === 'hidden') return false; // Skip frames when tab is hidden
 
     try {
@@ -671,8 +751,12 @@ export class Renderer {
     try {
       console.log('[Anime4KWebExt] Resizing renderer due to video source dimension change...');
       this.createResources();
-      await this.buildPipelines();
-      this.createRenderBindGroup();
+      // Only rebuild the render bind group when this build actually applied; a
+      // superseded resize must not bind against the winner's (or an empty)
+      // pipeline list.
+      if (await this.buildPipelines()) {
+        this.createRenderBindGroup();
+      }
       // Texture dimensions changed, so accumulated GPU samples are no longer
       // comparable to future frames.
       this.profiler?.reset();
@@ -726,8 +810,11 @@ export class Renderer {
     }
 
     console.log('[Anime4KWebExt] Rebuilding pipeline due to configuration update.');
-    await this.buildPipelines();
-    this.createRenderBindGroup();
+    // A superseded update must not create a render bind group against the
+    // winner's (or an empty) pipeline list; the winning call owns it.
+    if (await this.buildPipelines()) {
+      this.createRenderBindGroup();
+    }
     console.log('[Anime4KWebExt] Renderer configuration updated.');
   }
 
@@ -766,9 +853,49 @@ export class Renderer {
   }
 
   /**
+   * Tears down state created by an in-flight {@link recoverFromDeviceLoss} when
+   * the renderer was destroyed before recovery completed. Releases the
+   * replacement lease (if one was acquired), destroys any profiler, pipelines
+   * and frame texture rebuilt on it, unsubscribes the replacement loss
+   * listener, and clears `isRecovering` so it can never stay stuck.
+   *
+   * Idempotent: `releaseLease` and `GpuDeviceLease.release` are no-ops once the
+   * lease is gone, and `destroy` is guarded so this only ever runs for a
+   * recovery that raced a real teardown.
+   */
+  private abortRecovery(): void {
+    const device = this.device;
+    try {
+      this.profiler?.destroy();
+      this.profiler = null;
+      this.pipelines.forEach((pipeline) => pipeline.destroy?.());
+      this.pipelines = [];
+      this.pipelineLabels = [];
+      this.videoFrameTexture?.destroy();
+      // Disassociate the canvas from the replacement device.
+      this.context?.unconfigure();
+      GPUDeviceManager.invalidatePreWarm();
+      if (device) gpuResourceCache.release(device);
+    } catch (cleanupError) {
+      console.error('[Anime4KWebExt] Error cleaning up after aborted device recovery:', cleanupError);
+    } finally {
+      // Unsubscribe the replacement loss listener and release its lease, then
+      // always clear the flag so a later renderer state is not blocked.
+      this.releaseLease();
+      this.isRecovering = false;
+    }
+  }
+
+  /**
    * Recovers from device loss.
    * Attempts to reinitialize GPU resources and resume rendering.
    * Uses GPUDeviceManager for device re-acquisition.
+   *
+   * Because this method awaits several GPU operations, `destroy()` may run
+   * while it is suspended. `this.destroyed` is therefore re-checked after every
+   * await; a destroyed renderer aborts recovery, releasing the lease it had
+   * just acquired (otherwise it would leak the shared device's refCount with no
+   * `destroy()` left to run again) and tearing down anything rebuilt.
    */
   private async recoverFromDeviceLoss(): Promise<void> {
     if (this.destroyed || this.isRecovering) return;
@@ -792,6 +919,10 @@ export class Renderer {
       // Acquire a lease on the replacement shared device.
       this.lease = await GPUDeviceManager.acquireGPUDevice();
       this.device = this.lease.device;
+      if (this.destroyed) {
+        this.abortRecovery();
+        return;
+      }
 
       // Set up device loss listener for the new lease/device
       this.watchDeviceLoss();
@@ -800,6 +931,10 @@ export class Renderer {
       // resources were lost along with the device.
       this.profiler?.destroy();
       await this.createProfiler();
+      if (this.destroyed) {
+        this.abortRecovery();
+        return;
+      }
 
       // Reconfigure context (unconfigure then configure, as strictly required by the spec)
       this.context.unconfigure();
@@ -816,6 +951,10 @@ export class Renderer {
       // Preserve an active DRM canvas fallback, which takes precedence.
       if (!this.useDrmCanvasFallback) {
         this.useImageBitmapFallback = !await this.detectVideoFrameSupport();
+        if (this.destroyed) {
+          this.abortRecovery();
+          return;
+        }
         if (this.useImageBitmapFallback) {
           console.log('[Anime4KWebExt] Renderer: Using ImageBitmap fallback for copying video frames.');
         }
@@ -824,7 +963,15 @@ export class Renderer {
       // Rebuild resources and pipelines
       this.createResources();
       await this.buildPipelines();
+      if (this.destroyed) {
+        this.abortRecovery();
+        return;
+      }
       await this.createRenderPipeline();
+      if (this.destroyed) {
+        this.abortRecovery();
+        return;
+      }
       this.createRenderBindGroup();
 
       // Restart the render loop

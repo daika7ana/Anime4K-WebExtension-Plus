@@ -3,10 +3,11 @@
  *
  * Long-lived renderer/effect output textures are allocated once at
  * pipeline-build time and are intentionally NOT pooled here. This pool targets
- * short-lived, repeatedly created/destroyed textures — currently the
- * benchmark's per-tier input texture and the pre-warm dummy texture — so
- * consecutive consumers can recycle the same `GPUTexture` instead of paying the
- * allocation/destruction cost on every iteration.
+ * short-lived, repeatedly created/destroyed textures — currently the benchmark's
+ * per-tier input textures — so consecutive consumers can recycle the same
+ * `GPUTexture` instead of paying the allocation/destruction cost on every
+ * iteration. (The pre-warmer creates and destroys its own dummy texture; it is
+ * not pooled.)
  *
  * ## Identity
  * Textures are pooled by an identity key derived from `width`, `height`,
@@ -49,24 +50,6 @@ export interface TexturePoolDescriptor {
     sampleCount?: number;
     /** Mip level count. Defaults to 1. Part of the identity key. */
     mipLevelCount?: number;
-}
-
-/** Aggregate pool statistics. All counters reset on {@link TexturePool.dispose}. */
-export interface TexturePoolStats {
-    /** Number of textures currently sitting in the free list. */
-    free: number;
-    /** Number of textures currently checked out by callers. */
-    checkedOut: number;
-    /** Total bytes currently held by the pool (free + checked out). */
-    bytes: number;
-    /** Configured budget in bytes. */
-    budgetBytes: number;
-    /** Number of free textures destroyed by LRU eviction. */
-    evictions: number;
-    /** Number of acquire calls satisfied from the free list. */
-    hits: number;
-    /** Number of acquire calls that had to allocate a new texture. */
-    misses: number;
 }
 
 /** Default pool budget: 256 MiB. */
@@ -175,9 +158,6 @@ export class TexturePool {
 
     /** Total bytes held by the pool (free + checked out). */
     private bytes = 0;
-    private evictions = 0;
-    private hits = 0;
-    private misses = 0;
 
     constructor(device: GPUDevice, budgetBytes: number = DEFAULT_BUDGET_BYTES) {
         this.device = device;
@@ -205,12 +185,10 @@ export class TexturePool {
                     key,
                     bytes: estimateBytes(descriptor),
                 });
-                this.hits++;
                 return texture;
             }
         }
 
-        this.misses++;
         const texture = this.createTexture(descriptor);
         this.checkedOut.set(texture, {
             key,
@@ -238,7 +216,7 @@ export class TexturePool {
     }
 
     /**
-     * Destroy every free pooled texture and reset all state and statistics.
+     * Destroy every free pooled texture and reset all state.
      * Checked-out textures are left untouched (callers still own them) but are
      * forgotten, so any later `release()` for them becomes a no-op. The pool is
      * reusable after `dispose()`.
@@ -251,22 +229,6 @@ export class TexturePool {
         this.freeEntries.clear();
         this.checkedOut.clear();
         this.bytes = 0;
-        this.evictions = 0;
-        this.hits = 0;
-        this.misses = 0;
-    }
-
-    /** Snapshot the current pool statistics. */
-    stats(): TexturePoolStats {
-        return {
-            free: this.freeEntries.size,
-            checkedOut: this.checkedOut.size,
-            bytes: this.bytes,
-            budgetBytes: this.budgetBytes,
-            evictions: this.evictions,
-            hits: this.hits,
-            misses: this.misses,
-        };
     }
 
     private createTexture(descriptor: TexturePoolDescriptor): GPUTexture {
@@ -305,7 +267,6 @@ export class TexturePool {
             const oldest = this.freeEntries.keys().next();
             if (oldest.done) return; // nothing free to evict (all checked out)
             this.destroyFree(oldest.value);
-            this.evictions++;
         }
     }
 

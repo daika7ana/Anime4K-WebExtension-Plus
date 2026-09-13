@@ -11,7 +11,7 @@ vi.mock('./messaging', () => ({
   sendMessage: vi.fn(),
 }));
 
-import { validateRulePattern, isUrlWhitelisted, getMatchingWhitelistRules, removeWhitelistRules } from './whitelist';
+import { validateRulePattern, isUrlWhitelisted, getMatchingWhitelistRules, removeWhitelistRules, addWhitelistRule } from './whitelist';
 import { getSettings, saveSettings } from './settings';
 import { sendMessage } from './messaging';
 import type { WhitelistRule, Anime4KWebExtSettings } from '../types';
@@ -88,10 +88,20 @@ describe('isUrlWhitelisted', () => {
     expect(isUrlWhitelisted('https://EXAMPLE.COM/path', rules)).toBe(true);
   });
 
-  it('wildcard at start of pattern can match prefix of hostname', () => {
-    // Pattern "example.com/*" becomes regex ".*example\.com/.*" which matches any prefix
+  it('anchors matching to the full hostname + pathname', () => {
+    // Pattern "example.com/*" is anchored, so a different hostname must not match
     const rules = makeRules('example.com/*');
-    expect(isUrlWhitelisted('https://notexample.com/page', rules)).toBe(true);
+    expect(isUrlWhitelisted('https://notexample.com/page', rules)).toBe(false);
+  });
+
+  it('does not match a URL whose path merely starts with the pattern path', () => {
+    const rules = makeRules('example.com/watch/123');
+    expect(isUrlWhitelisted('https://example.com/watch/123456', rules)).toBe(false);
+  });
+
+  it('anchored wildcard still matches a full wildcard URL', () => {
+    const rules = makeRules('example.com/*');
+    expect(isUrlWhitelisted('https://example.com/anything', rules)).toBe(true);
   });
 
   it('handles the default bilibili rule', () => {
@@ -158,6 +168,59 @@ describe('getMatchingWhitelistRules', () => {
   it('matches case-insensitively and honours wildcards', () => {
     const rules = makeRules('Example.COM/Path/*');
     expect(getMatchingWhitelistRules('https://example.com/Path/Video', rules)).toHaveLength(1);
+  });
+});
+
+describe('addWhitelistRule', () => {
+  beforeEach(() => {
+    vi.mocked(getSettings).mockReset();
+    vi.mocked(saveSettings).mockReset();
+    vi.mocked(sendMessage).mockReset();
+    vi.mocked(saveSettings).mockResolvedValue(undefined);
+  });
+
+  it('appends a new rule and notifies', async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      whitelist: [{ pattern: 'example.com/*', enabled: true }],
+    } as Anime4KWebExtSettings);
+
+    await addWhitelistRule('other.com/page');
+
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(saveSettings).toHaveBeenCalledWith({
+      whitelist: [
+        { pattern: 'example.com/*', enabled: true },
+        { pattern: 'other.com/page', enabled: true },
+      ],
+    });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'WHITELIST_UPDATED' });
+  });
+
+  it('is a no-op when the rule already exists and is enabled', async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      whitelist: [{ pattern: 'example.com/*', enabled: true }],
+    } as Anime4KWebExtSettings);
+
+    await addWhitelistRule('example.com/*');
+
+    expect(saveSettings).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('re-enables and persists an existing disabled rule', async () => {
+    vi.mocked(getSettings).mockResolvedValue({
+      whitelist: [{ pattern: 'example.com/page', enabled: false }],
+    } as Anime4KWebExtSettings);
+
+    await addWhitelistRule('example.com/page');
+
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(saveSettings).toHaveBeenCalledWith({
+      whitelist: [{ pattern: 'example.com/page', enabled: true }],
+    });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'WHITELIST_UPDATED' });
   });
 });
 

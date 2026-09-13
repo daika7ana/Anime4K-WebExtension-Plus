@@ -23,7 +23,9 @@ const DIST_TARGETS = ['dist-chrome', 'dist-firefox'];
 
 // --- Forbidden test-only tokens -------------------------------------------
 // Any of these appearing in shipped JavaScript means test/dev-only code has
-// leaked into the production bundle. Matching is case-insensitive.
+// leaked into the production bundle. Matching is case-insensitive and
+// word-boundary anchored so the tokens cannot false-positive inside unrelated
+// identifiers (e.g. `vitest` inside `myvitestHelper`).
 const FORBIDDEN_TOKENS = [
   'vitest',
   'playwright',
@@ -31,19 +33,32 @@ const FORBIDDEN_TOKENS = [
   'test-setup',
   '__tests__',
 ];
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const FORBIDDEN_TOKEN_PATTERNS = FORBIDDEN_TOKENS.map((token) => ({
+  token,
+  pattern: new RegExp(`\\b${escapeRegExp(token)}\\b`, 'i'),
+}));
 // --------------------------------------------------------------------------
 
-// Entry points emitted by webpack plus the copied manifest/rules.
+// Entry points emitted by webpack plus the copied manifest/rules and the
+// native CSS extracted for each UI entry point.
 const REQUIRED_FILES = [
   'manifest.json',
   'background.js',
   'content.js',
   'popup.js',
   'popup.html',
+  'popup.css',
   'options.js',
   'options.html',
+  'options.css',
   'onboarding.js',
   'onboarding.html',
+  'onboarding.css',
   'rules.json',
 ];
 
@@ -79,10 +94,10 @@ for (const target of DIST_TARGETS) {
   const jsFiles = walkFiles(distDir, (abs) => abs.endsWith('.js'));
   for (const jsFile of jsFiles) {
     const content = readFileSync(jsFile, 'utf8');
-    const lower = content.toLowerCase();
-    for (const token of FORBIDDEN_TOKENS) {
-      const index = lower.indexOf(token.toLowerCase());
-      if (index !== -1) {
+    for (const { token, pattern } of FORBIDDEN_TOKEN_PATTERNS) {
+      const match = pattern.exec(content);
+      if (match) {
+        const index = match.index;
         const before = content.slice(0, index);
         const line = before.split('\n').length;
         const column = index - before.lastIndexOf('\n');

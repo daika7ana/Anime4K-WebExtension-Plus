@@ -55,6 +55,12 @@
   "addParentPath": {
     "message": "路径"
   },
+  "removeFromWhitelist": {
+    "message": "从白名单中移除"
+  },
+  "removedFromWhitelist": {
+    "message": "已从白名单中移除"
+  },
   "openSettings": {
     "message": "设置"
   },
@@ -487,6 +493,12 @@
   },
   "autoEnableOnWhitelistDesc": {
     "message": "在白名单站点上自动增强视频，无需点击 Enhance 按钮。"
+  },
+  "autoEnableSettleMs": {
+    "message": "自动启用延迟（毫秒）"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "自动启用视频前的等待毫秒数，用于跳过临时播放器。设为 0 可禁用延迟。"
   },
   "showDiagnostics": {
     "message": "显示诊断信息"

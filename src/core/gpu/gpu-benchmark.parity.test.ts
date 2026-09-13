@@ -14,103 +14,35 @@ import * as Anime4KModule from 'anime4k-webgpu-async';
 import { resolveEffectChain } from '@utils/effect-chain-templates';
 import type { EnhancementEffect } from '@/types';
 
-// ─── Hoisted fake library classes + construction recorder ───
-const mocks = vi.hoisted(() => {
-  interface ConstructedRecord {
-    effectName: string;
-    descriptor: any;
-    paramUpdates: Array<[string, any]>;
-  }
-  const constructed: ConstructedRecord[] = [];
-
-  function makeEffectClass(effectName: string) {
-    return class MockEffect {
-      static effectName = effectName;
-      descriptor: any;
-      paramUpdates: Array<[string, any]> = [];
-      constructor(descriptor: any) {
-        this.descriptor = descriptor;
-        constructed.push({ effectName, descriptor, paramUpdates: this.paramUpdates });
-      }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return this.descriptor.inputTexture; }
-      updateParam(key: string, value: any) { this.paramUpdates.push([key, value]); }
-      destroy() {}
-    };
-  }
-
-  /** Two-stage epilogue node with a distinct marker output. */
-  function makeApplyClass() {
-    return class MockClampHighlightsApply {
-      static effectName = 'ClampHighlightsApply';
-      descriptor: any;
-      outputTexture: { width: number; height: number; kind: string };
-      constructor(descriptor: any) {
-        this.descriptor = descriptor;
-        this.outputTexture = {
-          width: descriptor.inputTexture?.width ?? 0,
-          height: descriptor.inputTexture?.height ?? 0,
-          kind: 'clamp-apply',
-        };
-        constructed.push({ effectName: 'ClampHighlightsApply', descriptor, paramUpdates: [] });
-      }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return this.outputTexture; }
-      updateParam() {}
-      destroy() {}
-    };
-  }
-
-  const scaleByKey: Record<string, number> = {
-    CNNx2M: 2,
-    CNNx2VL: 2,
-    DenoiseCNNx2VL: 2,
-    CNNx2UL: 2,
-    GANx3L: 3,
-    GANx4UUL: 4,
-  };
-
-  const ClampHighlightsApplyClass = makeApplyClass();
-  const ClampHighlightsClass = class extends makeEffectClass('ClampHighlights') {
-    getDeferredPipeline(finalInputTexture: any) {
-      return new ClampHighlightsApplyClass({ inputTexture: finalInputTexture });
-    }
-  };
-
-  const libraryClasses: Record<string, any> = {
-    ClampHighlights: ClampHighlightsClass,
-    CNNM: makeEffectClass('CNNM'),
-    CNNSoftM: makeEffectClass('CNNSoftM'),
-    CNNSoftVL: makeEffectClass('CNNSoftVL'),
-    CNNVL: makeEffectClass('CNNVL'),
-    CNNUL: makeEffectClass('CNNUL'),
-    GANUUL: makeEffectClass('GANUUL'),
-    CNNx2M: makeEffectClass('CNNx2M'),
-    CNNx2VL: makeEffectClass('CNNx2VL'),
-    DenoiseCNNx2VL: makeEffectClass('DenoiseCNNx2VL'),
-    CNNx2UL: makeEffectClass('CNNx2UL'),
-    GANx3L: makeEffectClass('GANx3L'),
-    GANx4UUL: makeEffectClass('GANx4UUL'),
-    DoG: makeEffectClass('DoG'),
-    BilateralMean: makeEffectClass('BilateralMean'),
-    ClampHighlightsApply: ClampHighlightsApplyClass,
-    Downscale: makeEffectClass('Downscale'),
-  };
-
-  return { constructed, libraryClasses, scaleByKey, backendCompiles: 0 };
+// ─── Fake library classes + construction recorder ───
+// Shared with the renderer suite via the test helper; the mocked registry
+// constructs the same classes and records the same order.
+vi.mock('anime4k-webgpu-async', async () => {
+  const { libraryClasses } = await import('./__test-helpers__/fake-backend.js');
+  return { ...libraryClasses };
 });
 
-vi.mock('anime4k-webgpu-async', () => ({ ...mocks.libraryClasses }));
+vi.mock('@core/engines/registry.js', async () => {
+  const {
+    createFakeAnime4kBackend,
+    libraryClasses,
+    state,
+  } = await import('./__test-helpers__/fake-backend.js');
 
-vi.mock('@core/engines/registry.js', () => {
-  const anime4kBackend = {
-    backendId: 'anime4k',
+  const anime4kBackend = createFakeAnime4kBackend({
     displayName: 'Anime4K (benchmark golden fake)',
+    missingCtorPrefix: '[benchmark-golden-fake]',
+    ceilScaledDimensions: true,
+  });
+
+  const coreBackend = {
+    backendId: 'core',
+    displayName: 'core (benchmark golden fake)',
     listEffects: () => [],
     async compileEffect(ref: any, ctx: any) {
-      const Ctor = mocks.libraryClasses[ref.key];
-      if (!Ctor) throw new Error(`[benchmark-golden-fake] no constructor for "${ref.key}"`);
-      mocks.backendCompiles += 1;
+      const Ctor = libraryClasses[ref.key];
+      if (!Ctor) throw new Error(`[benchmark-golden-fake] no constructor for core "${ref.key}"`);
+      state.backendCompiles += 1;
 
       const pipeline = new Ctor({
         device: ctx.device,
@@ -119,18 +51,11 @@ vi.mock('@core/engines/registry.js', () => {
         targetDimensions: ctx.targetDimensions,
       });
 
-      const scale = mocks.scaleByKey[ref.key] ?? 1;
-      const outputDimensions = scale > 1
-        ? {
-          width: Math.ceil(ctx.currentDimensions.width * scale),
-          height: Math.ceil(ctx.currentDimensions.height * scale),
-        }
-        : ctx.currentDimensions;
-
+      // Extension-owned core effects (ColorAdjust) are dimension-preserving.
       return {
         pipeline,
         outputTexture: pipeline.getOutputTexture(),
-        outputDimensions,
+        outputDimensions: ctx.currentDimensions,
         profileLabel: ref.key,
       };
     },
@@ -138,9 +63,11 @@ vi.mock('@core/engines/registry.js', () => {
 
   const registry = {
     register: vi.fn(),
-    getBackend: (backendId: string) => (backendId === 'anime4k' ? anime4kBackend : undefined),
+    getBackend: (backendId: string) =>
+      backendId === 'anime4k' ? anime4kBackend : backendId === 'core' ? coreBackend : undefined,
     getBackendAsync: async (backendId: string) => {
       if (backendId === 'anime4k') return anime4kBackend;
+      if (backendId === 'core') return coreBackend;
       throw new Error(`[benchmark-golden-fake] backend "${backendId}" is not registered`);
     },
     listEffects: () => [],
@@ -153,20 +80,9 @@ vi.mock('@core/engines/registry.js', () => {
 
 // ─── Import AFTER mocks ───
 import { runEffectChainTest } from './gpu-benchmark';
+import { constructed, normalizeStep, state } from './__test-helpers__/fake-backend';
 
 // ─── Helpers ───
-
-function normalizeStep(record: { effectName: string; descriptor: any }) {
-  const descriptor = record.descriptor ?? {};
-  return {
-    effectName: record.effectName,
-    nativeDimensions: descriptor.nativeDimensions ?? null,
-    targetDimensions: descriptor.targetDimensions ?? null,
-    inputTexture: descriptor.inputTexture
-      ? { width: descriptor.inputTexture.width, height: descriptor.inputTexture.height }
-      : null,
-  };
-}
 
 /** Build one expected normalized constructor record. */
 function makeStep(
@@ -245,8 +161,8 @@ describe('runEffectChainTest golden (engine registry)', () => {
 
   beforeEach(() => {
     mock = installGPUMock();
-    mocks.constructed.length = 0;
-    mocks.backendCompiles = 0;
+    constructed.length = 0;
+    state.backendCompiles = 0;
   });
 
   afterEach(() => {
@@ -257,8 +173,8 @@ describe('runEffectChainTest golden (engine registry)', () => {
     effects: EnhancementEffect[],
     sourceDimensions: { width: number; height: number } = { width: 1920, height: 1080 },
   ) {
-    mocks.constructed.length = 0;
-    mocks.backendCompiles = 0;
+    constructed.length = 0;
+    state.backendCompiles = 0;
     const device = mock.device as unknown as GPUDevice;
     const inputTexture = createMockGPUTexture(
       sourceDimensions.width,
@@ -274,12 +190,12 @@ describe('runEffectChainTest golden (engine registry)', () => {
     );
 
     return {
-      classSequence: mocks.constructed.map((record) => record.effectName),
-      constructors: mocks.constructed.map(normalizeStep),
-      paramUpdates: mocks.constructed.map((record) =>
+      classSequence: constructed.map((record) => record.effectName),
+      constructors: constructed.map(normalizeStep),
+      paramUpdates: constructed.map((record) =>
         record.paramUpdates.map(([key, value]) => [key, value]),
       ),
-      backendCompiles: mocks.backendCompiles,
+      backendCompiles: state.backendCompiles,
     };
   }
 
@@ -328,5 +244,24 @@ describe('runEffectChainTest golden (engine registry)', () => {
     const narrow = await run(effects);
     expect(narrow.classSequence).not.toContain('CNNx2M');
     expect(narrow.classSequence.length).toBeLessThan(wide.classSequence.length);
+  });
+
+  it('orders color-category effects after the deferred epilogue (renderer parity)', async () => {
+    // A `category: 'color'` effect (ColorAdjust, resolved to the `core`
+    // backend) must be flagged as post-epilogue exactly as the renderer's
+    // pipeline builder derives it, so it runs AFTER ClampHighlightsApply rather
+    // than being compiled in the main loop and clamped afterwards.
+    const effects: EnhancementEffect[] = [
+      { id: 'anime4k/ClampHighlights', name: 'Clamp Highlights', className: 'ClampHighlights', upscaleFactor: 1 },
+      { id: 'anime4k/ColorGrading/ColorAdjust', name: 'Color Grading', className: 'ColorAdjust', upscaleFactor: 1 },
+    ];
+
+    const registry = await run(effects);
+
+    expect(registry.classSequence).toEqual([
+      'ClampHighlights',
+      'ClampHighlightsApply',
+      'ColorAdjust',
+    ]);
   });
 });

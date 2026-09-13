@@ -35,7 +35,9 @@ function parseArgs(argv) {
       if (!args.tag) throw new Error('--tag requires a value, e.g. --tag v0.7.0');
       i += 1;
     } else if (arg.startsWith('--tag=')) {
-      args.tag = arg.slice('--tag='.length);
+      const value = arg.slice('--tag='.length);
+      if (!value) throw new Error('--tag requires a value, e.g. --tag v0.7.0');
+      args.tag = value;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }

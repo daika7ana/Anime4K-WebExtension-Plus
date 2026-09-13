@@ -2,7 +2,4 @@ allowBuilds:
   core-js: false
   esbuild: true
 minimumReleaseAgeExclude:
-  - anime4k-webgpu-async@3.1.0 || 3.2.0
-
-# overrides:
-#   anime4k-webgpu-async: link:../Anime4K-WebGPU
+  - anime4k-webgpu-async@3.2.0

@@ -16,7 +16,8 @@ import { resolveEffectReference, type EffectResolution } from '@utils/effect-reg
 import { PipelinePreWarmer } from './pipeline-prewarmer';
 import type { PreWarmEffectRef, PreWarmTarget } from './pipeline-prewarmer';
 import { computeRemainingUpscaleFactors, planChainGeometryPreview, isSuppressedIndex, DEFAULT_MAX_INTERMEDIATE_PIXELS, type ChainGeometryLimits, type RestoreSuppression } from './effect-chain';
-import { compileEffectChain } from './effect-chain-compiler';
+import { compileEffectChain, destroyPipelines } from './effect-chain-compiler';
+import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
 
 /** Cached anime4k-webgpu-async module (avoids repeated dynamic imports) */
 let cachedAnime4KModule: typeof import('anime4k-webgpu-async') | null = null;
@@ -134,28 +135,14 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   // --- Effect-chain geometry pre-pass ---
   // The descriptor's declared scale is the authority; unresolved entries fall
   // back to `effect.upscaleFactor` so their geometry slot is still planned.
-  const upscaleFactors = effects.map((effect, i) => {
-    const resolution = resolutions[i];
-    if (resolution.status === 'resolved') {
-      return resolution.effect.descriptor.dimensionBehavior.scale ?? 1;
-    }
-    return effect.upscaleFactor ?? 1;
-  });
+  const upscaleFactors = deriveUpscaleFactors(effects, resolutions);
   // Restore-role flags come from the authoritative descriptor category, so
   // helpers (e.g. ClampHighlights → 'helper') are never misclassified. The
   // geometry planner stays library-free and only sees booleans.
-  const restoreFlags = resolutions.map(
-    (resolution) =>
-      resolution.status === 'resolved'
-      && resolution.effect.descriptor.category === 'restore',
-  );
+  const restoreFlags = deriveRestoreFlags(resolutions);
   // Color-category effects (color grading) must run AFTER the deferred
   // ClampHighlightsApply epilogue; see compileEffectChain.
-  const postEpilogueFlags = resolutions.map(
-    (resolution) =>
-      resolution.status === 'resolved'
-      && resolution.effect.descriptor.category === 'color',
-  );
+  const postEpilogueFlags = derivePostEpilogueFlags(resolutions);
   // The "Fast mode" policy applies to every mode, built-in and
   // custom alike: it defaults to V2 (drop restores after the final Downscale),
   // and turning "Fast mode" off restores the full-enhancement V1
@@ -280,54 +267,32 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
     restoreFlags,
     postEpilogueFlags,
     restoreSuppression,
-    compileEffect: async ({
-      effect,
-      index,
-      inputTexture,
-      currentDimensions,
-      targetDimensions: effectTargetDimensions,
-    }) => {
-      const resolution = resolutions[index];
-
-      if (resolution.status === 'resolved') {
-        const { descriptor, reference } = resolution.effect;
-        try {
-          const backend = await registry.getBackendAsync(descriptor.backendId);
-          const node = await backend.compileEffect(reference, {
-            device,
-            inputTexture,
-            sourceDimensions: { width: video.videoWidth, height: video.videoHeight },
-            currentDimensions,
-            targetDimensions: effectTargetDimensions,
-            params: effect.params,
-            resources: gpuResourceCache,
-            isStale,
-          });
-          return {
-            pipeline: node.pipeline,
-            label: node.profileLabel,
-            scaleApplied: descriptor.dimensionBehavior.kind === 'scale',
-            postDimensions: node.outputDimensions,
-          };
-        } catch (e) {
+    compileEffect: createEffectCompiler({
+      device,
+      registry,
+      resolutions,
+      resources: gpuResourceCache,
+      sourceDimensions: { width: video.videoWidth, height: video.videoHeight },
+      isStale,
+      logging: {
+        registryFailure: (effect, backendId, error) => {
           console.warn(
             `[Anime4KWebExt] Registry compile failed for "${effect.className}" `
-            + `(backend "${descriptor.backendId}"); skipping effect.`,
-            e,
+            + `(backend "${backendId}"); skipping effect.`,
+            error,
           );
-          return null;
-        }
-      }
-
-      // New-style references for unregistered backends are preserved in
-      // storage but cannot be compiled here; legacy entries unknown to the
-      // catalog are equally unbuildable. Skip the effect, never crash.
-      console.warn(
-        `[Anime4KWebExt] ${resolution.status === 'unresolved' ? 'Unresolved new-style' : 'Unknown legacy'} `
-        + `effect (id "${effect.id}", className "${effect.className}"); skipping effect.`,
-      );
-      return null;
-    },
+        },
+        skipped: (effect, status) => {
+          // New-style references for unregistered backends are preserved in
+          // storage but cannot be compiled here; legacy entries unknown to the
+          // catalog are equally unbuildable. Skip the effect, never crash.
+          console.warn(
+            `[Anime4KWebExt] ${status === 'unresolved' ? 'Unresolved new-style' : 'Unknown legacy'} `
+            + `effect (id "${effect.id}", className "${effect.className}"); skipping effect.`,
+          );
+        },
+      },
+    }),
     onEffectStart: (index, total) => {
       // Report progress
       const loadingMsg = t('loadingEffect', `⏳ Loading effect ${index + 1}/${total}...`, [String(index + 1), String(total)]);
@@ -337,7 +302,12 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   });
 
   if (result.superseded) {
-    // Discard everything: keep `labels` consistent with the returned [].
+    // The compiler destroys its partially built pipelines on a stale return, so
+    // `result.pipelines` is always empty here. Destroy defensively anyway: this
+    // path must never hand back a leaked (undestroyed) pipeline if the contract
+    // ever changes, and `destroyPipelines` is idempotent over an empty list.
+    destroyPipelines(result.pipelines);
+    // Keep `labels` consistent with the returned [].
     labels?.splice(0, labels.length);
     return []; // Superseded
   }

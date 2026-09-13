@@ -9,7 +9,6 @@ import {
   sanitizeColorGrading,
   sanitizeCustomModes,
   sanitizeWhitelist,
-  validateColorGrading,
   validateGPUBenchmarkResult,
   validateModesImport,
 } from './validation';
@@ -367,7 +366,7 @@ describe('sanitizeCustomModes', () => {
   });
 });
 
-describe('sanitizeColorGrading / validateColorGrading', () => {
+describe('sanitizeColorGrading', () => {
   it('keeps valid values and falls back on invalid ones', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = sanitizeColorGrading({
@@ -395,8 +394,9 @@ describe('sanitizeColorGrading / validateColorGrading', () => {
     });
   });
 
-  it('strict validator rejects out-of-range fields', () => {
-    const result = validateColorGrading({
+  it('falls back to defaults for out-of-range fields', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = sanitizeColorGrading({
       enabled: false,
       brightness: 0,
       gamma: 1,
@@ -405,7 +405,8 @@ describe('sanitizeColorGrading / validateColorGrading', () => {
       vibrance: 0,
       exposure: 5,
     });
-    expect(result.ok).toBe(false);
+    // `exposure` is outside its bound, so it falls back to the default 0.
+    expect(result.exposure).toBe(0);
   });
 });
 

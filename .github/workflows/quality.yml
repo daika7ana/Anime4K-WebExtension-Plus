@@ -36,9 +36,6 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
-
       - name: Test with coverage
         run: pnpm exec vitest run --coverage
 
