@@ -42,7 +42,7 @@ import {
  * `playwright.gpu.ablation.config.ts`) and never runs in the default GPU suite.
  *
  * Env overrides:
- *   SWEEP_INPUT    input PNG (default `<repo>/videoframe_497385.png`)
+ *   SWEEP_INPUT    input PNG (default `<repo>/e2e/testdata/videoframe_497385.png`)
  *   SWEEP_VARIANTS comma list of variant ids (default all six)
  */
 
@@ -182,7 +182,7 @@ test('dump trailing-sharpener sweep variants to PNG', async ({ browser }) => {
   guardGpu(preflight, 'restore sweep dump');
 
   const inputPath = path.resolve(
-    process.env.SWEEP_INPUT ?? path.join(REPO_ROOT, 'videoframe_497385.png'),
+    process.env.SWEEP_INPUT ?? path.join(REPO_ROOT, 'e2e', 'testdata', 'videoframe_497385.png'),
   );
   if (!existsSync(inputPath)) throw new Error(`input PNG not found: ${inputPath}`);
 

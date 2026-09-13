@@ -150,7 +150,7 @@ type DiagnosticsDetailMode = 'auto' | 'compact' | 'expanded';
 /**
  * Restore-pass policy for the emitted effect chain.
  * - `off`      — keep every restore (full V1 chain), no gating;
- * - `gate`     — drop restores after the final Downscale, then gate the retained ones;
+ * - `gate`     — keep every restore, then gate each one by local luma;
  * - `trailing` — drop restores after the final Downscale (no gating);
  * - `leading`  — drop restores before the first retained upscaler.
  */
@@ -167,8 +167,8 @@ interface LocalSettings {
   diagnosticsDetail?: DiagnosticsDetailMode;
   /**
    * Restore-pass policy applied to all modes, built-in and custom. Defaults to
-   * `'gate'` (trailing drop set + local-luma gating) for fresh/normalized-missing
-   * values. Persisted locally.
+   * `'gate'` (keep every restore, local-luma gating each one) for
+   * fresh/normalized-missing values. Persisted locally.
    */
   restorePolicy?: RestorePolicy;
 }
@@ -234,11 +234,11 @@ interface RendererOptions {
    */
   enableGpuTimings?: boolean;
   /**
-   * Restore-pass policy. Applies to all modes: `'gate'` (default) uses the
-   * `'trailing'` drop set and wraps each retained restore in the local-luma
-   * gate; `'off'` keeps every restore; `'trailing'` drops restores after the
-   * target-exact final Downscale; `'leading'` drops restores before the first
-   * retained upscaler.
+   * Restore-pass policy. Applies to all modes: `'gate'` (default) keeps every
+   * restore and wraps each one in the local-luma gate; `'off'` keeps every
+   * restore without gating; `'trailing'` drops restores after the target-exact
+   * final Downscale; `'leading'` drops restores before the first retained
+   * upscaler.
    */
   restorePolicy?: RestorePolicy;
 }

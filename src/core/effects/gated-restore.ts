@@ -31,11 +31,10 @@ export interface GatedRestoreOptions {
 
 /**
  * Sub-4K `gate` profile. Used when the chain emits a target-exact final
- * Downscale, so the trailing restores are dropped and only the leading restore
- * is gated (running at the scaled-up intermediate). Calibrated on the real
- * frame under the GPU ROI gate: the wide ramp keeps the wing contour at the
- * no-restore ceiling (lineContrast 1.000x, midRMS 0.951x of a no-restore chain)
- * while face fine detail (1.003x) and whole-frame high-frequency energy
+ * Downscale; every restore is retained and gated. The wide ramp is calibrated
+ * on the real frame under the GPU ROI gate: the wide ramp keeps the wing contour
+ * at the no-restore ceiling (lineContrast 1.000x, midRMS 0.951x of a no-restore
+ * chain) while face fine detail (1.003x) and whole-frame high-frequency energy
  * (1.009x) match the shipped trailing chain.
  */
 export const GATED_RESTORE_DEFAULTS: GatedRestoreOptions = Object.freeze({
@@ -67,10 +66,10 @@ export const GATED_RESTORE_4K_HEIGHT_THRESHOLD = 2160;
 /**
  * Select the `gate` profile for a render target.
  *
- * The split tracks whether the restores run at the render target: ≥4K
- * (equal-upscale) targets emit no final Downscale, so every restore is gated at
- * the target, while sub-4K targets drop the trailing restores and gate only the
- * leading one. 2160 is the practical proxy for that split.
+ * The split tracks where the restores run: ≥4K (equal-upscale) targets emit no
+ * final Downscale, so every restore is gated at the render target, while sub-4K
+ * targets retain and gate the restores at the scaled-up intermediate. 2160 is
+ * the practical proxy for that split.
  *
  * Returns the shared, frozen profile constant (not a per-call copy); callers
  * must treat it as read-only.

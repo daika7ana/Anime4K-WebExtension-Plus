@@ -568,7 +568,7 @@ describe('buildEffectPipelines', () => {
     ]);
   });
 
-  it('A+A / ultra @2K: gate skips trailing restores and wraps the retained one', async () => {
+  it('A+A / ultra @2K: gate keeps every restore and wraps each one', async () => {
     const labels: string[] = [];
     const pipelines = await buildEffectPipelines(buildParams({
       targetDimensions: { width: 2560, height: 1440 },
@@ -577,22 +577,28 @@ describe('buildEffectPipelines', () => {
       restorePolicy: 'gate',
     }));
 
-    // Same drop set as 'trailing': only the leading restore survives.
+    // gate keeps every restore (unlike trailing): the full 7-label chain, with
+    // the trailing restores after the target-exact Downscale retained.
     expect(labels).toEqual([
       'ClampHighlights',
       'CNNUL',
       'CNNx2UL',
       'Downscale',
+      'CNNUL',
+      'CNNUL',
       'ClampHighlightsApply',
     ]);
-    // No trailing restore node exists, and the single retained restore (the
-    // leading CNNUL at index 1) is the gate wrapper.
-    expect(labels.filter((label) => label === 'CNNUL')).toHaveLength(1);
-    expect(pipelines[1]).toBeInstanceOf(GatedRestore);
-    expect(pipelines.filter((pipeline) => pipeline instanceof GatedRestore)).toHaveLength(1);
+    expect(labels.filter((label) => label === 'CNNUL')).toHaveLength(3);
+    // Every CNNUL restore node is the gate wrapper.
+    for (const i of [1, 4, 5]) {
+      expect(pipelines[i]).toBeInstanceOf(GatedRestore);
+    }
+    expect(pipelines.filter((pipeline) => pipeline instanceof GatedRestore)).toHaveLength(3);
     // Non-restore nodes are not wrapped.
     expect(pipelines[0]).not.toBeInstanceOf(GatedRestore);
     expect(pipelines[2]).not.toBeInstanceOf(GatedRestore);
+    expect(pipelines[3]).not.toBeInstanceOf(GatedRestore);
+    expect(pipelines[6]).not.toBeInstanceOf(GatedRestore);
   });
 
   it('A+A / ultra @4K: gate keeps all three restores and wraps each one', async () => {

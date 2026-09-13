@@ -171,12 +171,12 @@ export function planIntermediateDownscale(params: {
  * | policy       | restores kept                       | rule                                                     |
  * | ------------ | ----------------------------------- | -------------------------------------------------------- |
  * | `'off'`      | all                                 | no restore drop, no gating (the full V1 chain).          |
- * | `'gate'`     | those at/before the final Downscale | drop restores after the final Downscale; retained restores are wrapped/gated. |
+ * | `'gate'`     | all                                 | no restore drop; each retained restore is wrapped/gated. |
  * | `'trailing'` | those at/before the final Downscale | drop restores with `index > finalDownscaleAfterIndex`, no gating. |
  * | `'leading'`  | those after the first upscaler      | drop restores with `index < firstRetainedUpscaleIndex`, no gating. |
  *
- * `'gate'` shares `'trailing'`'s drop set; the difference is that `'gate'`
- * additionally wraps each retained restore in the local-luma gate.
+ * `'gate'` never drops a restore; the difference from `'off'` is that each
+ * retained restore is wrapped in the local-luma gate.
  */
 export type RestoreSuppression = 'off' | 'gate' | 'trailing' | 'leading';
 
@@ -593,14 +593,14 @@ function firstRetainedUpscaleIndex(
  * set and the upscaler at `suppressFromIndex` itself is suppressed too.
  *
  * Restore rule: a scale-1 effect flagged as a `restore` may additionally be
- * suppressed, under the `'gate'`, `'trailing'` and `'leading'` policies:
+ * suppressed, under the `'trailing'` and `'leading'` policies:
  *
- *  - `'off'`: never suppress a restore.
- *  - `'gate'` / `'trailing'`: suppress restores that run after the emitted
- *    target-exact final Downscale (`index > finalDownscaleAfterIndex`). The
- *    anchor is only non-null when a Downscale is actually emitted, so a preview
- *    that triggers suppression without a final Downscale drops nothing. `'gate'`
- *    additionally wraps each retained restore in the local-luma gate.
+ *  - `'off'` / `'gate'`: never suppress a restore. `'gate'` additionally wraps
+ *    each retained restore in the local-luma gate.
+ *  - `'trailing'`: suppress restores that run after the emitted target-exact
+ *    final Downscale (`index > finalDownscaleAfterIndex`). The anchor is only
+ *    non-null when a Downscale is actually emitted, so a preview that triggers
+ *    suppression without a final Downscale drops nothing.
  *  - `'leading'`: suppress restores that run before the first retained
  *    upscaler (`index < firstRetainedUpscaleIndex`). When the preview retains no
  *    upscaler, nothing is dropped.
@@ -627,16 +627,16 @@ export function isSuppressedIndex(
     if (!preview.restoreFlags?.[index]) return false;
 
     const policy = preview.restoreSuppression ?? 'trailing';
-    // 'off' keeps every restore; 'gate' shares the trailing drop set below
-    // (retained restores are gated later at compile time).
-    if (policy === 'off') return false;
+    // 'off' and 'gate' keep every restore; 'gate' wraps each retained restore
+    // in the local-luma gate later at compile time.
+    if (policy === 'off' || policy === 'gate') return false;
 
     if (policy === 'leading') {
         const first = firstRetainedUpscaleIndex(preview, upscaleFactors);
         return first !== null && index < first;
     }
 
-    // 'trailing' / 'gate'.
+    // 'trailing'.
     return (
         preview.finalDownscaleAfterIndex !== null
         && index > preview.finalDownscaleAfterIndex

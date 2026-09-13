@@ -462,8 +462,8 @@ export async function runEffectChainTest(
     const upscaleFactors = deriveUpscaleFactors(effects, resolutions);
 
     // Benchmark geometry uses the same restore policy as the renderer's
-    // new default ('gate'): the trailing drop set, with retained restores gated
-    // by the same resolution-dependent profile. The role flags come from the
+    // new default ('gate'): no restore is dropped, and each one is gated by the
+    // same resolution-dependent profile. The role flags come from the
     // resolved descriptor category (helpers are never restores).
     const restoreFlags = deriveRestoreFlags(resolutions);
 

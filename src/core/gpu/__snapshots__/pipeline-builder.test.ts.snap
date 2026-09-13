@@ -387,6 +387,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNVL",
     "CNNx2VL",
     "Downscale",
+    "CNNVL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -448,6 +449,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -462,6 +478,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNVL",
     "CNNx2VL",
     "Downscale",
+    "CNNVL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -470,8 +487,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -482,6 +500,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNM",
     "CNNx2M",
     "Downscale",
+    "CNNM",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -543,6 +562,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -557,6 +591,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNM",
     "CNNx2M",
     "Downscale",
+    "CNNM",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -565,8 +600,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -577,6 +613,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNUL",
     "CNNx2UL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -638,6 +675,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -652,6 +704,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNUL",
     "CNNx2UL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -660,8 +713,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -672,6 +726,8 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNUL",
     "CNNx2UL",
     "Downscale",
+    "CNNUL",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -733,6 +789,36 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -747,6 +833,8 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNUL",
     "CNNx2UL",
     "Downscale",
+    "CNNUL",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -755,8 +843,10 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 7,
 }
 `;
 
@@ -1147,6 +1237,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2VL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1208,6 +1299,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -1222,6 +1328,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2VL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -1230,8 +1337,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -1242,6 +1350,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftM",
     "CNNx2M",
     "Downscale",
+    "CNNSoftM",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1303,6 +1412,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNSoftM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -1317,6 +1441,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftM",
     "CNNx2M",
     "Downscale",
+    "CNNSoftM",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -1325,8 +1450,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -1337,6 +1463,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2UL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1398,6 +1525,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -1412,6 +1554,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2UL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -1420,8 +1563,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -1432,6 +1576,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2UL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1493,6 +1638,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -1507,6 +1667,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "CNNSoftVL",
     "CNNx2UL",
     "Downscale",
+    "CNNSoftVL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -1515,8 +1676,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 5,
+  "pipelineCount": 6,
 }
 `;
 
@@ -1875,6 +2037,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNVL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1921,6 +2084,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -1934,6 +2112,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNVL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -1941,8 +2120,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 4,
+  "pipelineCount": 5,
 }
 `;
 
@@ -1952,6 +2132,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNM",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -1998,6 +2179,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -2011,6 +2207,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNM",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -2018,8 +2215,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 4,
+  "pipelineCount": 5,
 }
 `;
 
@@ -2029,6 +2227,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -2075,6 +2274,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -2088,6 +2302,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -2095,8 +2310,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 4,
+  "pipelineCount": 5,
 }
 `;
 
@@ -2106,6 +2322,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "constructors": [
@@ -2152,6 +2369,21 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
       },
     },
     {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
       "effectName": "ClampHighlightsApply",
       "inputTexture": {
         "height": 1080,
@@ -2165,6 +2397,7 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     "ClampHighlights",
     "DenoiseCNNx2VL",
     "Downscale",
+    "CNNUL",
     "ClampHighlightsApply",
   ],
   "paramUpdates": [
@@ -2172,8 +2405,9 @@ exports[`buildEffectPipelines golden (engine registry) > records the registry se
     [],
     [],
     [],
+    [],
   ],
-  "pipelineCount": 4,
+  "pipelineCount": 5,
 }
 `;
 

@@ -102,8 +102,10 @@ export interface EffectCompilerOptions {
   /**
    * When set, every compiled resolved `descriptor.category === 'restore'` node
    * is wrapped in a {@link GatedRestore} so its residual is applied only where
-   * the local luma amplitude passes the gate. Suppressed restores are never
-   * compiled, so they are never wrapped. `null`/absent leaves restores unwrapped.
+   * the local luma amplitude passes the gate. Under `'gate'` no restore is
+   * suppressed, so every restore is wrapped; under `'trailing'`/`'leading'`
+   * suppressed restores are never compiled and therefore never wrapped.
+   * `null`/absent leaves restores unwrapped.
    */
   gating?: GatedRestoreOptions | null;
   logging: EffectCompilerLogging;

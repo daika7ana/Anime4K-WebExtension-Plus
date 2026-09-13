@@ -35,13 +35,13 @@ export interface AppContext {
   refreshModesPanel?: () => void;
 }
 
-/** i18n key + fallback for the selected restore policy's mode-card note, or `null` when it drops nothing. */
+/** i18n key + fallback for the selected restore policy's mode-card note, or `null` when the policy needs no note. */
 function policyNoteI18nKey(policy: RestorePolicy): { key: string; fallback: string } | null {
   switch (policy) {
     case 'gate':
       return {
         key: 'restorePolicyNoteGate',
-        fallback: 'Trailing restores are skipped; the retained restores adapt to local contrast.',
+        fallback: 'Restore passes run adaptively: faint low-contrast detail bypasses them; strong edges are enhanced.',
       };
     case 'trailing':
       return {

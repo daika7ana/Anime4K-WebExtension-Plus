@@ -32,11 +32,22 @@ import {
  *                      output should equal `ref-norestore`
  *   gate-trailing-narrow : gated CNNUL(0.010,0.014,1.0), CNNx2UL, Downscale
  *   gate-trailing-wide   : same, gate (0.006,0.030,1.0)
+ *   off-2k               : CNNUL, CNNx2UL, Downscale, CNNUL, CNNUL   (2K keep-all ref)
+ *   gate-keepall-narrow-2k: same, every restore gated (0.006,0.030,1.0)
+ *   gate-keepall-loose-2k : same, every restore gated (0.030,0.060,1.0)
  *
  * The `gate-trailing-*` variants are the hybrid under test: gate ONLY the
  * leading restore that the `trailing` suppression policy retains, i.e. the
  * production chain is exactly `ref-off` with its leading CNNUL gated (no
  * trailing 2K restores).
+ *
+ * 2560x1440 target, keep-every-restore (`gate2`) — 2K now uses the same chain
+ * shape as 4K, i.e. both trailing 1440p restores are kept and gated:
+ *   off-2k              : CNNUL, CNNx2UL, Downscale, CNNUL, CNNUL   (ungated; face/hpRMS ref)
+ *   gate-keepall-narrow-2k: same chain, every restore gated (0.006,0.030,1.0)
+ *   gate-keepall-loose-2k : same chain, every restore gated (0.030,0.060,1.0)
+ * The wing ceiling N is the existing `ref-norestore` 2K dump (CNNx2UL,
+ * Downscale) in `videoframe_497385_gate/`.
  *
  * 3840x2160 target (same 1080p source): no final Downscale is emitted, so the
  * `gate` policy retains all three restores and wraps each (production defaults
@@ -50,7 +61,8 @@ import {
  *   gate4-loose2-4k: same chain, gate (0.020,0.050,1.0)
  *   norestore4-4k  : CNNx2UL                                (N4 wing ceiling)
  *
- * Output: `${repo}/videoframe_497385_gate/<variant>/` (2K) or
+ * Output: `${repo}/videoframe_497385_gate/<variant>/` (legacy 2K) or
+ *         `${repo}/videoframe_497385_gate2/<variant>/` (2K keep-all) or
  *         `${repo}/videoframe_497385_gate4/<variant>/` (4K)
  *   `00-source.png`, one PNG per stage, `manifest.json`, `passes.txt`.
  *
@@ -58,7 +70,7 @@ import {
  * `playwright.gpu.ablation.config.ts`) and never runs in the default GPU suite.
  *
  * Env overrides:
- *   GATE_INPUT    input PNG (default `<repo>/videoframe_497385.png`)
+ *   GATE_INPUT    input PNG (default `<repo>/e2e/testdata/videoframe_497385.png`)
  *   GATE_VARIANTS comma list of variant ids to dump (default all). Use
  *                 `gate-trailing-narrow,gate-trailing-wide` or
  *                 `ref4-4k,gate4-4k,norestore4-4k` to dump only a subset and
@@ -193,6 +205,34 @@ const VARIANTS: readonly VariantDef[] = [
     id: 'gate-trailing-wide',
     gate: GATE_WIDE,
     stages: chain(gatedTrailingChain(GATE_WIDE)),
+  },
+  // --- 2560x1440 target, keep every restore (2K now mirrors the 4K chain shape) ---
+  {
+    id: 'off-2k',
+    gate: null,
+    dirSuffix: 'gate2',
+    geometry: '2K keep-all, ungated (full chain: both trailing 1440p restores kept)',
+    stages: chain([
+      { kind: 'effect', key: 'CNNUL', scale: null },
+      { kind: 'effect', key: 'CNNx2UL', scale: 2 },
+      { kind: 'downscale' },
+      { kind: 'effect', key: 'CNNUL', scale: null },
+      { kind: 'effect', key: 'CNNUL', scale: null },
+    ]),
+  },
+  {
+    id: 'gate-keepall-narrow-2k',
+    gate: GATE_WIDE,
+    dirSuffix: 'gate2',
+    geometry: '2K keep-all, every restore gated (0.006/0.030/1.0)',
+    stages: chain(gatedChain(GATE_WIDE)),
+  },
+  {
+    id: 'gate-keepall-loose-2k',
+    gate: GATE_LOOSE,
+    dirSuffix: 'gate2',
+    geometry: '2K keep-all, every restore gated (0.030/0.060/1.0)',
+    stages: chain(gatedChain(GATE_LOOSE)),
   },
   // --- 3840x2160 target (no final Downscale; gate retains all three restores) ---
   {
@@ -333,7 +373,7 @@ test('dump restore-gate policy variants to PNG', async ({ browser }) => {
   guardGpu(preflight, 'restore gate dump');
 
   const inputPath = path.resolve(
-    process.env.GATE_INPUT ?? path.join(REPO_ROOT, 'videoframe_497385.png'),
+    process.env.GATE_INPUT ?? path.join(REPO_ROOT, 'e2e', 'testdata', 'videoframe_497385.png'),
   );
   if (!existsSync(inputPath)) throw new Error(`input PNG not found: ${inputPath}`);
 

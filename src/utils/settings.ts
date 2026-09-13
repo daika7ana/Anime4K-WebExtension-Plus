@@ -73,7 +73,7 @@ const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   showDiagnostics: false,
   // 'auto' expands on normal videos and compacts on small ones.
   diagnosticsDetail: 'auto',
-  // Fresh/normalized-missing default: `gate` (trailing drop set + local gate).
+  // Fresh/normalized-missing default: `gate` (keep every restore, gate each one).
   // The v3→v4 migration maps the legacy `preserveDetail` boolean for existing
   // users, so their behavior is unchanged.
   restorePolicy: 'gate',

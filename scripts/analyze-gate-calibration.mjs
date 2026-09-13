@@ -41,7 +41,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const rootDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const INPUT_PATH = path.resolve(process.env.GATE_INPUT ?? path.join(rootDir, 'videoframe_497385.png'));
+const INPUT_PATH = path.resolve(process.env.GATE_INPUT ?? path.join(rootDir, 'e2e', 'testdata', 'videoframe_497385.png'));
 const ANALYSIS_DIR = path.join(rootDir, 'videoframe_497385_analysis');
 
 const MAX_BUFFER = 80 * 1024 * 1024;

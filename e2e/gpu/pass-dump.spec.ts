@@ -43,7 +43,7 @@ import {
  * deferred `ClampHighlightsApply` epilogue is.
  *
  * Env overrides:
- *   PASS_DUMP_INPUT   input PNG (default `<repo>/videoframe_497385.png`)
+ *   PASS_DUMP_INPUT   input PNG (default `<repo>/e2e/testdata/videoframe_497385.png`)
  *   PASS_DUMP_TARGET  render target WxH (default `3840x2160`)
  *   PASS_DUMP_MODES   comma list of mode keys (default `C+A-ultra,A+A-ultra`)
  *   PASS_DUMP_POLICIES comma list of `on,off,legacy` (default `on,off`)
@@ -279,7 +279,7 @@ test('dump every pass of the requested modes to PNG', async ({ page }) => {
   guardGpu(preflight, 'pass dump');
 
   const inputPath = path.resolve(
-    process.env.PASS_DUMP_INPUT ?? path.join(REPO_ROOT, 'videoframe_497385.png'),
+    process.env.PASS_DUMP_INPUT ?? path.join(REPO_ROOT, 'e2e', 'testdata', 'videoframe_497385.png'),
   );
   if (!existsSync(inputPath)) throw new Error(`input PNG not found: ${inputPath}`);
   const target = parseDimensions(process.env.PASS_DUMP_TARGET ?? '3840x2160', 'PASS_DUMP_TARGET');

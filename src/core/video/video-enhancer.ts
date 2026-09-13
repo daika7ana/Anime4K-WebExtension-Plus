@@ -316,8 +316,8 @@ export class VideoEnhancer {
       targetDimensions,
       // GPU timings are only collected while the diagnostics overlay is shown.
       enableGpuTimings: showDiagnostics,
-      // Restore-pass policy. Defaults to 'gate' (trailing drop set + local
-      // gating); the value applies to all modes, built-in and custom.
+      // Restore-pass policy. Defaults to 'gate' (keep every restore, local-luma
+      // gating each one); the value applies to all modes, built-in and custom.
       restorePolicy: localSettings.restorePolicy ?? 'gate',
       onError: async (error: Error) => {
         // A destroyed enhancer has no live UI/resources; never surface errors or

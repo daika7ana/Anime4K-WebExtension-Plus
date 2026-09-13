@@ -59,9 +59,9 @@ interface BuildPipelinesParams {
   isStale: () => boolean;
   /**
    * Restore-pass policy applied to every mode, built-in or custom. Defaults to
-   * `'gate'` (trailing drop set + local gate on retained restores); `'off'`
-   * keeps every restore; `'trailing'`/`'leading'` drop restores as documented
-   * in `effect-chain.ts`.
+   * `'gate'` (keep every restore, gate each retained restore); `'off'` keeps
+   * every restore without gating; `'trailing'`/`'leading'` drop restores as
+   * documented in `effect-chain.ts`.
    */
   restorePolicy?: RestorePolicy;
   /**
@@ -144,14 +144,13 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   // ClampHighlightsApply epilogue; see compileEffectChain.
   const postEpilogueFlags = derivePostEpilogueFlags(resolutions);
   // The restore policy applies to every mode, built-in and custom alike:
-  // `'off'` keeps every restore; `'gate'` and `'trailing'` drop the trailing
-  // restores; `'leading'` drops the leading ones.
+  // `'off'` and `'gate'` keep every restore; `'trailing'` drops the trailing
+  // restores, `'leading'` drops the leading ones.
   const restoreSuppression: RestoreSuppression = restorePolicy;
-  // `'gate'` shares the trailing drop set above; every restore that survives
-  // (i.e. is actually compiled) is wrapped in the local-luma gate. Suppressed
-  // restores are never compiled, so they are never wrapped. The gate profile is
-  // resolution-dependent: sub-4K targets gate only the leading restore, while
-  // ≥4K targets emit no final Downscale and gate all restores at the target.
+  // `'gate'` never drops a restore; every compiled restore is wrapped in the
+  // local-luma gate. The gate profile is resolution-dependent: sub-4K targets
+  // use the softer ramp, ≥4K targets the stronger one. See
+  // `selectGatedRestoreOptions`.
   const gating = restorePolicy === 'gate'
     ? selectGatedRestoreOptions(targetDimensions)
     : null;

@@ -39,7 +39,7 @@ import {
  * default GPU suite.
  *
  * Env overrides:
- *   RESTORE_AB_INPUT    input PNG (default `<repo>/videoframe_497385.png`)
+ *   RESTORE_AB_INPUT    input PNG (default `<repo>/e2e/testdata/videoframe_497385.png`)
  *   RESTORE_AB_VARIANTS comma list of variant ids (default all four)
  */
 
@@ -164,7 +164,7 @@ test('dump leading-restore ablation variants to PNG', async ({ browser }) => {
   guardGpu(preflight, 'restore ablation dump');
 
   const inputPath = path.resolve(
-    process.env.RESTORE_AB_INPUT ?? path.join(REPO_ROOT, 'videoframe_497385.png'),
+    process.env.RESTORE_AB_INPUT ?? path.join(REPO_ROOT, 'e2e', 'testdata', 'videoframe_497385.png'),
   );
   if (!existsSync(inputPath)) throw new Error(`input PNG not found: ${inputPath}`);
 

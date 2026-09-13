@@ -372,13 +372,13 @@ describe('isSuppressedIndex (restore rule)', () => {
             .toEqual([false, false, false, false, true, false, true]);
     });
 
-    it("'gate' shares the trailing drop set (retained restores are gated downstream)", () => {
-        // 'gate' drops exactly what 'trailing' drops (restores after the final
-        // Downscale); the retained restores are wrapped in the gate at compile
-        // time. At 2K the final Downscale sits after index 2, so indices 3 and 5
-        // are dropped; at 4K there is no final Downscale, so nothing is dropped.
+    it("'gate' never drops a restore (retained restores are gated downstream)", () => {
+        // 'gate' keeps every restore exactly like 'off'; each retained restore
+        // is wrapped in the gate at compile time. At 2K the final Downscale sits
+        // after index 2, but gate suppresses nothing; at 4K there is no final
+        // Downscale either.
         expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 2560, height: 1440 }, 'gate'))
-            .toEqual([false, false, false, true, true, true, true]);
+            .toEqual([false, false, false, false, true, false, true]);
         expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 3840, height: 2160 }, 'gate'))
             .toEqual([false, false, false, false, true, false, true]);
     });
