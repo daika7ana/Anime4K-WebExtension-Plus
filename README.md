@@ -99,6 +99,46 @@ Click the **"Settings"** button at the bottom of the panel to access the detaile
 *   **Rule Management**: View, edit, or delete added URL rules.
 *   **Wildcard Support**: Use `*` to match multiple pages (e.g., `*.bilibili.com/*`).
 
+## Choosing a Mode & Target Resolution
+
+Pick a mode by the **type of degradation** in the source, not by resolution alone — a sharp 720p master and a blurry 1080p re-encode want different modes. As a starting point, the upstream quick-start labels are **Mode A ≈ 1080p, Mode B ≈ 720p, Mode C ≈ 480p**; the source-type guidance below is derived from the official "Optimized for" descriptions, which are more precise than resolution alone.
+
+| Mode | Recommended source | Notes |
+| --- | --- | --- |
+| Mode A | Most 1080p anime; some older 720p; old/blurry SD; heavy blur, compression smearing or many resampling artifacts | Best perceptual quality; can amplify ringing/banding already present in the source |
+| Mode B | Most 720p; 1080p→720p downscales; low blur with downsampling ringing/aliasing | Uses the "Soft" restore trained for downsampling artifacts |
+| Mode C | Clean sources with no degradation: digital art/wallpapers, 1080p→480p downscales, rarely high-quality 1080p animation | Highest PSNR but lowest perceptual sharpness; can amplify ringing/resampling artifacts |
+| Mode A+A | Same source class as A, but you want extra perceptual detail | Adds a second restore pass |
+| Mode B+B | Same source class as B, with extra perceptual detail | Adds a second restore pass |
+| Mode C+A | Same clean-source class as C, when plain C looks too soft | Adds a restore pass for more perceived detail without mode A's ringing-prone restore |
+
+### The 2× Rule
+
+The doubled modes (A+A / B+B / C+A) should only be used when the target/source ratio is **at least 2×** (for example 720p→1440p or 1080p→4K). At a 1:1 or native target they oversharpen and can degrade the image — use a single mode there (or restore-only). Upstream wording:
+
+> These modes should only be used on upscaling ratios of x2 or higher. If you have a 1080p screen, using mode A on 1080p anime will improve image quality, but mode A+A will most likely oversharpen and degrade the image.
+
+### Mode C+A
+
+Mode C+A is for a **clean, undegraded source (C-class)** when the ratio is **≥2×**. It adds a restore pass for slightly higher perceptual quality than plain C. Do not use it for compressed/blurry video (that is A / A+A) or for downsampling ringing (that is B / B+B).
+
+### Performance Tiers
+
+The four performance tiers (Fast / Balanced / Quality / Ultra) are a **GPU budget, not a resolution**: they select CNN variant sizes, and the onboarding benchmark recommends one for your hardware. Higher tiers are not "for higher resolutions".
+
+### Target Resolution
+
+The default target is the `x2` multiplier. `Match Display` is an option you can select: it sizes the chain to your monitor at the device-pixel ratio (capped at 8K). Fixed targets (720p / 1080p / 2K / 4K), other multipliers (x4 / x8) and a `Native` target are available when you want to force a specific output size.
+
+### Optional Effects & Notes
+
+*   Every built-in mode already starts with **Clamp Highlights** (prevents ringing); it is on by default.
+*   **Debanding** helps sources that already show banding; **Denoise** helps noisy/compressed sources but can blur textures. Note: upstream Anime4K ships no deband shader — debanding here is an extension-provided helper, so treat any deband advice as a practical suggestion rather than upstream guidance.
+*   The built-in modes use the CNN ×2 upscalers only. GAN shaders (Restore GAN, Upscale GAN x3/x4) are available only in **Custom Modes** and are much heavier; they are experimental upstream.
+*   There is no automatic mode selection — choose it yourself per source.
+
+This guidance is derived from [bloc97/Anime4K](https://github.com/bloc97/Anime4K)'s [`md/GLSL_Instructions_Advanced.md`](https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md): the **A = 1080p / B = 720p / C = 480p** labels are official, while the finer source-type mapping is derived from it.
+
 ## Acknowledgments
 
 - [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — Original repository this project is forked from

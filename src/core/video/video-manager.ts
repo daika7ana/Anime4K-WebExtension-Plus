@@ -10,7 +10,17 @@ const processedDocs = new Set<Document | ShadowRoot>();
 // Define the core media events to watch for optimal performance
 const mediaEventsToWatch: ReadonlyArray<string> = ['loadedmetadata', 'play', 'playing'];
 
+/**
+ * Default settle delay used when the `autoEnableSettleMs` setting is absent.
+ * Auto-enable waits this long so transient elements (previews, ads) can
+ * disappear and a not-yet-laid-out player can acquire its size.
+ */
+export const DEFAULT_AUTO_ENABLE_SETTLE_MS = 300;
+
 let domObserver: MutationObserver | null = null;
+
+/** Enhancers that were enabled automatically (not by an explicit user toggle). */
+const autoEnabledEnhancers = new WeakSet<VideoEnhancer>();
 
 /**
  * Cleans up the enhancer resources for a video element
@@ -77,6 +87,41 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
 }
 
 /**
+ * Whether a video is a suitable target for auto-enable. Keeps auto-enable from
+ * touching previews, ad frames, and hidden/zero-size videos.
+ */
+export function isEligibleForAutoEnable(video: HTMLVideoElement): boolean {
+  if (!video.isConnected || !video.parentElement) return false;
+  const rect = video.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * Page-level switch: disables every currently-active auto-enabled renderer.
+ * @returns The number of enhancers that were toggled off.
+ */
+export function disableAllAutoEnabled(): number {
+  let count = 0;
+  for (const video of EnhancerMap.getAllManagedVideos()) {
+    const enhancer = EnhancerMap.getEnhancer(video);
+    if (
+      enhancer
+      && autoEnabledEnhancers.has(enhancer)
+      && video.hasAttribute(ANIME4K_APPLIED_ATTR)
+    ) {
+      void enhancer.toggleEnhancement();
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Resolve after `ms` milliseconds. */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Fire-and-forget auto-enable: triggers enhancement automatically when
  * autoEnableOnWhitelist is true, whitelist mode is active, and the
  * video is not already enhanced.
@@ -86,8 +131,31 @@ async function maybeAutoEnable(videoEl: HTMLVideoElement, enhancer: VideoEnhance
     const settings = await getSettings();
     if (!settings.autoEnableOnWhitelist) return;
     if (!settings.whitelistEnabled) return;
+    // The enhancer may have been destroyed/dissociated while awaiting settings.
+    if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
     // Only auto-enable if the video isn't already enhanced
     if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return;
+
+    const settleMs = typeof settings.autoEnableSettleMs === 'number'
+      ? settings.autoEnableSettleMs
+      : DEFAULT_AUTO_ENABLE_SETTLE_MS;
+
+    // Let transient elements (previews, ads) disappear and a not-yet-laid-out
+    // main player acquire its size before committing to auto-enable. A configured
+    // value of 0 skips the wait entirely (no delay(0) call).
+    if (settleMs > 0) {
+      await delay(settleMs);
+
+      // Re-validate after the settle window: cancel silently if the enhancer was
+      // destroyed/dissociated or the video got enhanced in the meantime.
+      if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
+      if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return;
+    }
+
+    // The eligibility gate applies on both paths (delay and no-delay).
+    if (!isEligibleForAutoEnable(videoEl)) return;
+
+    autoEnabledEnhancers.add(enhancer);
     await enhancer.toggleEnhancement();
   } catch (error) {
     console.warn('[Anime4KWebExt] Auto-enable failed:', error);

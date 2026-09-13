@@ -1,16 +1,19 @@
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const ExtensionManifestPlugin = require("webpack-extension-manifest-plugin");
 const WebExtensionPlugin = require("webpack-target-webextension");
-const TerserPlugin = require("terser-webpack-plugin");
+
+const pkg = require("./package.json");
 
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === "development";
   const targetBrowser = process.env.TARGET_BROWSER || "chrome";
 
   const manifest = require("./manifest.json");
+
+  // Keep the emitted manifest in sync with package.json; asserted by
+  // `pnpm check:version` for the built dist-<target>/manifest.json files.
+  manifest.version = pkg.version;
 
   // Modify manifest based on target browser
   if (targetBrowser === "firefox") {
@@ -39,17 +42,26 @@ module.exports = (env, argv) => {
       filename: "[name].js",
       path: path.resolve(__dirname, "dist-" + targetBrowser),
       clean: true, // Clean output directory
+      cssFilename: "[name].css",
+    },
+    // Webpack's built-in CSS handling (webpack >= 5.109) parses, extracts,
+    // and minifies CSS itself, replacing css-loader + mini-css-extract-plugin
+    // for the default global-CSS setup this project uses.
+    experiments: {
+      css: true,
     },
     module: {
       rules: [
         {
           test: /\.ts$/,
-          use: "ts-loader",
+          use: {
+            loader: "esbuild-loader",
+            options: {
+              target: "es2022",
+              format: "cjs",
+            },
+          },
           exclude: /node_modules/,
-        },
-        {
-          test: /\.css$/,
-          use: [MiniCssExtractPlugin.loader, "css-loader"],
         },
         {
           test: /\.wgsl$/,
@@ -59,6 +71,12 @@ module.exports = (env, argv) => {
     },
     resolve: {
       extensions: [".ts", ".js"],
+      // Dynamic imports of TypeScript modules use explicit `.js` specifiers
+      // (required by TS node16 ESM resolution for `import()`); map them back
+      // to the `.ts` sources at bundle time.
+      extensionAlias: {
+        ".js": [".ts", ".js"],
+      },
       alias: {
         "@": path.resolve(__dirname, "src"),
         "@core": path.resolve(__dirname, "src/core"),
@@ -77,6 +95,11 @@ module.exports = (env, argv) => {
           { from: "*.{png,svg}", context: "public/icons", to: "icons" },
           { from: "public/_locales", to: "_locales" },
           { from: "rules.json" },
+          {
+            // Emit the (browser-adjusted, version-injected) extension manifest.
+            from: "manifest.json",
+            transform: () => JSON.stringify(manifest, null, 2),
+          },
         ],
       }),
       new HtmlWebpackPlugin({
@@ -94,17 +117,15 @@ module.exports = (env, argv) => {
         template: "./src/ui/onboarding/onboarding.html",
         chunks: ["onboarding"],
       }),
-      new MiniCssExtractPlugin({
-        filename: "[name].css",
-      }),
-      new ExtensionManifestPlugin({
-        config: {
-          base: manifest,
-        },
-        pkgJsonProps: ["version"],
-      }),
       new WebExtensionPlugin({
+        // Declare which entry is the background so the plugin can apply its
+        // MV3 fixes (eager chunk loading + a try/catch wrapper so the service
+        // worker console stays readable if the entry throws). Chrome MV3 uses
+        // a service worker; Firefox uses a background page.
         background: {
+          ...(targetBrowser === "firefox"
+            ? { pageEntry: "background" }
+            : { serviceWorkerEntry: "background" }),
           classicLoader: false,
         },
         weakRuntimeCheck: true,
@@ -118,16 +139,20 @@ module.exports = (env, argv) => {
     },
     optimization: {
       minimize: !isDevelopment,
-      minimizer: [
-        new TerserPlugin({
-          terserOptions: {
-            compress: {
-              // Remove console.log and console.warn in production (keep console.error)
-              pure_funcs: ["console.log", "console.warn"],
-            },
+      // Configure webpack's built-in minimizers instead of supplying an
+      // explicit `minimizer` array: overriding the minimizer array replaces
+      // the built-in CSS minimizer, leaving native CSS unminified.
+      minimizeOptions: {
+        javascript: {
+          compress: {
+            // Remove console.log and console.warn in production (keep console.error)
+            pure_funcs: ["console.log", "console.warn"],
+            // Match webpack's default of 2 compression passes (overriding
+            // minimizeOptions is not merged with the defaults).
+            passes: 2,
           },
-        }),
-      ],
+        },
+      },
       splitChunks: {
         chunks: "async",
         minSize: 20000,

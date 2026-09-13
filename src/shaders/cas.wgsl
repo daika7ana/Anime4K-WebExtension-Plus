@@ -50,8 +50,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let mxRGB2 = max(mxRGB, max(max(a, c), max(g, i)));
   mxRGB += mxRGB2;
 
-  // Smooth minimum distance to signal limit divided by smooth max
-  let rcpMRGB = 1.0 / mxRGB;
+  // Smooth minimum distance to signal limit divided by smooth max.
+  // Floor the divisor: for an all-black neighborhood (mxRGB == 0) the raw
+  // `1.0 / 0.0` is +Infinity and `min(mnRGB, 2 - mxRGB) * rcpMRGB` becomes
+  // `0 * Infinity` = NaN. With a finite reciprocal the amplitude clamps to 0,
+  // `wRGB` becomes -0 and the filter degenerates to `outColor == e` (identity).
+  // For any non-black 8-bit input mxRGB >= 2/255, so this is bit-identical on
+  // the normal path.
+  let rcpMRGB = 1.0 / max(mxRGB, vec3<f32>(1e-8));
   var ampRGB = clamp(min(mnRGB, 2.0 - mxRGB) * rcpMRGB, vec3<f32>(0.0), vec3<f32>(1.0));
 
   // Shaping amount of sharpening

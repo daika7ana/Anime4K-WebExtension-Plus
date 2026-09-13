@@ -12,7 +12,7 @@
     "message": "Anime4K Enhancement Plus"
   },
   "performanceTierLabel": {
-    "message": "Performance Tier:"
+    "message": "Performance Tier"
   },
   "selectTierDesc": {
     "message": "Manually select the performance tier. Higher tiers use larger AI models for better quality but require more GPU power."
@@ -29,6 +29,9 @@
   "nativeResolution": {
     "message": "Native Resolution (No Enhancement)"
   },
+  "matchDisplayResolution": {
+    "message": "Match Display"
+  },
   "enhanceError": {
     "message": "Enhancement failed, please try again",
     "description": "Error message for enhancement failure"
@@ -38,7 +41,10 @@
     "description": "Error message for rendering failure"
   },
   "whitelistEnable": {
-    "message": "Enable Whitelist"
+    "message": "Enable Whitelist Mode"
+  },
+  "whitelistEnableDesc": {
+    "message": "When enabled, only sites and pages on the whitelist are enhanced."
   },
   "addCurrentPage": {
     "message": "Page"
@@ -48,6 +54,12 @@
   },
   "addParentPath": {
     "message": "Path"
+  },
+  "removeFromWhitelist": {
+    "message": "Remove from Whitelist"
+  },
+  "removedFromWhitelist": {
+    "message": "Removed from whitelist"
   },
   "openSettings": {
     "message": "Settings"
@@ -236,6 +248,69 @@
   },
   "customModes": {
     "message": "Custom Modes"
+  },
+  "restorePolicyBadge": {
+    "message": "Restore"
+  },
+  "restorePolicyBadgeTitle": {
+    "message": "Restore pass — may be affected by the restore policy."
+  },
+  "restorePolicyLabel": {
+    "message": "Restore policy"
+  },
+  "restorePolicyDesc": {
+    "message": "Controls which restore passes the chain keeps. \"Off\" runs the full chain (full enhancement); \"Gate\" keeps every restore and adapts it to local contrast; \"Trailing\" skips restores after the final Downscale; \"Leading\" skips restores before the first upscaler."
+  },
+  "restorePolicyOff": {
+    "message": "Off — Full chain"
+  },
+  "restorePolicyGate": {
+    "message": "Gate — Adaptive restores"
+  },
+  "restorePolicyTrailing": {
+    "message": "Trailing — Skip restores after final Downscale"
+  },
+  "restorePolicyLeading": {
+    "message": "Leading — Skip restores before first upscaler"
+  },
+  "restorePolicyNameOff": {
+    "message": "Off"
+  },
+  "restorePolicyNameGate": {
+    "message": "Gate"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "Trailing"
+  },
+  "restorePolicyNameLeading": {
+    "message": "Leading"
+  },
+  "restorePolicyNoteGate": {
+    "message": "Restore passes run adaptively: faint low-contrast detail bypasses them; strong edges are enhanced."
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "Restore passes after the final Downscale may be skipped."
+  },
+  "restorePolicyNoteLeading": {
+    "message": "Restore passes before the first upscaler may be skipped."
+  },
+  "modeDescA": {
+    "message": "For most 1080p anime, older 720p, and blurry or heavily compressed SD."
+  },
+  "modeDescB": {
+    "message": "For most 720p and 1080p→720p downscales with ringing or aliasing."
+  },
+  "modeDescC": {
+    "message": "For clean, undegraded sources: digital art, wallpapers, and 1080p→480p downscales."
+  },
+  "modeDescAA": {
+    "message": "For the same sources as Mode A, with extra detail. Doubled modes are meant for 2× or higher; at lower targets they can oversharpen, so a single mode is recommended."
+  },
+  "modeDescBB": {
+    "message": "For the same sources as Mode B, with extra detail. Doubled modes are meant for 2× or higher; at lower targets they can oversharpen, so a single mode is recommended."
+  },
+  "modeDescCA": {
+    "message": "For clean C-class sources that look too soft. Doubled modes are meant for 2× or higher; at lower targets they can oversharpen, so a single mode is recommended."
   },
   "settingsSaved": {
     "message": "Settings saved!"
@@ -449,6 +524,12 @@
   "autoEnableOnWhitelistDesc": {
     "message": "Automatically enhance videos on whitelisted sites without clicking the Enhance button."
   },
+  "autoEnableSettleMs": {
+    "message": "Auto-enable Delay (ms)"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "Milliseconds to wait before auto-enabling a video, so transient players are skipped. Set to 0 to disable the delay."
+  },
   "showDiagnostics": {
     "message": "Show Diagnostics"
   },
@@ -478,5 +559,80 @@
   },
   "diagnostics": {
     "message": "Diagnostics"
+  },
+  "diagnosticsMode": {
+    "message": "Mode"
+  },
+  "diagnosticsTier": {
+    "message": "Tier"
+  },
+  "diagnosticsInputResolution": {
+    "message": "Input"
+  },
+  "diagnosticsTargetResolution": {
+    "message": "Target"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "Restore policy"
+  },
+  "diagnosticsCustomMode": {
+    "message": "Custom"
+  },
+  "diagnosticsFrameLabel": {
+    "message": "Frame"
+  },
+  "diagnosticsCpu": {
+    "message": "CPU"
+  },
+  "diagnosticsGpuShare": {
+    "message": "GPU"
+  },
+  "diagnosticsGpuTimings": {
+    "message": "GPU Timings"
+  },
+  "diagnosticsGpuTimingsUnavailable": {
+    "message": "GPU timings unavailable"
+  },
+  "diagnosticsTimingPass": {
+    "message": "Pass"
+  },
+  "diagnosticsTimingCpuP50": {
+    "message": "CPU p50"
+  },
+  "diagnosticsTimingCpuP95": {
+    "message": "CPU p95"
+  },
+  "diagnosticsTimingGpuP50": {
+    "message": "GPU p50"
+  },
+  "diagnosticsTimingGpuP95": {
+    "message": "GPU p95"
+  },
+  "diagnosticsTimingGpuP99": {
+    "message": "GPU p99"
+  },
+  "diagnosticsTimingTotal": {
+    "message": "Total GPU"
+  },
+  "diagnosticsFramesSampled": {
+    "message": "Frames sampled"
+  },
+  "diagnosticsCpuTimingLimited": {
+    "message": "CPU timings limited to 0.1 ms"
+  },
+  "diagnosticsDetail": {
+    "message": "Detail level"
+  },
+  "diagnosticsDetailDesc": {
+    "message": "Choose how much detail the diagnostics overlay shows."
+  },
+  "diagnosticsDetailAuto": {
+    "message": "Auto (compact on small videos)"
+  },
+  "diagnosticsDetailCompact": {
+    "message": "Compact"
+  },
+  "diagnosticsDetailExpanded": {
+    "message": "Expanded"
   }
 }

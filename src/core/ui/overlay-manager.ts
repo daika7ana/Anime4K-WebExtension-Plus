@@ -283,6 +283,10 @@ export class OverlayManager {
     if (this.canvas) {
       this.canvas.remove();
     }
+    // The canvas that covered the video is gone, so the original video must be
+    // made visible again. Otherwise the element stays at opacity 0 with no
+    // canvas on top, leaving a permanently black video.
+    this.video.style.opacity = '';
   }
 
   /**

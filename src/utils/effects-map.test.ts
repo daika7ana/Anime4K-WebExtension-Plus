@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AVAILABLE_EFFECTS } from './effects-map';
+import { resolveEffectReference } from './effect-registry';
 
 describe('AVAILABLE_EFFECTS', () => {
   // ── Catalog size ──────────────────────────────────────────────
@@ -143,6 +144,93 @@ describe('AVAILABLE_EFFECTS', () => {
       expect(bm.params).toBeDefined();
       expect(bm.params!.strength).toBe(0.2);
       expect(bm.params!.strength2).toBe(2);
+    });
+  });
+});
+
+/**
+ * Golden parity: the derived catalog must stay byte-identical to the pre-seam
+ * literal in id/name/className/upscaleFactor and order. This is the guard that
+ * lets persistence/validation switch to the engine seam without a migration.
+ */
+describe('AVAILABLE_EFFECTS parity with the engine seam', () => {
+  // Frozen expected sequence: [id, name, className].
+  const EXPECTED_SEQUENCE: ReadonlyArray<readonly [string, string, string]> = [
+    ['anime4k/Sharpen/CAS', 'Contrast Adaptive Sharpening (CAS)', 'CAS'],
+    ['anime4k/Helper/ClampHighlights', 'Clamp Highlights', 'ClampHighlights'],
+    ['anime4k/Debanding/Debanding', 'Debanding', 'Debanding'],
+    ['anime4k/Deblur/DoG', 'Deblur (DoG)', 'DoG'],
+    ['anime4k/Denoise/BilateralMean', 'Denoise (Bilateral Mean)', 'BilateralMean'],
+    ['anime4k/Restore/CNNM', 'Restore CNN (M)', 'CNNM'],
+    ['anime4k/Restore/CNNSoftM', 'Restore CNN Soft (M)', 'CNNSoftM'],
+    ['anime4k/Restore/CNNSoftVL', 'Restore CNN Soft (VL)', 'CNNSoftVL'],
+    ['anime4k/Restore/CNNVL', 'Restore CNN (VL)', 'CNNVL'],
+    ['anime4k/Restore/CNNUL', 'Restore CNN (UL)', 'CNNUL'],
+    ['anime4k/Restore/GANUUL', 'Restore GAN (UUL)', 'GANUUL'],
+    ['anime4k/Upscale/CNNx2M', 'Upscale CNN x2 (M)', 'CNNx2M'],
+    ['anime4k/Upscale/CNNx2VL', 'Upscale CNN x2 (VL)', 'CNNx2VL'],
+    ['anime4k/Upscale/DenoiseCNNx2VL', 'Upscale & Denoise CNN x2 (VL)', 'DenoiseCNNx2VL'],
+    ['anime4k/Upscale/CNNx2UL', 'Upscale CNN x2 (UL)', 'CNNx2UL'],
+    ['anime4k/Upscale/GANx3L', 'Upscale GAN x3 (L)', 'GANx3L'],
+    ['anime4k/Upscale/GANx4UUL', 'Upscale GAN x4 (UUL)', 'GANx4UUL'],
+  ];
+
+  it('preserves the frozen id/name/className sequence and length', () => {
+    expect(AVAILABLE_EFFECTS).toHaveLength(EXPECTED_SEQUENCE.length);
+    expect(
+      AVAILABLE_EFFECTS.map(e => [e.id, e.name, e.className]),
+    ).toEqual(EXPECTED_SEQUENCE.map(e => [...e]));
+  });
+
+  it('preserves the frozen upscaleFactor sequence', () => {
+    expect(AVAILABLE_EFFECTS.map(e => e.upscaleFactor)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      2,
+      2,
+      2,
+      2,
+      3,
+      4,
+    ]);
+  });
+
+  it('resolves every entry through the seam with matching backend metadata', () => {
+    for (const effect of AVAILABLE_EFFECTS) {
+      const resolution = resolveEffectReference(effect);
+      expect(resolution.status).toBe('resolved');
+      if (resolution.status !== 'resolved') continue;
+
+      expect(resolution.effect.descriptor.id).toBe(effect.id);
+      expect(resolution.effect.descriptor.key).toBe(effect.className);
+      expect(effect.backendId).toBe(resolution.effect.descriptor.backendId);
+      expect(effect.key).toBe(resolution.effect.descriptor.key);
+    }
+  });
+
+  it('derives params from descriptor schema or the legacy fallback', () => {
+    const paramsById = new Map(AVAILABLE_EFFECTS.map(e => [e.id, e.params]));
+
+    // Schema-backed core descriptors.
+    expect(paramsById.get('anime4k/Sharpen/CAS')).toEqual({ sharpness: 0.5 });
+    expect(paramsById.get('anime4k/Debanding/Debanding')).toEqual({
+      strength: 0.5,
+      bandThreshold: 0.08,
+    });
+    // No-schema library descriptors keep their legacy defaults.
+    expect(paramsById.get('anime4k/Deblur/DoG')).toEqual({ strength: 4 });
+    expect(paramsById.get('anime4k/Denoise/BilateralMean')).toEqual({
+      strength: 0.2,
+      strength2: 2,
     });
   });
 });

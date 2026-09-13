@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // vi.hoisted ensures these are available when vi.mock factories execute
 const { mockInitializeOnPage, mockDeinitializeOnPage, mockHandleSettingsUpdate,
         mockIsUrlWhitelisted, mockGetWhitelistRules,
-        mockGetAllManagedVideos, mockGetEnhancer } = vi.hoisted(() => ({
+        mockGetAllManagedVideos, mockGetEnhancer, mockDisableAllAutoEnabled } = vi.hoisted(() => ({
   mockInitializeOnPage: vi.fn(),
   mockDeinitializeOnPage: vi.fn(),
   mockHandleSettingsUpdate: vi.fn(),
@@ -11,12 +11,14 @@ const { mockInitializeOnPage, mockDeinitializeOnPage, mockHandleSettingsUpdate,
   mockGetWhitelistRules: vi.fn().mockResolvedValue([]),
   mockGetAllManagedVideos: vi.fn().mockReturnValue([]),
   mockGetEnhancer: vi.fn().mockReturnValue(undefined),
+  mockDisableAllAutoEnabled: vi.fn().mockReturnValue(0),
 }));
 
 vi.mock('@core/video/video-manager', () => ({
   initializeOnPage: mockInitializeOnPage,
   deinitializeOnPage: mockDeinitializeOnPage,
   handleSettingsUpdate: mockHandleSettingsUpdate,
+  disableAllAutoEnabled: mockDisableAllAutoEnabled,
 }));
 
 vi.mock('@utils/whitelist', () => ({
@@ -39,6 +41,7 @@ describe('content.ts', () => {
     mockHandleSettingsUpdate.mockClear();
     mockIsUrlWhitelisted.mockReturnValue(false);
     mockGetWhitelistRules.mockResolvedValue([]);
+    mockDisableAllAutoEnabled.mockReturnValue(0);
 
     // chrome.storage.sync.get is used with await (promise style) in content.ts
     (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
@@ -170,7 +173,29 @@ describe('content.ts', () => {
 
       messageListener({ type: 'TOGGLE_ENHANCEMENT' }, {}, vi.fn());
 
+      expect(mockDisableAllAutoEnabled).toHaveBeenCalled();
       expect(mockToggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('TOGGLE_ENHANCEMENT disables all auto-enabled videos before the primary fallback', async () => {
+      await loadContentScript();
+
+      const mockToggleEnhancement = vi.fn();
+      const mockVideo = document.createElement('video');
+      vi.spyOn(mockVideo, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 640, 360)
+      );
+      const mockEnhancer = { toggleEnhancement: mockToggleEnhancement };
+
+      mockGetAllManagedVideos.mockReturnValue([mockVideo]);
+      mockGetEnhancer.mockReturnValue(mockEnhancer);
+      mockDisableAllAutoEnabled.mockReturnValue(2);
+
+      messageListener({ type: 'TOGGLE_ENHANCEMENT' }, {}, vi.fn());
+
+      expect(mockDisableAllAutoEnabled).toHaveBeenCalled();
+      // Page-level disable already acted; the primary video must not also toggle.
+      expect(mockToggleEnhancement).not.toHaveBeenCalled();
     });
 
     it('TOGGLE_ENHANCEMENT is a no-op when no managed videos exist', async () => {

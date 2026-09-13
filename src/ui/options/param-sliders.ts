@@ -1,78 +1,65 @@
-import type { EnhancementEffect, EffectClassName, ParamSliderConfig } from '../../types';
+import type { EnhancementEffect, ParamSliderConfig } from '../../types';
+import type { EffectParamSchema } from 'anime4k-webgpu-async';
 import { t } from '@utils/i18n';
+import { resolveEffectReference } from '@utils/effect-registry';
 
 // ===== Param Slider Configuration =====
 
 /**
- * Factory for sliders that represent a value in the [0, 1] range as a 0–100 percentage.
- * Centralises the toSlider/fromSlider pair so adding a new percent-style param is one line.
+ * Presentation overrides applied on top of the generic descriptor-schema
+ * defaults, keyed by descriptor id then param key. Only needed where the
+ * generic percent / decimal formatting does not already match the established UX.
  */
-const percent = (
-  cfg: Omit<ParamSliderConfig, 'toSlider' | 'fromSlider' | 'sliderMin' | 'sliderMax'>,
-): ParamSliderConfig => ({
-  ...cfg,
-  sliderMin: 0,
-  sliderMax: 100,
-  toSlider: (v) => Math.round(v * 100),
-  fromSlider: (v) => v / 100,
-});
+interface SliderPresentation {
+  sliderMin?: number;
+  sliderMax?: number;
+  toSlider?: (v: number) => number;
+  fromSlider?: (v: number) => number;
+  formatValue?: (v: number) => string;
+}
 
-const PARAM_REGISTRY: Record<EffectClassName, ParamSliderConfig[]> = {
-  CAS: [percent({
-    paramKey: 'sharpness',
-    labelKey: 'sharpness',
-    labelFallback: 'Sharpness',
-    defaultValue: 0.5,
-    formatValue: (v) => Math.round(v * 100) + '%',
-  })],
-  DoG: [{
-    paramKey: 'strength',
-    labelKey: 'strength',
-    labelFallback: 'Strength',
-    sliderMin: 10, sliderMax: 100, defaultValue: 4,
-    toSlider: (v) => Math.round(v * 10),
-    fromSlider: (v) => v / 10,
-    formatValue: (v) => v.toFixed(1),
-  }],
-  BilateralMean: [
-    percent({
-      paramKey: 'strength',
-      labelKey: 'intensitySigma',
-      labelFallback: 'Intensity σ',
-      defaultValue: 0.2,
-      formatValue: (v) => v.toFixed(2),
-    }),
-    {
-      paramKey: 'strength2',
-      labelKey: 'spatialSigma',
-      labelFallback: 'Spatial σ',
-      sliderMin: 5, sliderMax: 50, defaultValue: 2,
-      toSlider: (v) => Math.round(v * 10),
-      fromSlider: (v) => v / 10,
-      formatValue: (v) => v.toFixed(1),
-    },
-  ],
-  Debanding: [
-    percent({
-      paramKey: 'strength',
-      labelKey: 'debandingStrength',
-      labelFallback: 'Debanding',
-      defaultValue: 0.5,
-      formatValue: (v) => v.toFixed(2),
-    }),
-    percent({
-      paramKey: 'bandThreshold',
-      labelKey: 'debandingThreshold',
-      labelFallback: 'Threshold',
-      defaultValue: 0.08,
-      formatValue: (v) => v.toFixed(2),
-    }),
-  ],
+const PARAM_PRESENTATION: Record<string, Record<string, SliderPresentation>> = {
+  'anime4k/Denoise/BilateralMean': { strength: { formatValue: (v) => v.toFixed(2) } },
+  'anime4k/Debanding/Debanding': {
+    strength: { formatValue: (v) => v.toFixed(2) },
+    bandThreshold: { formatValue: (v) => v.toFixed(2) },
+  },
 };
 
 /**
- * Renders param sliders for a given effect using the descriptor registry.
- * Only sliders for params present on the effect are rendered.
+ * Build one slider config from a numeric descriptor schema param using the
+ * generic presentational defaults: `[0,1]` schemas render as a 0–100 percentage,
+ * everything else as a 10× scaled slider with one-decimal display.
+ */
+function buildSliderConfig(
+  paramKey: string,
+  param: EffectParamSchema,
+  presentation?: SliderPresentation,
+): ParamSliderConfig {
+  const min = param.min ?? 0;
+  const max = param.max ?? 1;
+  const isPercent = min >= 0 && max <= 1;
+  const defaultValue = typeof param.defaultValue === 'number' ? param.defaultValue : 0;
+
+  const base: ParamSliderConfig = {
+    paramKey,
+    labelKey: param.labelKey ?? paramKey,
+    labelFallback: param.labelFallback ?? paramKey,
+    sliderMin: isPercent ? 0 : Math.round(min * 10),
+    sliderMax: isPercent ? 100 : Math.round(max * 10),
+    defaultValue,
+    toSlider: isPercent ? (v) => Math.round(v * 100) : (v) => Math.round(v * 10),
+    fromSlider: isPercent ? (v) => v / 100 : (v) => v / 10,
+    formatValue: isPercent ? (v) => Math.round(v * 100) + '%' : (v) => v.toFixed(1),
+  };
+
+  return { ...base, ...presentation };
+}
+
+/**
+ * Renders param sliders for a given effect, deriving the controls from the
+ * resolved descriptor's `paramsSchema`. Only sliders for numeric schema params
+ * are rendered.
  */
 export function renderParamSliders(
   effect: EnhancementEffect,
@@ -81,14 +68,21 @@ export function renderParamSliders(
   wrapper: HTMLElement,
   saveCallback: (modeId: string) => Promise<void>,
 ): void {
-  // The className field is typed as a plain string, but only the union members of EffectClassName
-  // have registered sliders. Cast at the lookup boundary so a typo elsewhere would still surface
-  // as a missing entry (undefined) rather than a type error masking a real bug.
-  const configs = PARAM_REGISTRY[effect.className as EffectClassName];
+  const resolution = resolveEffectReference(effect);
+  const descriptor = resolution.status === 'resolved' ? resolution.effect.descriptor : undefined;
+  const schema = descriptor?.paramsSchema;
   const params = effect.params;
-  if (!configs || !params) return;
+  if (!schema || !params) return;
 
-  for (const cfg of configs) {
+  for (const [paramKey, param] of Object.entries(schema)) {
+    if (param.type !== 'number') continue;
+
+    const cfg = buildSliderConfig(
+      paramKey,
+      param,
+      descriptor ? PARAM_PRESENTATION[descriptor.id]?.[paramKey] : undefined,
+    );
+
     // Auto-populate the default for params that were added after the effect was created
     // (e.g. bandThreshold on a Debanding effect created before the param existed).
     // The default lives in effect.params and gets persisted on the user's first slider change.

@@ -12,7 +12,7 @@
     "message": "Anime4K超解像 Plus"
   },
   "performanceTierLabel": {
-    "message": "パフォーマンス段階："
+    "message": "パフォーマンス段階"
   },
   "selectTierDesc": {
     "message": "パフォーマンス段階を手動で選択します。高い段階はより大きなAIモデルを使用し、より良い品質を提供しますが、より多くのGPUパワーが必要です。"
@@ -29,6 +29,9 @@
   "nativeResolution": {
     "message": "オリジナル解像度 (超解像なし)"
   },
+  "matchDisplayResolution": {
+    "message": "表示サイズに合わせる"
+  },
   "enhanceError": {
     "message": "超解像に失敗しました、再試行してください",
     "description": "超解像失敗エラーメッセージ"
@@ -38,7 +41,10 @@
     "description": "レンダリング失敗エラーメッセージ"
   },
   "whitelistEnable": {
-    "message": "ホワイトリストを有効化"
+    "message": "ホワイトリストモードを有効化"
+  },
+  "whitelistEnableDesc": {
+    "message": "有効にすると、ホワイトリストにあるサイトとページのみが拡張されます。"
   },
   "addCurrentPage": {
     "message": "ページ"
@@ -48,6 +54,12 @@
   },
   "addParentPath": {
     "message": "パス"
+  },
+  "removeFromWhitelist": {
+    "message": "ホワイトリストから削除"
+  },
+  "removedFromWhitelist": {
+    "message": "ホワイトリストから削除しました"
   },
   "openSettings": {
     "message": "設定"
@@ -237,6 +249,69 @@
   },
   "customModes": {
     "message": "カスタムモード"
+  },
+  "restorePolicyBadge": {
+    "message": "復元"
+  },
+  "restorePolicyBadgeTitle": {
+    "message": "復元パス — 復元ポリシーの影響を受けることがあります。"
+  },
+  "restorePolicyLabel": {
+    "message": "復元ポリシー"
+  },
+  "restorePolicyDesc": {
+    "message": "チェーンが保持する復元パスを制御します。「オフ」はフルチェーン（最大限の強調）、「ゲート」はすべての復元を保持して局所コントラストに適応、「末尾」は最終ダウンスケール後の復元を省略、「先頭」は最初のアップスケーラー前の復元を省略します。"
+  },
+  "restorePolicyOff": {
+    "message": "オフ — フルチェーン"
+  },
+  "restorePolicyGate": {
+    "message": "ゲート — 適応的復元"
+  },
+  "restorePolicyTrailing": {
+    "message": "末尾 — 最終ダウンスケール後の復元を省略"
+  },
+  "restorePolicyLeading": {
+    "message": "先頭 — 最初のアップスケーラー前の復元を省略"
+  },
+  "restorePolicyNameOff": {
+    "message": "オフ"
+  },
+  "restorePolicyNameGate": {
+    "message": "ゲート"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "末尾"
+  },
+  "restorePolicyNameLeading": {
+    "message": "先頭"
+  },
+  "restorePolicyNoteGate": {
+    "message": "復元パスは適応的に実行されます。低コントラストの細部は省略され、強いエッジは強調されます。"
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "最終ダウンスケール後の復元パスは省略されることがあります。"
+  },
+  "restorePolicyNoteLeading": {
+    "message": "最初のアップスケーラーより前の復元パスは省略されることがあります。"
+  },
+  "modeDescA": {
+    "message": "多くの 1080p アニメ、古い 720p、ぼやけた／強く圧縮された SD 向け。"
+  },
+  "modeDescB": {
+    "message": "多くの 720p と、リンギングやエイリアシングのある 1080p→720p 縮小向け。"
+  },
+  "modeDescC": {
+    "message": "劣化のないクリーンなソース向け：デジタルアート、壁紙、1080p→480p 縮小。"
+  },
+  "modeDescAA": {
+    "message": "モード A と同じソース向けで、より細部を強調。二重モードは 2× 以上での使用を想定しており、それより低いターゲットでは過剰にシャープになることがあるため、単一モードを推奨します。"
+  },
+  "modeDescBB": {
+    "message": "モード B と同じソース向けで、より細部を強調。二重モードは 2× 以上での使用を想定しており、それより低いターゲットでは過剰にシャープになることがあるため、単一モードを推奨します。"
+  },
+  "modeDescCA": {
+    "message": "やや軟らかく見えるクリーンな C クラス源向け。二重モードは 2× 以上での使用を想定しており、それより低いターゲットでは過剰にシャープになることがあるため、単一モードを推奨します。"
   },
   "settingsSaved": {
     "message": "設定が保存されました！"
@@ -450,6 +525,12 @@
   "autoEnableOnWhitelistDesc": {
     "message": "ホワイトリストに登録されたサイトで、「超解像」ボタンをクリックせずに動画を自動的に拡張します。"
   },
+  "autoEnableSettleMs": {
+    "message": "自動有効化の遅延 (ms)"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "動画を自動で有効化するまでの待機時間（ミリ秒）。一時的なプレーヤーをスキップするために使用します。0 にすると遅延を無効にします。"
+  },
   "showDiagnostics": {
     "message": "診断情報を表示"
   },
@@ -479,5 +560,80 @@
   },
   "diagnostics": {
     "message": "診断"
+  },
+  "diagnosticsMode": {
+    "message": "モード"
+  },
+  "diagnosticsTier": {
+    "message": "ティア"
+  },
+  "diagnosticsInputResolution": {
+    "message": "入力"
+  },
+  "diagnosticsTargetResolution": {
+    "message": "出力"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "復元ポリシー"
+  },
+  "diagnosticsCustomMode": {
+    "message": "カスタム"
+  },
+  "diagnosticsFrameLabel": {
+    "message": "フレーム"
+  },
+  "diagnosticsCpu": {
+    "message": "CPU"
+  },
+  "diagnosticsGpuShare": {
+    "message": "GPU"
+  },
+  "diagnosticsGpuTimings": {
+    "message": "GPU タイミング"
+  },
+  "diagnosticsGpuTimingsUnavailable": {
+    "message": "GPU タイミングは利用できません"
+  },
+  "diagnosticsTimingPass": {
+    "message": "パス"
+  },
+  "diagnosticsTimingCpuP50": {
+    "message": "CPU p50"
+  },
+  "diagnosticsTimingCpuP95": {
+    "message": "CPU p95"
+  },
+  "diagnosticsTimingGpuP50": {
+    "message": "GPU p50"
+  },
+  "diagnosticsTimingGpuP95": {
+    "message": "GPU p95"
+  },
+  "diagnosticsTimingGpuP99": {
+    "message": "GPU p99"
+  },
+  "diagnosticsTimingTotal": {
+    "message": "GPU 合計"
+  },
+  "diagnosticsFramesSampled": {
+    "message": "サンプル数"
+  },
+  "diagnosticsCpuTimingLimited": {
+    "message": "CPU タイミングは 0.1 ms 分解能に制限されています"
+  },
+  "diagnosticsDetail": {
+    "message": "詳細レベル"
+  },
+  "diagnosticsDetailDesc": {
+    "message": "診断オーバーレイの表示詳細を選択します。"
+  },
+  "diagnosticsDetailAuto": {
+    "message": "自動（小さい動画ではコンパクト）"
+  },
+  "diagnosticsDetailCompact": {
+    "message": "コンパクト"
+  },
+  "diagnosticsDetailExpanded": {
+    "message": "詳細"
   }
 }

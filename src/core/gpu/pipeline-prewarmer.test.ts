@@ -1,45 +1,49 @@
 /**
- * Tests for PipelinePreWarmer — speculative shader pre-warming.
+ * Tests for PipelinePreWarmer — engine-agnostic, callback-driven shader pre-warming.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { installGPUMock, removeGPUMock } from '@/test/webgpu-mock';
 import type { MockGPUObjects } from '@/test/webgpu-mock';
-import { PipelinePreWarmer } from './pipeline-prewarmer';
-import type { EnhancementEffect } from '@/types';
+import type { DestroyablePipeline } from '@/types';
 
 // ─── Mock yieldToMain ───
 vi.mock('@core/utils/yield-utils', () => ({
   yieldToMain: vi.fn().mockResolvedValue(undefined),
 }));
 
-// ─── Mock anime4k-webgpu-async ───
-class MockLibraryEffect {
-  descriptor: any;
-  destroyed = false;
-  constructor(descriptor: any) {
-    this.descriptor = descriptor;
+import { PipelinePreWarmer } from './pipeline-prewarmer';
+import type { PreWarmTarget, PreWarmEffectRef, CompileDummy } from './pipeline-prewarmer';
+import { yieldToMain } from '@core/utils/yield-utils';
+
+// ─── Helpers ───
+
+function target(
+  className: string,
+  opts?: {
+    backendId?: string;
+    key?: string;
+    prewarmable?: boolean;
+    loadsAssets?: boolean;
+  },
+): PreWarmTarget {
+  const result: PreWarmTarget = {
+    ref: { backendId: opts?.backendId, key: opts?.key ?? className, className },
+  };
+  if (opts && (opts.prewarmable !== undefined || opts.loadsAssets !== undefined)) {
+    result.capabilities = {
+      prewarmable: opts.prewarmable,
+      loadsAssets: opts.loadsAssets,
+    };
   }
-  pass() { return Promise.resolve(); }
-  getOutputTexture() { return this.descriptor.inputTexture; }
-  updateParam() {}
-  destroy() { this.destroyed = true; }
+  return result;
 }
 
-const mockAnime4KModule = {
-  CNNx2M: MockLibraryEffect,
-  CNNM: MockLibraryEffect,
-  ClampHighlights: MockLibraryEffect,
-  DoG: MockLibraryEffect,
-};
-vi.mock('anime4k-webgpu-async', () => mockAnime4KModule);
-
-// ─── Helper: create a fake effect entry ───
-function mkEffect(className: string, params?: Record<string, number>): EnhancementEffect {
+function makeDummy(onDestroy?: () => void): DestroyablePipeline {
   return {
-    id: `test/${className}`,
-    name: className,
-    className,
-    params,
+    pass: () => Promise.resolve(),
+    getOutputTexture: () => ({ destroy: vi.fn() } as unknown as GPUTexture),
+    updateParam: () => {},
+    destroy: () => onDestroy?.(),
   };
 }
 
@@ -56,40 +60,76 @@ describe('PipelinePreWarmer', () => {
     removeGPUMock();
   });
 
-  // ── Deduplication by signature ──
+  // ── Deduplication by engine identity ──
 
-  it('deduplicates: second warm with same effects returns immediately', async () => {
+  it('deduplicates: second warm of the same engine-identity chain returns immediately', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const effects = [mkEffect('DoG')];
+    const targets = [target('DoG', { backendId: 'anime4k', key: 'DoG' })];
+    const compile: CompileDummy = () => makeDummy();
 
-    await prewarmer.warm(device, effects);
-
-    // Record call count after first warm
+    await prewarmer.warm(device, targets, compile);
     const callCountAfterFirst = mock.device.createTexture.mock.calls.length;
 
-    // Second identical warm should skip entirely
-    await prewarmer.warm(device, effects);
+    await prewarmer.warm(device, targets, compile);
     expect(mock.device.createTexture).toHaveBeenCalledTimes(callCountAfterFirst);
   });
 
-  it('warms again when effects change', async () => {
+  it('warms again when the chain changes', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const effects1 = [mkEffect('DoG')];
-    const effects2 = [mkEffect('CNNM')];
+    const compile: CompileDummy = () => makeDummy();
 
-    await prewarmer.warm(device, effects1);
+    await prewarmer.warm(device, [target('DoG', { backendId: 'anime4k', key: 'DoG' })], compile);
     const callsAfterFirst = mock.device.createTexture.mock.calls.length;
 
-    await prewarmer.warm(device, effects2);
-    // Should create a new texture for the different chain
+    await prewarmer.warm(device, [target('CNNM', { backendId: 'anime4k', key: 'CNNM' })], compile);
     expect(mock.device.createTexture.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+
+  it('builds the dedupe key from backendId:key when resolvable', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compile: CompileDummy = () => makeDummy();
+
+    // Same className, different engine identity → distinct signatures → re-warm.
+    await prewarmer.warm(device, [target('Shared', { backendId: 'anime4k', key: 'CNNM' })], compile);
+    const afterFirst = mock.device.createTexture.mock.calls.length;
+
+    await prewarmer.warm(device, [target('Shared', { backendId: 'core', key: 'CAS' })], compile);
+    expect(mock.device.createTexture.mock.calls.length).toBeGreaterThan(afterFirst);
+  });
+
+  it('dedupes on backendId:key even when className differs', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compile: CompileDummy = () => makeDummy();
+
+    await prewarmer.warm(device, [target('Alpha', { backendId: 'anime4k', key: 'CNNM' })], compile);
+    const afterFirst = mock.device.createTexture.mock.calls.length;
+
+    // Same `anime4k:CNNM` identity with a different display className → same signature.
+    await prewarmer.warm(device, [target('Beta', { backendId: 'anime4k', key: 'CNNM' })], compile);
+    expect(mock.device.createTexture).toHaveBeenCalledTimes(afterFirst);
+  });
+
+  it('falls back to className in the dedupe key when no backendId is present', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const constructed: string[] = [];
+    const compile: CompileDummy = (ref) => {
+      constructed.push(ref.className);
+      return makeDummy();
+    };
+
+    await prewarmer.warm(device, [target('LegacyDoG')], compile);
+    const afterFirst = constructed.length;
+
+    // Same className, no backendId → same signature → skipped.
+    await prewarmer.warm(device, [target('LegacyDoG')], compile);
+    expect(constructed.length).toBe(afterFirst);
   });
 
   // ── Dummy texture creation ──
 
   it('creates a 1×1 texture with correct format and usage', async () => {
     const device = mock.device as unknown as GPUDevice;
-    await prewarmer.warm(device, [mkEffect('DoG')]);
+    await prewarmer.warm(device, [target('DoG')], () => makeDummy());
 
     expect(mock.device.createTexture).toHaveBeenCalled();
     const callArg = mock.device.createTexture.mock.calls[0][0];
@@ -99,133 +139,145 @@ describe('PipelinePreWarmer', () => {
     expect(callArg.usage).toBe(15);
   });
 
-  // ── Custom effect handler ──
+  // ── Callback-driven compilation (both modes) ──
 
-  it('uses custom effect handler when it returns non-null', async () => {
+  it('drives the callback for a legacy (no backendId) target', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const customConstructed: any[] = [];
-
-    class CustomEffect {
-      descriptor: any;
-      constructor(descriptor: any) {
-        customConstructed.push(descriptor);
-        this.descriptor = descriptor;
-      }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return { destroy: vi.fn() }; }
-      updateParam() {}
-      destroy() {}
-    }
-
-    const effects: EnhancementEffect[] = [
-      { id: 'test/Custom', name: 'Custom', className: 'CustomEffect' },
-    ];
-
-    await prewarmer.warm(device, effects, (className, dev, tex) => {
-      if (className === 'CustomEffect') {
-        return {
-          EffectClass: CustomEffect as any,
-          descriptor: { device: dev, inputTexture: tex, customProp: 42 },
-        };
-      }
-      return null;
-    });
-
-    expect(customConstructed.length).toBe(1);
-    expect(customConstructed[0].customProp).toBe(42);
-    expect(customConstructed[0].device).toBe(device);
-  });
-
-  it('falls through to library lookup when custom handler returns null', async () => {
-    const device = mock.device as unknown as GPUDevice;
-    // custom handler returns null → uses anime4k-webgpu-async lookup
-    await prewarmer.warm(device, [mkEffect('DoG')], () => null);
-
-    // The DoG class from the mock should have been constructed
-    // We verify this by checking createTexture was called (dummy texture)
-    expect(mock.device.createTexture).toHaveBeenCalled();
-  });
-
-  // ── Library effect lookup ──
-
-  it('looks up effect class from anime4k-webgpu-async module', async () => {
-    const device = mock.device as unknown as GPUDevice;
-    await prewarmer.warm(device, [mkEffect('CNNM')]);
-
-    // The texture, shader module, pipeline etc. should have been created via the mock
-    expect(mock.device.createTexture).toHaveBeenCalled();
-  });
-
-  it('skips effect when not found in library module', async () => {
-    const device = mock.device as unknown as GPUDevice;
-    // 'NonExistent' is not in our mock module
-    await prewarmer.warm(device, [mkEffect('NonExistent')]);
-
-    // Should still create a dummy texture but skip the effect construction
-    expect(mock.device.createTexture).toHaveBeenCalled();
-    // No crash, warm completed successfully
-  });
-
-  // ── Destroy after warm ──
-
-  it('destroys dummy texture after warm completes', async () => {
-    const device = mock.device as unknown as GPUDevice;
-
-    await prewarmer.warm(device, [mkEffect('DoG')]);
-
-    // Dummy texture should have been created
-    expect(mock.device.createTexture).toHaveBeenCalledWith(
-      expect.objectContaining({ size: [1, 1], format: 'rgba8unorm' }),
-    );
-
-    // The dummy texture.destroy() should have been called via safeDestroy
-    // The mock device creates a texture with a destroy spy
-    const createdTextures = mock.device.createTexture.mock.results.map((r: any) => r.value);
-    // At least one texture should have had destroy called
-    const anyDestroyCalled = createdTextures.some((t: any) => t.destroy.mock?.calls?.length > 0);
-    // destroy may be called on dummy pipeline output textures too
-    expect(anyDestroyCalled || createdTextures.length > 0).toBe(true);
-  });
-
-  it('calls destroy on constructed dummy pipelines', async () => {
-    const device = mock.device as unknown as GPUDevice;
-    const destroyed: string[] = [];
-
-    class TrackedEffect {
-      descriptor: any;
-      className: string;
-      constructor(descriptor: any) { this.descriptor = descriptor; this.className = 'Tracked'; }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return this.descriptor.inputTexture; }
-      updateParam() {}
-      destroy() { destroyed.push('Tracked'); }
-    }
+    const seen: PreWarmEffectRef[] = [];
+    const textures: GPUTexture[] = [];
 
     await prewarmer.warm(
       device,
-      [mkEffect('Tracked')],
-      (className, dev, tex) => ({
-        EffectClass: TrackedEffect as any,
-        descriptor: { device: dev, inputTexture: tex },
-      }),
+      [target('DoG')],
+      (ref, dev, tex) => {
+        seen.push(ref);
+        textures.push(tex);
+        return makeDummy();
+      },
     );
 
-    expect(destroyed).toContain('Tracked');
+    expect(seen).toEqual([{ backendId: undefined, key: 'DoG', className: 'DoG' }]);
+    expect(textures).toHaveLength(1);
+    expect(textures[0]).toBe(mock.device.createTexture.mock.results[0].value);
+  });
+
+  it('drives the callback for a registry (backendId + key) target', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const seen: PreWarmEffectRef[] = [];
+
+    await prewarmer.warm(
+      device,
+      [target('CAS', { backendId: 'core', key: 'CAS' })],
+      (ref) => {
+        seen.push(ref);
+        return makeDummy();
+      },
+    );
+
+    expect(seen).toEqual([{ backendId: 'core', key: 'CAS', className: 'CAS' }]);
+  });
+
+  it('supports an async compileDummy callback', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const destroyed: string[] = [];
+
+    await prewarmer.warm(
+      device,
+      [target('CNNM', { backendId: 'anime4k', key: 'CNNM' })],
+      async () => makeDummy(() => destroyed.push('CNNM')),
+    );
+
+    expect(destroyed).toEqual(['CNNM']);
+  });
+
+  it('destroys each constructed dummy pipeline', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const destroyed: string[] = [];
+
+    await prewarmer.warm(
+      device,
+      [target('A'), target('B')],
+      (ref) => makeDummy(() => destroyed.push(ref.className)),
+    );
+
+    expect(destroyed).toEqual(['A', 'B']);
+  });
+
+  it('treats a null callback result as "nothing to warm"', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    await expect(
+      prewarmer.warm(device, [target('Unknown')], () => null),
+    ).resolves.toBeUndefined();
+  });
+
+  // ── Capability gating ──
+
+  it('skips effects with prewarmable === false', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compile = vi.fn(() => makeDummy());
+
+    await prewarmer.warm(device, [target('Asset', { prewarmable: false })], compile);
+
+    expect(compile).not.toHaveBeenCalled();
+    // A dummy texture is still created for the warm pass.
+    expect(mock.device.createTexture).toHaveBeenCalled();
+  });
+
+  it('skips effects with loadsAssets === true', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compile = vi.fn(() => makeDummy());
+
+    await prewarmer.warm(device, [target('Asset', { loadsAssets: true })], compile);
+
+    expect(compile).not.toHaveBeenCalled();
+  });
+
+  it('warms effects whose capabilities allow it', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compile = vi.fn(() => makeDummy());
+
+    await prewarmer.warm(
+      device,
+      [target('Fast', { prewarmable: true, loadsAssets: false })],
+      compile,
+    );
+
+    expect(compile).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips only the gated effect in a mixed chain', async () => {
+    const device = mock.device as unknown as GPUDevice;
+    const compiled: string[] = [];
+
+    await prewarmer.warm(
+      device,
+      [
+        target('Keep', { backendId: 'anime4k', key: 'CNNM' }),
+        target('Skip', { backendId: 'artcnn', key: 'C4F16', loadsAssets: true }),
+        target('AlsoKeep', { backendId: 'core', key: 'CAS' }),
+      ],
+      (ref) => {
+        compiled.push(ref.key);
+        return makeDummy();
+      },
+    );
+
+    expect(compiled).toEqual(['CNNM', 'CAS']);
   });
 
   // ── Invalidate clears cache ──
 
   it('invalidate() clears the warm cache', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const effects = [mkEffect('DoG')];
+    const targets = [target('DoG', { backendId: 'anime4k', key: 'DoG' })];
+    const compile: CompileDummy = () => makeDummy();
 
-    await prewarmer.warm(device, effects);
+    await prewarmer.warm(device, targets, compile);
     const callsAfterFirst = mock.device.createTexture.mock.calls.length;
 
     prewarmer.invalidate();
 
-    // After invalidation, same chain should trigger re-warm
-    await prewarmer.warm(device, effects);
+    await prewarmer.warm(device, targets, compile);
     expect(mock.device.createTexture.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 
@@ -233,99 +285,58 @@ describe('PipelinePreWarmer', () => {
 
   it('cancels in-progress warm when superseded by a new warm() call', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const effects1 = [mkEffect('CNNM')];
-    const effects2 = [mkEffect('DoG')];
 
-    // Start first warm (don't await yet)
-    const warm1 = prewarmer.warm(device, effects1);
-
-    // Immediately start second warm which supersedes the first
-    const warm2 = prewarmer.warm(device, effects2);
+    const warm1 = prewarmer.warm(
+      device,
+      [target('CNNM', { backendId: 'anime4k', key: 'CNNM' })],
+      () => makeDummy(),
+    );
+    const warm2 = prewarmer.warm(
+      device,
+      [target('DoG', { backendId: 'anime4k', key: 'DoG' })],
+      () => makeDummy(),
+    );
 
     await Promise.all([warm1, warm2]);
-
-    // Both should resolve without error. The first may have been cancelled mid-way.
+    // Both resolve without error; the first may have been cancelled mid-way.
   });
 
   // ── Yield between pipelines ──
 
   it('yields to main thread after each effect', async () => {
     const device = mock.device as unknown as GPUDevice;
+    vi.mocked(yieldToMain).mockClear();
 
-    await prewarmer.warm(device, [mkEffect('DoG'), mkEffect('CNNM')]);
+    await prewarmer.warm(device, [target('A'), target('B')], () => makeDummy());
 
-    // yieldToMain mock should have been called at least once per effect.
-    const yUtils = await import('../utils/yield-utils.js');
-    expect(yUtils.yieldToMain).toHaveBeenCalled();
+    expect(yieldToMain).toHaveBeenCalledTimes(2);
   });
 
-  // ── Error per-effect is caught ──
+  // ── Error isolation ──
 
-  it('continues to next effect when one effect constructor throws', async () => {
+  it('continues to the next effect when one callback throws', async () => {
     const device = mock.device as unknown as GPUDevice;
-    const constructed: string[] = [];
-
-    class GoodEffect {
-      constructor(_desc: any) { constructed.push('good'); }
-      pass() { return Promise.resolve(); }
-      getOutputTexture() { return { destroy: vi.fn() }; }
-      updateParam() {}
-      destroy() {}
-    }
-    class BadEffect {
-      constructor(_desc: any) { throw new Error('Boom!'); }
-    }
-
-    const handler = (className: string, dev: any, tex: any) => {
-      if (className === 'Bad') {
-        return { EffectClass: BadEffect as any, descriptor: { device: dev, inputTexture: tex } };
-      }
-      if (className === 'Good') {
-        return { EffectClass: GoodEffect as any, descriptor: { device: dev, inputTexture: tex } };
-      }
-      return null;
-    };
+    const compiled: string[] = [];
 
     await prewarmer.warm(
       device,
-      [mkEffect('Bad'), mkEffect('Good')],
-      handler,
+      [target('Bad'), target('Good')],
+      (ref) => {
+        if (ref.className === 'Bad') throw new Error('Boom!');
+        compiled.push(ref.className);
+        return makeDummy();
+      },
     );
 
-    // 'Bad' should have thrown, 'Good' should have been constructed
-    expect(constructed).toContain('good');
+    expect(compiled).toEqual(['Good']);
   });
 
-  it('warm completes even when all effects throw', async () => {
+  it('completes even when all callbacks throw', async () => {
     const device = mock.device as unknown as GPUDevice;
-    class ExplodingEffect {
-      constructor(_desc: any) { throw new Error('Boom!'); }
-    }
-
-    const handler = (_className: string, dev: any, tex: any) => ({
-      EffectClass: ExplodingEffect as any,
-      descriptor: { device: dev, inputTexture: tex },
-    });
-
-    // Should not throw — errors are caught per-effect
-    await prewarmer.warm(device, [mkEffect('Boom1'), mkEffect('Boom2')], handler);
-
-    // Dummy texture should have been destroyed
-    // No assertion needed — test passes if no throw
-  });
-
-  // ── Module caching ──
-
-  it('caches the anime4k-webgpu-async module across warm calls', async () => {
-    const device = mock.device as unknown as GPUDevice;
-
-    // First warm triggers dynamic import
-    await prewarmer.warm(device, [mkEffect('DoG')]);
-
-    // Second warm should reuse cached module (no re-import)
-    await prewarmer.warm(device, [mkEffect('CNNM')]);
-
-    // Should work fine — no double-import issues
-    expect(mock.device.createTexture).toHaveBeenCalled();
+    await expect(
+      prewarmer.warm(device, [target('Boom1'), target('Boom2')], () => {
+        throw new Error('Boom!');
+      }),
+    ).resolves.toBeUndefined();
   });
 });

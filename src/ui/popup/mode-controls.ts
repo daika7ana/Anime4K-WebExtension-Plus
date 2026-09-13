@@ -2,6 +2,7 @@
 import type { EnhancementMode, CustomMode } from '@/types';
 import { BUILTIN_MODES } from '@utils/settings';
 import { t } from '@utils/i18n';
+import { getModeDescription } from './mode-guidance';
 
 export function initModeControls(opts: {
   modeSelect: HTMLSelectElement;
@@ -29,6 +30,7 @@ export function initModeControls(opts: {
       const option = document.createElement('option');
       option.value = mode.id;
       option.textContent = mode.name;
+      option.title = getModeDescription(mode.baseMode);
       builtInGroup.appendChild(option);
     });
     modeSelect.appendChild(builtInGroup);

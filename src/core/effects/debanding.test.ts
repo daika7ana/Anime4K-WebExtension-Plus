@@ -113,6 +113,48 @@ describe('Debanding', () => {
     });
   });
 
+  describe('shader param propagation', () => {
+    it('binds the same params buffer that receives the debanding uniform write', () => {
+      new Debanding({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      const entries = mockDevice.createBindGroup.mock.calls[0]?.[0]?.entries as any[];
+      const paramsEntry = entries.find((e) => e.binding === 2);
+
+      expect(paramsEntry).toBeDefined();
+      expect(paramsEntry.resource.buffer).toBe(paramsBuffer);
+    });
+
+    it('routes both debanding params to the shader-bound params buffer', () => {
+      const db = new Debanding({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      vi.clearAllMocks();
+
+      db.updateParam('bandThreshold', 0.3);
+
+      expect(mockDevice.queue.writeBuffer).toHaveBeenCalledWith(
+        paramsBuffer,
+        0,
+        expect.any(Float32Array),
+      );
+      const writtenData = mockDevice.queue.writeBuffer.mock.calls[0]?.[2] as Float32Array;
+      expect(writtenData[0]).toBe(0.5);
+      expect(writtenData[1]).toBeCloseTo(0.3, 5);
+    });
+
+    it('preserves a previously configured bandThreshold when strength changes', () => {
+      const db = new Debanding({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+      db.updateParam('bandThreshold', 0.3);
+      vi.clearAllMocks();
+
+      db.updateParam('strength', 0.7);
+
+      const writtenData = mockDevice.queue.writeBuffer.mock.calls[0]?.[2] as Float32Array;
+      expect(writtenData[0]).toBeCloseTo(0.7, 5);
+      expect(writtenData[1]).toBeCloseTo(0.3, 5);
+    });
+  });
+
   describe('updateParam', () => {
     function createDebanding() {
       return new Debanding({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });

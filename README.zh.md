@@ -100,6 +100,46 @@
 *   **规则管理**: 查看、编辑或删除已添加的网址规则。
 *   **支持通配符**: 使用 `*` 匹配多个页面（如 `*.bilibili.com/*`）。
 
+## 选择模式与目标分辨率
+
+请根据片源的**劣化类型**来选择模式，而不是只看分辨率——清晰锐利的 720p 母带与模糊的 1080p 二次压缩需要不同的模式。作为起点，上游快速入门给出的标签是 **Mode A ≈ 1080p、Mode B ≈ 720p、Mode C ≈ 480p**；下文的片源类型指南则根据官方 "Optimized for" 描述推导而来，它比单纯的分辨率更精确。
+
+| 模式 | 推荐片源 | 说明 |
+| --- | --- | --- |
+| Mode A | 大多数 1080p 动画；部分较旧的 720p；老旧/模糊的标清 (SD)；严重模糊、压缩涂抹或大量重采样伪影 | 感知质量最佳；可能放大片源中已有的振铃/色带 |
+| Mode B | 大多数 720p；1080p→720p 降采样；伴随降采样振铃/锯齿的轻度模糊 | 使用针对降采样伪影训练的 "Soft" 修复模型 |
+| Mode C | 无劣化的干净片源：数字绘画/壁纸、1080p→480p 降采样、少见的高质量 1080p 动画 | PSNR 最高但感知锐度最低；可能放大振铃/重采样伪影 |
+| Mode A+A | 与 A 相同的片源类别，但希望获得额外的感知细节 | 增加第二遍修复 |
+| Mode B+B | 与 B 相同的片源类别，希望获得额外的感知细节 | 增加第二遍修复 |
+| Mode C+A | 与 C 相同的干净片源类别，当普通 C 看起来过于柔和时 | 增加一遍修复以获得更多感知细节，同时避免 Mode A 易产生振铃的修复 |
+
+### 2× 规则
+
+加倍模式（A+A / B+B / C+A）只应在目标/片源比例**至少为 2×** 时使用（例如 720p→1440p 或 1080p→4K）。在 1:1 或原生目标下，它们会过度锐化并可能降低画质——此时应使用单一模式（或仅修复）。上游原文如下：
+
+> These modes should only be used on upscaling ratios of x2 or higher. If you have a 1080p screen, using mode A on 1080p anime will improve image quality, but mode A+A will most likely oversharpen and degrade the image.
+
+### Mode C+A
+
+Mode C+A 适用于**干净、无劣化片源（C 类）**且比例 **≥2×** 的情况。它会增加一遍修复，获得略高于普通 C 的感知质量。请勿用于压缩/模糊视频（那应使用 A / A+A），也不要用于降采样振铃（那应使用 B / B+B）。
+
+### 性能档位
+
+四个性能档位（Fast / Balanced / Quality / Ultra）是 **GPU 预算，而非分辨率**：它们决定所选 CNN 变体的规模，初次设置时的基准测试会为您的硬件推荐一个档位。更高的档位并不"适用于更高分辨率"。
+
+### 目标分辨率
+
+默认目标是 `x2` 倍数。`Match Display` 是用户可选择的选项：它按设备像素比将处理链适配到您的显示器（上限为 8K）。当您想强制指定输出尺寸时，可以使用固定目标（720p / 1080p / 2K / 4K）、其他倍数（x4 / x8）以及 `Native` 目标。
+
+### 可选效果与说明
+
+*   每个内置模式都已内置 **Clamp Highlights**（防止振铃），且默认开启。
+*   **Debanding** 有助于已经出现色带的片源；**Denoise** 有助于有噪点/压缩的片源，但可能模糊纹理。注意：上游 Anime4K 并不附带 deband 着色器——此处的去色带是本扩展提供的辅助功能，因此请将任何去色带建议视为实用建议，而非上游指导。
+*   内置模式仅使用 CNN ×2 放大器。GAN 着色器（Restore GAN、Upscale GAN x3/x4）仅在**自定义模式**中可用，且开销大得多；它们在上游属于实验性功能。
+*   没有自动模式选择——请根据片源自行选择。
+
+本指南推导自 [bloc97/Anime4K](https://github.com/bloc97/Anime4K) 的 [`md/GLSL_Instructions_Advanced.md`](https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md)：其中 **A = 1080p / B = 720p / C = 480p** 标签为官方定义，而更细的片源类型映射则是推导得出的。
+
 ## 致谢
 
 - [chenmozhijin/Anime4K-WebExtension](https://github.com/chenmozhijin/Anime4K-WebExtension) — 本项目 fork 自此仓库

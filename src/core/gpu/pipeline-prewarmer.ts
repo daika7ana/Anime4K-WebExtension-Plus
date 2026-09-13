@@ -10,34 +10,80 @@
  * during idle time (page load, settings change). When the real pipelines are
  * constructed later, the shader cache hits make them near-instant.
  *
- * The dummy pipelines are destroyed immediately after construction — the compiled
- * shaders remain cached in the driver.
+ * The pre-warmer is engine-agnostic: it never imports the Anime4K library or
+ * resolves `className` → class itself. The caller (the pipeline builder) supplies
+ * a `compileDummy` callback that knows how to compile one effect through its
+ * engine backend. The dummy pipelines are destroyed immediately after
+ * construction — the compiled shaders remain cached in the driver.
  */
 
-import type { EnhancementEffect, EffectClassDescriptor, Anime4KClassCtor, Anime4KClassMap, DisposablePipeline } from '@/types';
+import type { DestroyablePipeline, DisposablePipeline } from '@/types';
 import { yieldToMain } from '@core/utils/yield-utils';
+
+/** Engine-agnostic identity of one effect to pre-warm. */
+export interface PreWarmEffectRef {
+  backendId?: string;
+  key: string;
+  className: string;
+}
+
+/**
+ * Optional descriptor capabilities governing whether an effect may be pre-warmed.
+ * When `prewarmable === false` or `loadsAssets === true` the effect is skipped.
+ */
+export interface PreWarmCapabilities {
+  prewarmable?: boolean;
+  loadsAssets?: boolean;
+}
+
+/** One pre-warm unit: the effect identity plus optional descriptor capabilities. */
+export interface PreWarmTarget {
+  ref: PreWarmEffectRef;
+  capabilities?: PreWarmCapabilities;
+}
+
+/**
+ * Compile a dummy pipeline for one effect against the supplied 1×1 texture.
+ * Returns `null` when the effect cannot be compiled (unknown class/backend).
+ */
+export type CompileDummy = (
+  ref: PreWarmEffectRef,
+  device: GPUDevice,
+  dummyTexture: GPUTexture,
+) => DestroyablePipeline | null | Promise<DestroyablePipeline | null>;
+
+/** Stable dedupe key for one target: `backendId:key` when resolvable, else `className`. */
+function targetIdentity(target: PreWarmTarget): string {
+  const { backendId, key, className } = target.ref;
+  return backendId ? `${backendId}:${key}` : className;
+}
+
+function shouldSkip(target: PreWarmTarget): boolean {
+  const capabilities = target.capabilities;
+  return capabilities?.prewarmable === false || capabilities?.loadsAssets === true;
+}
 
 export class PipelinePreWarmer {
   private warmedSignatures: Set<string> = new Set();
   private currentWarmId: symbol = Symbol('initial');
-  private cachedAnime4KModule: typeof import('anime4k-webgpu-async') | null = null;
 
   /**
    * Pre-warm pipelines for a given effect chain.
    * Safe to call multiple times — only warms new/changed chains.
    *
    * @param device - The GPU device to use for pipeline creation
-   * @param effects - The effect chain to pre-warm
-   * @param customEffectHandler - Optional handler for custom effects (e.g., CAS).
-   *   Returns the effect class and its constructor descriptor, or null if not a custom effect.
+   * @param targets - The effect identities (and capabilities) to pre-warm
+   * @param compileDummy - Compiles one dummy pipeline; supplied by the caller so
+   *   the pre-warmer stays engine-agnostic.
    */
   async warm(
     device: GPUDevice,
-    effects: EnhancementEffect[],
-    customEffectHandler?: (className: string, device: GPUDevice, dummyTexture: GPUTexture) => { EffectClass: Anime4KClassCtor; descriptor: EffectClassDescriptor } | null
+    targets: readonly PreWarmTarget[],
+    compileDummy: CompileDummy,
   ): Promise<void> {
-    // Deduplicate: only warm if the chain has changed
-    const signature = JSON.stringify(effects.map(e => e.className));
+    // Deduplicate: only warm if the engine-identity chain has changed. Params are
+    // deliberately ignored — construction defaults are what gets compiled.
+    const signature = JSON.stringify(targets.map(targetIdentity));
     if (this.warmedSignatures.has(signature)) return;
 
     // Cancel any in-progress warm
@@ -46,11 +92,6 @@ export class PipelinePreWarmer {
 
     let dummyTexture: GPUTexture | null = null;
     try {
-      if (!this.cachedAnime4KModule) {
-        this.cachedAnime4KModule = await import('anime4k-webgpu-async');
-      }
-      const anime4kModule = this.cachedAnime4KModule;
-
       // Create minimal dummy texture (1×1 is enough to trigger shader compilation)
       dummyTexture = device.createTexture({
         size: [1, 1],
@@ -65,45 +106,26 @@ export class PipelinePreWarmer {
       // Construct each pipeline with the dummy texture.
       // Each constructor calls createComputePipeline() internally,
       // which triggers shader compilation and caching in the driver.
-      for (const effect of effects) {
+      for (const target of targets) {
         // Check if this warm was superseded
         if (this.currentWarmId !== warmId) return; // finally handles cleanup
 
+        // Engine payloads are not pre-warmed (skip fetching/decoding assets).
+        if (shouldSkip(target)) {
+          await yieldToMain();
+          continue;
+        }
+
         try {
-          let EffectClass: Anime4KClassCtor | undefined;
-          let descriptor: EffectClassDescriptor | null = null;
+          const dummyPipeline = await compileDummy(target.ref, device, dummyTexture);
 
-          // Check for custom effects first
-          if (customEffectHandler) {
-            const result = customEffectHandler(effect.className, device, dummyTexture);
-            if (result) {
-              EffectClass = result.EffectClass;
-              descriptor = result.descriptor;
-            }
-          }
-
-          if (!EffectClass) {
-            EffectClass = (anime4kModule as unknown as Anime4KClassMap)[effect.className];
-            // Default descriptor for anime4k-webgpu-async library effects
-            descriptor = {
-              device,
-              inputTexture: dummyTexture,
-              nativeDimensions: { width: 1, height: 1 },
-              targetDimensions: { width: 1, height: 1 },
-            };
-          }
-
-          if (EffectClass && descriptor) {
-            // Constructor triggers createComputePipeline() calls internally.
-            // The 1×1 texture means output textures are also 1×1 — minimal memory.
-            const dummyPipeline = new EffectClass(descriptor);
-
+          if (dummyPipeline) {
             // Destroy the dummy pipeline to free GPU memory.
             // The compiled shaders remain cached in the driver.
             this.safeDestroy(dummyPipeline);
           }
         } catch (e) {
-          console.warn(`[PipelinePreWarmer] Failed to pre-warm ${effect.className}:`, e);
+          console.warn(`[PipelinePreWarmer] Failed to pre-warm ${target.ref.key}:`, e);
         }
 
         // Yield between top-level pipelines to avoid blocking during pre-warm

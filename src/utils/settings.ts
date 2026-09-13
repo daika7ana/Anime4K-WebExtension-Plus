@@ -12,9 +12,22 @@ import type {
   CustomMode,
   EnhancementEffect,
   PerformanceTier,
+  DiagnosticsDetailMode,
+  RestorePolicy,
 } from '../types';
-import { AVAILABLE_EFFECTS } from './effects-map';
+import { descriptorToCatalogEffect } from './effects-map';
+import { resolveEffectReference } from './effect-registry';
 import { resolveEffectChain } from './effect-chain-templates';
+import { getSnapshot, invalidate, isStale, setSnapshot } from './settings-snapshot';
+import {
+  DEFAULT_COLOR_GRADING,
+  isPerformanceTier,
+  isValidResolutionSetting,
+  sanitizeColorGrading,
+  sanitizeCustomModes,
+  sanitizeWhitelist,
+  validateGPUBenchmarkResult,
+} from './validation';
 
 // ===== Settings Cache =====
 let cachedSettings: Anime4KWebExtSettings | null = null;
@@ -24,6 +37,9 @@ const SETTINGS_CACHE_TTL = 2000; // 2-second TTL
 // Automatically invalidate cache when storage changes
 chrome.storage.onChanged.addListener(() => {
   cachedSettings = null;
+  // Also mark the revisioned snapshot stale so getSettings bypasses the TTL
+  // immediately rather than waiting for it to expire.
+  invalidate();
 });
 
 // ===== Built-in Mode Definitions =====
@@ -45,16 +61,9 @@ const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
   customModes: [],
   enableCrossOriginFix: false,
   autoEnableOnWhitelist: false,
+  autoEnableSettleMs: 300,
   enableHotkey: true,
-  colorGrading: {
-    enabled: false,
-    brightness: 0,
-    gamma: 1,
-    contrast: 1,
-    saturation: 1,
-    vibrance: 0,
-    exposure: 0,
-  },
+  colorGrading: { ...DEFAULT_COLOR_GRADING },
 };
 
 const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
@@ -62,21 +71,34 @@ const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   gpuBenchmarkResult: null,
   hasCompletedOnboarding: false,
   showDiagnostics: false,
+  // 'auto' expands on normal videos and compacts on small ones.
+  diagnosticsDetail: 'auto',
+  // Fresh/normalized-missing default: `gate` (keep every restore, gate each one).
+  // The v3→v4 migration maps the legacy `preserveDetail` boolean for existing
+  // users, so their behavior is unchanged.
+  restorePolicy: 'gate',
 };
 
 /**
- * Ensure effects in custom modes stay in sync with AVAILABLE_EFFECTS
+ * Ensure effects in custom modes stay in sync with the effective catalog.
+ *
+ * Each persisted effect is resolved through the engine seam:
+ * - resolved  → canonicalized to the descriptor's catalog shape, merging user
+ *               params over catalog defaults (user values win);
+ * - unresolved → a well-formed new-style reference for a backend this device
+ *               does not have is preserved as-is (cross-device forward compat);
+ * - unknown   → legacy entry with unknown id AND className, dropped.
  */
 export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMode[] {
-  const availableEffectsMap = new Map(
-    AVAILABLE_EFFECTS.map(e => [e.id, e])
-  );
-
   return modes.map(mode => {
     const synchronizedEffects = mode.effects
       .map(effectInMode => {
-        const catalogEffect = availableEffectsMap.get(effectInMode.id);
-        if (!catalogEffect) return null;
+        const resolution = resolveEffectReference(effectInMode);
+
+        if (resolution.status === 'unresolved') return effectInMode;
+        if (resolution.status === 'unknown') return null;
+
+        const catalogEffect = descriptorToCatalogEffect(resolution.effect.descriptor);
         // Preserve user-customized params (e.g. CAS sharpness) over catalog defaults
         if (effectInMode.params && Object.keys(effectInMode.params).length > 0) {
           return { ...catalogEffect, params: { ...catalogEffect.params, ...effectInMode.params } };
@@ -87,6 +109,181 @@ export function synchronizeEffectsForCustomModes(modes: CustomMode[]): CustomMod
 
     return { ...mode, effects: synchronizedEffects };
   });
+}
+
+function describeStoredType(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+function warnInvalidSetting(key: string, value: unknown): void {
+  console.warn(
+    `[Settings] Ignoring invalid stored value for "${key}" (${describeStoredType(value)}); using default.`,
+  );
+}
+
+function coerceBoolean(key: string, value: unknown, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === 'boolean') return value;
+  warnInvalidSetting(key, value);
+  return fallback;
+}
+
+function coerceNonEmptyString(key: string, value: unknown, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value === 'string' && value.trim() !== '') return value;
+  warnInvalidSetting(key, value);
+  return fallback;
+}
+
+function coerceResolutionSetting(value: unknown, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (isValidResolutionSetting(value)) return value;
+  warnInvalidSetting('targetResolutionSetting', value);
+  return fallback;
+}
+
+function coercePerformanceTier(value: unknown, fallback: PerformanceTier): PerformanceTier {
+  if (value === undefined) return fallback;
+  if (isPerformanceTier(value)) return value;
+  warnInvalidSetting('performanceTier', value);
+  return fallback;
+}
+
+function coerceDiagnosticsDetail(
+  value: unknown,
+  fallback: DiagnosticsDetailMode,
+): DiagnosticsDetailMode {
+  if (value === undefined) return fallback;
+  if (value === 'auto' || value === 'compact' || value === 'expanded') return value;
+  warnInvalidSetting('diagnosticsDetail', value);
+  return fallback;
+}
+
+function coerceRestorePolicy(value: unknown, fallback: RestorePolicy): RestorePolicy {
+  if (value === undefined) return fallback;
+  if (
+    value === 'off'
+    || value === 'gate'
+    || value === 'trailing'
+    || value === 'leading'
+  ) {
+    return value;
+  }
+  warnInvalidSetting('restorePolicy', value);
+  return fallback;
+}
+
+/**
+ * Map the pre-v4 local `preserveDetail` boolean to the new policy enum, or
+ * `undefined` when the stored value is absent/non-boolean. Used only as a
+ * fallback when `restorePolicy` itself is absent (see {@link normalizeLocalSettings}).
+ */
+function legacyRestorePolicyFromPreserveDetail(value: unknown): RestorePolicy | undefined {
+  if (typeof value !== 'boolean') return undefined;
+  return value ? 'trailing' : 'off';
+}
+
+function coerceAutoEnableSettleMs(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.round(Math.min(Math.max(value, 0), 10000));
+  }
+  warnInvalidSetting('autoEnableSettleMs', value);
+  return fallback;
+}
+
+/**
+ * Normalize untrusted synced settings read from storage, falling back to
+ * defaults for any field that is missing, the wrong type, or out of range.
+ */
+export function normalizeSyncedSettings(data: Record<string, unknown>): SyncedSettings {
+  return {
+    selectedModeId: coerceNonEmptyString(
+      'selectedModeId',
+      data.selectedModeId,
+      DEFAULT_SYNCED_SETTINGS.selectedModeId,
+    ),
+    targetResolutionSetting: coerceResolutionSetting(
+      data.targetResolutionSetting,
+      DEFAULT_SYNCED_SETTINGS.targetResolutionSetting,
+    ),
+    whitelistEnabled: coerceBoolean(
+      'whitelistEnabled',
+      data.whitelistEnabled,
+      DEFAULT_SYNCED_SETTINGS.whitelistEnabled,
+    ),
+    whitelist: sanitizeWhitelist(data.whitelist),
+    customModes: sanitizeCustomModes(data.customModes),
+    enableCrossOriginFix: coerceBoolean(
+      'enableCrossOriginFix',
+      data.enableCrossOriginFix,
+      DEFAULT_SYNCED_SETTINGS.enableCrossOriginFix,
+    ),
+    autoEnableOnWhitelist: coerceBoolean(
+      'autoEnableOnWhitelist',
+      data.autoEnableOnWhitelist,
+      DEFAULT_SYNCED_SETTINGS.autoEnableOnWhitelist,
+    ),
+    autoEnableSettleMs: coerceAutoEnableSettleMs(
+      data.autoEnableSettleMs,
+      DEFAULT_SYNCED_SETTINGS.autoEnableSettleMs,
+    ),
+    enableHotkey: coerceBoolean(
+      'enableHotkey',
+      data.enableHotkey,
+      DEFAULT_SYNCED_SETTINGS.enableHotkey,
+    ),
+    colorGrading: sanitizeColorGrading(data.colorGrading),
+  };
+}
+
+/**
+ * Normalize untrusted local settings read from storage, falling back to
+ * defaults for any field that is missing, the wrong type, or out of range.
+ */
+export function normalizeLocalSettings(data: Record<string, unknown>): LocalSettings {
+  const benchmark = validateGPUBenchmarkResult(data.gpuBenchmarkResult);
+  if (
+    !benchmark.ok &&
+    data.gpuBenchmarkResult !== undefined &&
+    data.gpuBenchmarkResult !== null
+  ) {
+    console.warn('[Settings] Ignoring invalid stored gpuBenchmarkResult; using default.');
+  }
+  return {
+    performanceTier: coercePerformanceTier(
+      data.performanceTier,
+      DEFAULT_LOCAL_SETTINGS.performanceTier,
+    ),
+    gpuBenchmarkResult: benchmark.ok
+      ? benchmark.value
+      : DEFAULT_LOCAL_SETTINGS.gpuBenchmarkResult,
+    hasCompletedOnboarding: coerceBoolean(
+      'hasCompletedOnboarding',
+      data.hasCompletedOnboarding,
+      DEFAULT_LOCAL_SETTINGS.hasCompletedOnboarding,
+    ),
+    showDiagnostics: coerceBoolean(
+      'showDiagnostics',
+      data.showDiagnostics,
+      DEFAULT_LOCAL_SETTINGS.showDiagnostics,
+    ),
+    diagnosticsDetail: coerceDiagnosticsDetail(
+      data.diagnosticsDetail,
+      DEFAULT_LOCAL_SETTINGS.diagnosticsDetail ?? 'auto',
+    ),
+    // A stale legacy `maxDetail` key is deliberately not read (ignored/dropped).
+    // `restorePolicy` is authoritative; a legacy `preserveDetail` boolean is
+    // mapped only when the new key is absent (true → 'trailing', false → 'off').
+    restorePolicy: coerceRestorePolicy(
+      data.restorePolicy,
+      legacyRestorePolicyFromPreserveDetail(data.preserveDetail)
+        ?? DEFAULT_LOCAL_SETTINGS.restorePolicy
+        ?? 'gate',
+    ),
+  };
 }
 
 /**
@@ -102,20 +299,11 @@ async function getSyncedSettings(): Promise<SyncedSettings> {
       'customModes',
       'enableCrossOriginFix',
       'autoEnableOnWhitelist',
+      'autoEnableSettleMs',
       'enableHotkey',
       'colorGrading',
     ], (data) => {
-      resolve({
-        selectedModeId: data.selectedModeId ?? DEFAULT_SYNCED_SETTINGS.selectedModeId,
-        targetResolutionSetting: data.targetResolutionSetting ?? DEFAULT_SYNCED_SETTINGS.targetResolutionSetting,
-        whitelistEnabled: data.whitelistEnabled ?? DEFAULT_SYNCED_SETTINGS.whitelistEnabled,
-        whitelist: data.whitelist ?? DEFAULT_SYNCED_SETTINGS.whitelist,
-        customModes: data.customModes ?? DEFAULT_SYNCED_SETTINGS.customModes,
-        enableCrossOriginFix: data.enableCrossOriginFix ?? DEFAULT_SYNCED_SETTINGS.enableCrossOriginFix,
-        autoEnableOnWhitelist: data.autoEnableOnWhitelist ?? DEFAULT_SYNCED_SETTINGS.autoEnableOnWhitelist,
-        enableHotkey: data.enableHotkey ?? DEFAULT_SYNCED_SETTINGS.enableHotkey,
-        colorGrading: data.colorGrading ?? DEFAULT_SYNCED_SETTINGS.colorGrading,
-      });
+      resolve(normalizeSyncedSettings(data));
     });
   });
 }
@@ -131,13 +319,11 @@ export async function getLocalSettings(): Promise<LocalSettings> {
       'gpuAdapterInfo',
       'hasCompletedOnboarding',
       'showDiagnostics',
+      'diagnosticsDetail',
+      'restorePolicy',
+      'preserveDetail',
     ], (data) => {
-      resolve({
-        performanceTier: data.performanceTier ?? DEFAULT_LOCAL_SETTINGS.performanceTier,
-        gpuBenchmarkResult: data.gpuBenchmarkResult ?? DEFAULT_LOCAL_SETTINGS.gpuBenchmarkResult,
-        hasCompletedOnboarding: data.hasCompletedOnboarding ?? DEFAULT_LOCAL_SETTINGS.hasCompletedOnboarding,
-        showDiagnostics: data.showDiagnostics ?? DEFAULT_LOCAL_SETTINGS.showDiagnostics,
-      });
+      resolve(normalizeLocalSettings(data));
     });
   });
 }
@@ -148,7 +334,14 @@ export async function getLocalSettings(): Promise<LocalSettings> {
  * Uses a TTL cache to avoid redundant chrome.storage IPC calls
  */
 export async function getSettings(): Promise<Anime4KWebExtSettings> {
-  if (cachedSettings && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
+  // The snapshot becomes stale as soon as a relevant storage area changes
+  // (see settings-snapshot.ts), which bypasses the TTL so changes are observed
+  // immediately. When nothing has changed we keep the existing TTL behavior as a
+  // fallback to avoid redundant chrome.storage IPC calls.
+  const snapshot = getSnapshot();
+  const snapshotUsable = snapshot !== null && !isStale();
+
+  if (cachedSettings && snapshotUsable && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
     return cachedSettings;
   }
 
@@ -175,6 +368,7 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
 
   cachedSettings = result;
   cacheTimestamp = Date.now();
+  setSnapshot(result);
   return result;
 }
 
@@ -220,6 +414,7 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
     'customModes',
     'enableCrossOriginFix',
     'autoEnableOnWhitelist',
+    'autoEnableSettleMs',
     'enableHotkey',
     'colorGrading',
   ];
@@ -229,6 +424,8 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
     'gpuBenchmarkResult',
     'hasCompletedOnboarding',
     'showDiagnostics',
+    'diagnosticsDetail',
+    'restorePolicy',
   ];
 
   const syncSettings: Partial<Record<keyof SyncedSettings, unknown>> = {};

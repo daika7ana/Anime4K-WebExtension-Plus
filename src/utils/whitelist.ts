@@ -20,19 +20,28 @@ export function validateRulePattern(pattern: string): boolean {
 }
 
 /**
- * Check if a URL matches any whitelist rule
+ * Get every enabled whitelist rule whose wildcard pattern matches the URL.
+ *
+ * Matching semantics are identical to the previous `isUrlWhitelisted`
+ * implementation: protocol and query string are stripped, patterns are
+ * case-insensitive, and `*` is the only wildcard.
+ *
  * @param url The URL to check
- * @param rules Array of whitelist rules
+ * @param rules Whitelist rules (may be null/undefined)
+ * @returns The enabled rules that match; empty for no rules or an invalid URL
  */
-export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
-  if (!rules || rules.length === 0) return false;
+export function getMatchingWhitelistRules(
+  url: string,
+  rules: WhitelistRule[] | null | undefined,
+): WhitelistRule[] {
+  if (!rules || rules.length === 0) return [];
 
   try {
     const parsedUrl = new URL(url);
     // Remove protocol and query parameters
     const baseUrl = parsedUrl.hostname + parsedUrl.pathname;
 
-    const result = rules.some(rule => {
+    return rules.filter(rule => {
       if (!rule.enabled) return false;
 
       // Convert wildcard pattern to regular expression
@@ -41,18 +50,23 @@ export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
         .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // Escape all regex special chars
         .replace(/\*/g, '.*');                     // Then convert wildcards to .*
 
-      // Create a case-insensitive regular expression
-      const regex = new RegExp(regexPattern, 'i');
-      const matchResult = regex.test(baseUrl);
-
-      return matchResult;
+      // Create a case-insensitive, fully anchored regular expression
+      const regex = new RegExp(`^${regexPattern}$`, 'i');
+      return regex.test(baseUrl);
     });
-
-    return result;
   } catch (error) {
     console.error('[Whitelist] URL matching failed:', error);
-    return false;
+    return [];
   }
+}
+
+/**
+ * Check if a URL matches any enabled whitelist rule
+ * @param url The URL to check
+ * @param rules Array of whitelist rules
+ */
+export function isUrlWhitelisted(url: string, rules: WhitelistRule[]): boolean {
+  return getMatchingWhitelistRules(url, rules).length > 0;
 }
 
 /**
@@ -66,14 +80,50 @@ export async function addWhitelistRule(pattern: string, enabled: boolean = true)
 
   const newWhitelist = whitelist || [];
 
-  // Avoid duplicate entries
-  if (!newWhitelist.some(r => r.pattern === pattern)) {
-    newWhitelist.push(newRule);
+  const existingRule = newWhitelist.find(r => r.pattern === pattern);
+
+  if (existingRule) {
+    // Already enabled — nothing to do.
+    if (existingRule.enabled) return;
+
+    // Re-enable the previously disabled rule and persist the change.
+    existingRule.enabled = true;
     await saveSettings({ whitelist: newWhitelist });
 
     // Notify that the whitelist has been updated
     sendMessage({ type: 'WHITELIST_UPDATED' });
+    return;
   }
+
+  newWhitelist.push(newRule);
+  await saveSettings({ whitelist: newWhitelist });
+
+  // Notify that the whitelist has been updated
+  sendMessage({ type: 'WHITELIST_UPDATED' });
+}
+
+/**
+ * Remove several whitelist rules in a single persist + notification.
+ *
+ * @param patterns Rule patterns to remove. If empty, or if no stored rule
+ *   matches, this is a no-op.
+ */
+export async function removeWhitelistRules(patterns: string[]): Promise<void> {
+  if (patterns.length === 0) return;
+
+  const { whitelist } = await getSettings();
+  if (!whitelist || whitelist.length === 0) return;
+
+  const patternSet = new Set(patterns);
+  const newWhitelist = whitelist.filter(r => !patternSet.has(r.pattern));
+
+  // Nothing matched — avoid a pointless save/notification
+  if (newWhitelist.length === whitelist.length) return;
+
+  await saveSettings({ whitelist: newWhitelist });
+
+  // Notify that the whitelist has been updated
+  sendMessage({ type: 'WHITELIST_UPDATED' });
 }
 
 /**
@@ -81,15 +131,7 @@ export async function addWhitelistRule(pattern: string, enabled: boolean = true)
  * @param pattern The rule pattern to remove
  */
 export async function removeWhitelistRule(pattern: string): Promise<void> {
-  const { whitelist } = await getSettings();
-
-  if (whitelist) {
-    const newWhitelist = whitelist.filter(r => r.pattern !== pattern);
-    await saveSettings({ whitelist: newWhitelist });
-
-    // Notify that the whitelist has been updated
-    sendMessage({ type: 'WHITELIST_UPDATED' });
-  }
+  await removeWhitelistRules([pattern]);
 }
 
 /**

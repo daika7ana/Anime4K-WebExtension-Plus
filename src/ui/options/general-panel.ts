@@ -20,6 +20,8 @@ export function initGeneralPanel(
   versionNumberSpan: HTMLSpanElement,
   enableHotkeyToggle: HTMLInputElement,
   diagnosticsToggle: HTMLInputElement,
+  restorePolicySelect: HTMLSelectElement,
+  diagnosticsDetailSelect: HTMLSelectElement | null,
 ): { render(): Promise<void>; renderGeneralSettings(): Promise<void> } {
 
   async function render() {
@@ -28,9 +30,13 @@ export function initGeneralPanel(
     themeSelect.value = themeManager.getTheme();
     tierSelect.value = ctx.getTier();
 
-    // Diagnostics toggle reads from local settings
+    // Diagnostics + restore-policy controls read from local settings
     const localSettings = await getLocalSettings();
     diagnosticsToggle.checked = localSettings.showDiagnostics ?? false;
+    restorePolicySelect.value = localSettings.restorePolicy ?? 'gate';
+    if (diagnosticsDetailSelect) {
+      diagnosticsDetailSelect.value = localSettings.diagnosticsDetail ?? 'auto';
+    }
 
     // Hotkey toggle reads from synced settings
     enableHotkeyToggle.checked = state.enableHotkey ?? true;
@@ -120,6 +126,25 @@ export function initGeneralPanel(
   diagnosticsToggle.addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;
     await saveLocalSettings({ showDiagnostics: enabled });
+    ctx.notifyUpdate();
+  });
+
+  // --- Diagnostics Detail Level (local) ---
+  diagnosticsDetailSelect?.addEventListener('change', async (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    if (value !== 'auto' && value !== 'compact' && value !== 'expanded') return;
+    await saveLocalSettings({ diagnosticsDetail: value });
+    ctx.notifyUpdate();
+  });
+
+  // --- Restore policy (local) ---
+  restorePolicySelect.addEventListener('change', async (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    if (value !== 'off' && value !== 'gate' && value !== 'trailing' && value !== 'leading') return;
+    await saveLocalSettings({ restorePolicy: value });
+    // The options page never receives its own cross-context update, so refresh
+    // the modes panel here to update the restore-policy note immediately.
+    ctx.refreshModesPanel?.();
     ctx.notifyUpdate();
   });
 

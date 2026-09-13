@@ -28,6 +28,8 @@ const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
 const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
 const crossOriginFixToggle = document.getElementById('cross-origin-fix-toggle') as HTMLInputElement;
 const autoEnableToggle = document.getElementById('auto-enable-toggle') as HTMLInputElement;
+const autoEnableSettleInput = document.getElementById('auto-enable-settle-ms') as HTMLInputElement;
+const whitelistEnabledToggle = document.getElementById('whitelist-enabled-toggle') as HTMLInputElement;
 const colorGradingToggle = document.getElementById('color-grading-toggle') as HTMLInputElement;
 const colorGradingSliders = document.getElementById('color-grading-sliders') as HTMLElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
@@ -38,6 +40,8 @@ const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButt
 const tierSelect = document.getElementById('tier-select') as HTMLSelectElement;
 const enableHotkeyToggle = document.getElementById('enable-hotkey-toggle') as HTMLInputElement;
 const diagnosticsToggle = document.getElementById('diagnostics-toggle') as HTMLInputElement;
+const diagnosticsDetailSelect = document.getElementById('diagnostics-detail-select') as HTMLSelectElement | null;
+const restorePolicySelect = document.getElementById('restore-policy-select') as HTMLSelectElement;
 
 // --- AppContext: shared state + callbacks for all panels ---
 const ctx: AppContext = {
@@ -75,7 +79,7 @@ const setupInternationalization = () => {
 
 // --- Initialize panels (bind DOM + events; returns render handles) ---
 const modesPanel = initModesPanel(ctx, modesContainer, addModeBtn, exportModesBtn, importModesBtn);
-const whitelistPanel = initWhitelistPanel(ctx, rulesContainer, addRuleBtn, exportBtn, importBtn, autoEnableToggle);
+const whitelistPanel = initWhitelistPanel(ctx, rulesContainer, addRuleBtn, exportBtn, importBtn, autoEnableToggle, autoEnableSettleInput, whitelistEnabledToggle);
 
 // onTierChanged is called when the tier changes (manual select or benchmark apply).
 // It syncs the tier-select display AND re-renders mode chains (which depend on tier).
@@ -96,6 +100,8 @@ const generalPanel = initGeneralPanel(
   versionNumberSpan,
   enableHotkeyToggle,
   diagnosticsToggle,
+  restorePolicySelect,
+  diagnosticsDetailSelect,
 );
 
 // --- Cross-context message listener ---

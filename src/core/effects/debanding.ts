@@ -14,6 +14,7 @@
  */
 
 import DEBANDING_SHADER from '@shaders/debanding.wgsl';
+import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 
 /**
  * Debanding pipeline implementing the Anime4KPipeline interface.
@@ -61,10 +62,8 @@ export class Debanding {
     });
     this.writeParams();
 
-    // Create shader module
-    const shaderModule = this.device.createShaderModule({
-      code: DEBANDING_SHADER,
-    });
+    // Create shader module (shared/cached per device — immutable)
+    const shaderModule = gpuResourceCache.getShaderModule(this.device, DEBANDING_SHADER, 'debanding');
 
     // Create compute pipeline
     this.pipeline = this.device.createComputePipeline({

@@ -12,7 +12,7 @@
     "message": "Улучшение Anime4K Plus"
   },
   "performanceTierLabel": {
-    "message": "Уровень производительности:"
+    "message": "Уровень производительности"
   },
   "selectTierDesc": {
     "message": "Вручную выберите уровень производительности. Более высокие уровни используют более крупные модели ИИ для лучшего качества, но требуют больше мощности GPU."
@@ -29,6 +29,9 @@
   "nativeResolution": {
     "message": "Нативное (без улучшения)"
   },
+  "matchDisplayResolution": {
+    "message": "По размеру экрана"
+  },
   "enhanceError": {
     "message": "Не удалось улучшить видео, попробуйте еще раз",
     "description": "Текст ошибки для неудавшегося улучшения"
@@ -38,7 +41,10 @@
     "description": "Текст ошибки для неудавшегося рендеринга"
   },
   "whitelistEnable": {
-    "message": "Включить белый список"
+    "message": "Включить режим белого списка"
+  },
+  "whitelistEnableDesc": {
+    "message": "Если включено, улучшаются только сайты и страницы из белого списка."
   },
   "addCurrentPage": {
     "message": "Страница"
@@ -48,6 +54,12 @@
   },
   "addParentPath": {
     "message": "Путь"
+  },
+  "removeFromWhitelist": {
+    "message": "Удалить из белого списка"
+  },
+  "removedFromWhitelist": {
+    "message": "Удалено из белого списка"
   },
   "openSettings": {
     "message": "Настройки"
@@ -236,6 +248,69 @@
   },
   "customModes": {
     "message": "Пользовательские режимы"
+  },
+  "restorePolicyBadge": {
+    "message": "Восстановление"
+  },
+  "restorePolicyBadgeTitle": {
+    "message": "Проход восстановления — может зависеть от политики восстановления."
+  },
+  "restorePolicyLabel": {
+    "message": "Политика восстановления"
+  },
+  "restorePolicyDesc": {
+    "message": "Управляет тем, какие проходы восстановления сохраняет цепочка. «Выкл.» — полная цепочка (максимальное усиление); «Шлюз» — сохраняет все восстановления и адаптирует их к локальному контрасту; «Замыкающие» — пропускает восстановления после финального даунскейла; «Ведущие» — пропускает восстановления перед первым апскейлером."
+  },
+  "restorePolicyOff": {
+    "message": "Выкл. — полная цепочка"
+  },
+  "restorePolicyGate": {
+    "message": "Шлюз — адаптивные восстановления"
+  },
+  "restorePolicyTrailing": {
+    "message": "Замыкающие — пропуск восстановлений после финального даунскейла"
+  },
+  "restorePolicyLeading": {
+    "message": "Ведущие — пропуск восстановлений перед первым апскейлером"
+  },
+  "restorePolicyNameOff": {
+    "message": "Выкл."
+  },
+  "restorePolicyNameGate": {
+    "message": "Шлюз"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "Замыкающие"
+  },
+  "restorePolicyNameLeading": {
+    "message": "Ведущие"
+  },
+  "restorePolicyNoteGate": {
+    "message": "Восстановления выполняются адаптивно: слабые низкоконтрастные детали пропускаются, сильные края усиливаются."
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "Проходы восстановления после финального даунскейла могут пропускаться."
+  },
+  "restorePolicyNoteLeading": {
+    "message": "Проходы восстановления перед первым апскейлером могут пропускаться."
+  },
+  "modeDescA": {
+    "message": "Для большинства 1080p-аниме, старого 720p и размытого или сильно сжатого SD."
+  },
+  "modeDescB": {
+    "message": "Для большинства 720p и даунскейлов 1080p→720p с рингингом или алиасингом."
+  },
+  "modeDescC": {
+    "message": "Для чистых источников без деградации: цифровое искусство, обои, даунскейл 1080p→480p."
+  },
+  "modeDescAA": {
+    "message": "Для тех же источников, что и режим A, с большей детализацией. Сдвоенные режимы рассчитаны на 2× и выше; при более низких целях возможно избыточное усиление резкости, поэтому рекомендуется одиночный режим."
+  },
+  "modeDescBB": {
+    "message": "Для тех же источников, что и режим B, с большей детализацией. Сдвоенные режимы рассчитаны на 2× и выше; при более низких целях возможно избыточное усиление резкости, поэтому рекомендуется одиночный режим."
+  },
+  "modeDescCA": {
+    "message": "Для чистых источников класса C, которые выглядят слишком мягко. Сдвоенные режимы рассчитаны на 2× и выше; при более низких целях возможно избыточное усиление резкости, поэтому рекомендуется одиночный режим."
   },
   "settingsSaved": {
     "message": "Настройки сохранены!"
@@ -449,6 +524,12 @@
   "autoEnableOnWhitelistDesc": {
     "message": "Автоматически улучшать видео на сайтах из белого списка без нажатия кнопки Enhance."
   },
+  "autoEnableSettleMs": {
+    "message": "Задержка авто-включения (мс)"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "Время ожидания в миллисекундах перед авто-включением видео, чтобы пропустить временные плееры. Установите 0, чтобы отключить задержку."
+  },
   "showDiagnostics": {
     "message": "Показать диагностику"
   },
@@ -478,5 +559,80 @@
   },
   "diagnostics": {
     "message": "Диагностика"
+  },
+  "diagnosticsMode": {
+    "message": "Режим"
+  },
+  "diagnosticsTier": {
+    "message": "Уровень"
+  },
+  "diagnosticsInputResolution": {
+    "message": "Вход"
+  },
+  "diagnosticsTargetResolution": {
+    "message": "Выход"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "Политика восстановления"
+  },
+  "diagnosticsCustomMode": {
+    "message": "Пользовательский"
+  },
+  "diagnosticsFrameLabel": {
+    "message": "Кадр"
+  },
+  "diagnosticsCpu": {
+    "message": "CPU"
+  },
+  "diagnosticsGpuShare": {
+    "message": "GPU"
+  },
+  "diagnosticsGpuTimings": {
+    "message": "Тайминги GPU"
+  },
+  "diagnosticsGpuTimingsUnavailable": {
+    "message": "Тайминги GPU недоступны"
+  },
+  "diagnosticsTimingPass": {
+    "message": "Проход"
+  },
+  "diagnosticsTimingCpuP50": {
+    "message": "CPU p50"
+  },
+  "diagnosticsTimingCpuP95": {
+    "message": "CPU p95"
+  },
+  "diagnosticsTimingGpuP50": {
+    "message": "GPU p50"
+  },
+  "diagnosticsTimingGpuP95": {
+    "message": "GPU p95"
+  },
+  "diagnosticsTimingGpuP99": {
+    "message": "GPU p99"
+  },
+  "diagnosticsTimingTotal": {
+    "message": "Всего GPU"
+  },
+  "diagnosticsFramesSampled": {
+    "message": "Кадров выбрано"
+  },
+  "diagnosticsCpuTimingLimited": {
+    "message": "Тайминги CPU ограничены разрешением 0,1 мс"
+  },
+  "diagnosticsDetail": {
+    "message": "Уровень детализации"
+  },
+  "diagnosticsDetailDesc": {
+    "message": "Выберите объём сведений в оверлее диагностики."
+  },
+  "diagnosticsDetailAuto": {
+    "message": "Авто (компактно на маленьких видео)"
+  },
+  "diagnosticsDetailCompact": {
+    "message": "Компактный"
+  },
+  "diagnosticsDetailExpanded": {
+    "message": "Подробный"
   }
 }

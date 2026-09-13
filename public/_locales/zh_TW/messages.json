@@ -13,7 +13,7 @@
     "message": "Anime4K超解析 Plus"
   },
   "performanceTierLabel": {
-    "message": "效能檔位："
+    "message": "效能檔位"
   },
   "selectTierDesc": {
     "message": "手動選擇效能檔位。更高的檔位使用更大的AI模型，提供更好的品質，但需要更多的GPU效能。"
@@ -30,6 +30,9 @@
   "nativeResolution": {
     "message": "原始解析度 (不超解析)"
   },
+  "matchDisplayResolution": {
+    "message": "符合顯示解析度"
+  },
   "enhanceError": {
     "message": "超解析失敗，請重試",
     "description": "超解析失敗錯誤訊息"
@@ -40,7 +43,10 @@
     "description": "渲染失敗錯誤訊息"
   },
   "whitelistEnable": {
-    "message": "啟用白名單"
+    "message": "啟用白名單模式"
+  },
+  "whitelistEnableDesc": {
+    "message": "啟用後，僅增強白名單中的網站和頁面。"
   },
   "addCurrentPage": {
     "message": "頁面"
@@ -50,6 +56,12 @@
   },
   "addParentPath": {
     "message": "路徑"
+  },
+  "removeFromWhitelist": {
+    "message": "從白名單中移除"
+  },
+  "removedFromWhitelist": {
+    "message": "已從白名單中移除"
   },
   "openSettings": {
     "message": "設定"
@@ -241,6 +253,69 @@
   },
   "customModes": {
     "message": "自訂模式"
+  },
+  "restorePolicyBadge": {
+    "message": "還原"
+  },
+  "restorePolicyBadgeTitle": {
+    "message": "還原通道 — 可能受還原策略影響。"
+  },
+  "restorePolicyLabel": {
+    "message": "還原策略"
+  },
+  "restorePolicyDesc": {
+    "message": "控制效果鏈保留哪些還原通道。「關閉」執行完整鏈（完整增強）；「閘控」保留所有還原並使其適應局部對比度；「結尾」略過最終降採樣之後的還原；「開頭」略過第一個放大器之前的還原。"
+  },
+  "restorePolicyOff": {
+    "message": "關閉 — 完整鏈"
+  },
+  "restorePolicyGate": {
+    "message": "閘控 — 自適應還原"
+  },
+  "restorePolicyTrailing": {
+    "message": "結尾 — 略過最終降採樣後的還原"
+  },
+  "restorePolicyLeading": {
+    "message": "開頭 — 略過第一個放大器之前的還原"
+  },
+  "restorePolicyNameOff": {
+    "message": "關閉"
+  },
+  "restorePolicyNameGate": {
+    "message": "閘控"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "結尾"
+  },
+  "restorePolicyNameLeading": {
+    "message": "開頭"
+  },
+  "restorePolicyNoteGate": {
+    "message": "還原通道自適應執行：低對比度的微弱細節會略過還原，強邊緣則會增強。"
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "最終降採樣之後的還原通道可能會被略過。"
+  },
+  "restorePolicyNoteLeading": {
+    "message": "第一個放大器之前的還原通道可能會被略過。"
+  },
+  "modeDescA": {
+    "message": "適用於大多數 1080p 動畫、較舊的 720p，以及模糊或嚴重壓縮的標清來源。"
+  },
+  "modeDescB": {
+    "message": "適用於大多數 720p，以及帶有振鈴或鋸齒的 1080p→720p 降採樣來源。"
+  },
+  "modeDescC": {
+    "message": "適用於無降質的乾淨來源：數位繪圖、壁紙和 1080p→480p 降採樣。"
+  },
+  "modeDescAA": {
+    "message": "適用於與模式 A 相同的來源，提供更多細節。疊加模式建議在 2× 或更高倍率使用；目標較低時可能過度銳化，建議改用單一模式。"
+  },
+  "modeDescBB": {
+    "message": "適用於與模式 B 相同的來源，提供更多細節。疊加模式建議在 2× 或更高倍率使用；目標較低時可能過度銳化，建議改用單一模式。"
+  },
+  "modeDescCA": {
+    "message": "適用於偏軟的乾淨 C 類來源。疊加模式建議在 2× 或更高倍率使用；目標較低時可能過度銳化，建議改用單一模式。"
   },
   "settingsSaved": {
     "message": "設定已儲存！"
@@ -454,6 +529,12 @@
   "autoEnableOnWhitelistDesc": {
     "message": "在白名單站台上自動增強影片，無需點擊 Enhance 按鈕。"
   },
+  "autoEnableSettleMs": {
+    "message": "自動啟用延遲（毫秒）"
+  },
+  "autoEnableSettleMsDesc": {
+    "message": "自動啟用影片前的等待毫秒數，用於略過暫時性的播放器。設為 0 可停用延遲。"
+  },
   "showDiagnostics": {
     "message": "顯示診斷資訊"
   },
@@ -483,5 +564,80 @@
   },
   "diagnostics": {
     "message": "診斷"
+  },
+  "diagnosticsMode": {
+    "message": "模式"
+  },
+  "diagnosticsTier": {
+    "message": "效能等級"
+  },
+  "diagnosticsInputResolution": {
+    "message": "輸入"
+  },
+  "diagnosticsTargetResolution": {
+    "message": "輸出"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "還原策略"
+  },
+  "diagnosticsCustomMode": {
+    "message": "自訂"
+  },
+  "diagnosticsFrameLabel": {
+    "message": "影格"
+  },
+  "diagnosticsCpu": {
+    "message": "CPU"
+  },
+  "diagnosticsGpuShare": {
+    "message": "GPU"
+  },
+  "diagnosticsGpuTimings": {
+    "message": "GPU 耗時"
+  },
+  "diagnosticsGpuTimingsUnavailable": {
+    "message": "GPU 耗時無法使用"
+  },
+  "diagnosticsTimingPass": {
+    "message": "通道"
+  },
+  "diagnosticsTimingCpuP50": {
+    "message": "CPU p50"
+  },
+  "diagnosticsTimingCpuP95": {
+    "message": "CPU p95"
+  },
+  "diagnosticsTimingGpuP50": {
+    "message": "GPU p50"
+  },
+  "diagnosticsTimingGpuP95": {
+    "message": "GPU p95"
+  },
+  "diagnosticsTimingGpuP99": {
+    "message": "GPU p99"
+  },
+  "diagnosticsTimingTotal": {
+    "message": "GPU 總計"
+  },
+  "diagnosticsFramesSampled": {
+    "message": "取樣影格數"
+  },
+  "diagnosticsCpuTimingLimited": {
+    "message": "CPU 計時精度限制為 0.1 ms"
+  },
+  "diagnosticsDetail": {
+    "message": "詳細程度"
+  },
+  "diagnosticsDetailDesc": {
+    "message": "選擇診斷疊加層顯示的詳細程度。"
+  },
+  "diagnosticsDetailAuto": {
+    "message": "自動（小影片自動精簡）"
+  },
+  "diagnosticsDetailCompact": {
+    "message": "精簡"
+  },
+  "diagnosticsDetailExpanded": {
+    "message": "詳細"
   }
 }

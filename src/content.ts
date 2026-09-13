@@ -2,7 +2,7 @@
  * Content script main entry point
  * Responsible for adding enhancement buttons to page video elements and managing enhancer instances
  */
-import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate } from '@core/video/video-manager';
+import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate, disableAllAutoEnabled } from '@core/video/video-manager';
 import { getAllManagedVideos, getEnhancer } from '@core/video/enhancer-map';
 import { isUrlWhitelisted, getWhitelistRules } from '@utils/whitelist';
 import { onMessage } from '@utils/messaging';
@@ -111,6 +111,9 @@ onMessage((message, _sender, sendResponse) => {
       return false;
     case 'TOGGLE_ENHANCEMENT':
       {
+        // The hotkey/popup acts as a page-level switch: stop every renderer that
+        // was auto-enabled before falling back to the primary-video toggle.
+        if (disableAllAutoEnabled() > 0) return false;
         const video = findPrimaryVideo();
         if (video) {
           const enhancer = getEnhancer(video);

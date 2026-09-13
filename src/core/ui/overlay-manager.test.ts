@@ -245,6 +245,23 @@ describe('OverlayManager', () => {
       expect(video.parentElement?.querySelector('canvas')).toBeNull();
       manager.destroy();
     });
+
+    it('restores the video opacity and removes the canvas after showCanvas()', () => {
+      const video = createTestVideo();
+      const manager = OverlayManager.create(video);
+
+      manager.showCanvas();
+      expect(video.style.opacity).toBe('0');
+      expect(video.parentElement?.querySelector('canvas')).toBeDefined();
+
+      manager.detach();
+
+      // Without restoring opacity, the video would stay hidden with no canvas.
+      expect(video.style.opacity).toBe('');
+      expect(video.parentElement?.querySelector('canvas')).toBeNull();
+
+      manager.destroy();
+    });
   });
 
   // ── destroy() ─────────────────────────────────────────────────

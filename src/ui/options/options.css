@@ -363,6 +363,10 @@ h1 {
   word-break: break-all;
   font-weight: 600;
   color: var(--on-surface);
+  /* Mirror the editable (custom) title's vertical box so built-in titles share
+     the same line-box height and stay centered with the collapse-arrow button.
+     Horizontal padding stays 0 to preserve the existing left offset. */
+  padding: 0.25rem 0;
 }
 
 .mode-card-header h2[contenteditable="true"] {
@@ -414,6 +418,30 @@ h1 {
 .effect-content span {
   font-size: 0.9375rem;
   font-weight: 500;
+}
+
+/* Effect name + auxiliary policy badge on one row */
+.effect-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Quiet marker on restore-category effects: subject to the "Fast mode — Preserve detail" policy */
+.effect-item .effect-policy-badge {
+  flex-shrink: 0;
+  padding: 0 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.6;
+  color: var(--on-surface-variant);
+  background-color: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .effect-item[draggable="true"] {
@@ -993,13 +1021,24 @@ textarea:hover {
 
 .mode-card-content {
   display: block;
-  padding-top: 1rem;
   border-top: 1px solid var(--outline-variant);
   margin-top: 1rem;
 }
 
 .mode-card.collapsed .mode-card-content {
   display: none;
+}
+
+/* Mode-card note: trailing restore passes may be skipped by "Fast mode" */
+.mode-policy-note {
+  margin: 1rem 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+  background-color: var(--surface-container-low);
+  border-left: 2px solid var(--outline);
+  border-radius: var(--border-radius-sm);
 }
 
 .effect-actions {

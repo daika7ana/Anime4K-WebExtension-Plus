@@ -3,8 +3,15 @@
  * Tests using real Anime4K effects
  */
 
-import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect, BenchmarkProgress, DestroyablePipeline, Anime4KClassMap, GPUAdapterWithInfo } from '@/types';
+import type { PerformanceTier, GPUBenchmarkResult, EnhancementEffect, BenchmarkProgress, DestroyablePipeline, GPUAdapterWithInfo, Dimensions } from '@/types';
+import type { BackendRegistry } from 'anime4k-webgpu-async';
 import { resolveEffectChain } from '@utils/effect-chain-templates';
+import { resolveEffectReference, type EffectResolution } from '@utils/effect-registry';
+import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
+import { TexturePool } from './texture-pool';
+import { compileEffectChain } from './effect-chain-compiler';
+import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
+import { selectGatedRestoreOptions } from '@core/effects/gated-restore';
 
 // Test configuration
 const TEST_TIMEOUT_MS = 20000; // Individual test timeout
@@ -12,7 +19,141 @@ const TEST_WIDTH = 1920;  // Test input width (1080p)
 const TEST_HEIGHT = 1080; // Test input height
 const TARGET_WIDTH = 3840;  // Target 4K
 const TARGET_HEIGHT = 2160;
-const TARGET_FRAME_TIME_24FPS = 1000 / 24; // ~41.67ms
+
+/**
+ * Cached engine backend registry for the benchmark's registry path. Loaded
+ * lazily (dynamic `import`) so the monolithic library is never inlined into the
+ * benchmark's module graph.
+ */
+let cachedBenchmarkRegistry: BackendRegistry | null = null;
+
+/** Default target frame rate for the sustainability budget (24fps ≈ 41.67ms/frame). */
+const DEFAULT_BENCHMARK_FPS_TARGET = 24;
+const TARGET_FRAME_TIME_24FPS = 1000 / DEFAULT_BENCHMARK_FPS_TARGET; // ~41.67ms
+
+/**
+ * ── Benchmark → performance-tier policy ─────────────────────────────────
+ *
+ * The benchmark measures per-frame GPU time (ms) for each performance tier.
+ * A tier is considered sustainable at the target frame rate when BOTH hold:
+ *
+ *   1. every measured frame fits the frame budget:  max(samples) < budget
+ *   2. the average frame keeps 10% headroom:        avg(samples) < 0.9 * budget
+ *
+ *   where budget = 1000 / fpsTarget   (default fpsTarget = 24 → ≈ 41.67 ms)
+ *
+ * Both inequalities are strict: a tier whose max frame time equals the budget
+ * exactly, or whose average equals 0.9 * budget exactly, is rejected.
+ *
+ * `recommendTierFromSamples` returns the heaviest qualifying tier (see
+ * `PERFORMANCE_TIER_ORDER`). When no tested tier qualifies — e.g. every tier is
+ * too slow, or no finite positive samples were recorded — it returns `null`.
+ * Callers must then fall back to `FALLBACK_PERFORMANCE_TIER`, the lightest
+ * (safest) tier, which preserves the historical default of recommending the
+ * `performance` tier when nothing better is sustainable.
+ *
+ * Non-finite (NaN / ±Infinity) and non-positive samples are ignored before
+ * aggregation so a single bad timing cannot disqualify an otherwise
+ * sustainable tier (and empty / all-invalid sets never qualify).
+ * ────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * Ordered performance tiers from lightest → heaviest. This is the single
+ * source of truth for tier ordering, shared by the benchmark loop and the
+ * pure recommendation policy.
+ */
+export const PERFORMANCE_TIER_ORDER = [
+    'performance',
+    'balanced',
+    'quality',
+    'ultra',
+] as const satisfies readonly PerformanceTier[];
+
+/** Deterministic fallback used when no tier satisfies the budget policy. */
+export const FALLBACK_PERFORMANCE_TIER: PerformanceTier = 'performance';
+
+/** Fraction of the frame budget the average frame time must stay below. */
+export const AVG_FRAME_BUDGET_RATIO = 0.9;
+
+/** Options for the benchmark → tier policy. */
+export interface TierRecommendationOptions {
+    /** Target frames per second. Defaults to 24. Non-positive/non-finite values fall back to the default. */
+    fpsTarget?: number;
+}
+
+/** Per-frame timing samples (ms) keyed by the tier that produced them. Tiers may be omitted when untested. */
+export type TierFrameSamples = Partial<Record<PerformanceTier, readonly number[]>>;
+
+/**
+ * Compute the per-frame time budget in milliseconds.
+ * @param opts Optional `fpsTarget` override.
+ * @returns `1000 / fpsTarget`, defaulting to 24fps (≈ 41.67 ms) for invalid input.
+ */
+export function computeFrameBudget(opts?: TierRecommendationOptions): number {
+    const fpsTarget = opts?.fpsTarget;
+    const target =
+        typeof fpsTarget === 'number' && Number.isFinite(fpsTarget) && fpsTarget > 0
+            ? fpsTarget
+            : DEFAULT_BENCHMARK_FPS_TARGET;
+    return 1000 / target;
+}
+
+/**
+ * Filter out samples that cannot contribute to a meaningful average: non-finite
+ * (NaN, ±Infinity) and non-positive (<= 0) values are dropped.
+ */
+export function sanitizeFrameSamples(samples: readonly number[]): number[] {
+    return samples.filter((sample) => Number.isFinite(sample) && sample > 0);
+}
+
+/**
+ * Pure predicate: does one tier's sample set satisfy both budget conditions?
+ * @returns `false` when no valid samples remain.
+ */
+export function tierMeetsBudget(
+    samples: readonly number[],
+    opts?: TierRecommendationOptions
+): boolean {
+    const valid = sanitizeFrameSamples(samples);
+    if (valid.length === 0) return false;
+
+    const budget = computeFrameBudget(opts);
+    let max = -Infinity;
+    let sum = 0;
+    for (const sample of valid) {
+        if (sample > max) max = sample;
+        sum += sample;
+    }
+    const avg = sum / valid.length;
+
+    return max < budget && avg < AVG_FRAME_BUDGET_RATIO * budget;
+}
+
+/**
+ * Recommend a performance tier from benchmark samples.
+ *
+ * Returns the heaviest tier (ultra → performance) whose samples satisfy BOTH
+ * `max(samples) < 1000 / fpsTarget` and `avg(samples) < 0.9 * 1000 / fpsTarget`.
+ * Returns `null` when no tested tier qualifies; callers should use
+ * `FALLBACK_PERFORMANCE_TIER`.
+ *
+ * @param samplesByTier Per-frame timings keyed by tier. Missing/empty tiers are skipped.
+ * @param opts Optional `fpsTarget` override (default 24).
+ */
+export function recommendTierFromSamples(
+    samplesByTier: TierFrameSamples,
+    opts?: TierRecommendationOptions
+): PerformanceTier | null {
+    for (let i = PERFORMANCE_TIER_ORDER.length - 1; i >= 0; i--) {
+        const tier = PERFORMANCE_TIER_ORDER[i];
+        const samples = samplesByTier[tier];
+        if (samples && tierMeetsBudget(samples, opts)) {
+            return tier;
+        }
+    }
+    return null;
+}
 
 /**
  * Check if the GPU device is still valid
@@ -59,7 +200,8 @@ async function safeDestroyPipelines(device: GPUDevice, pipelines: DestroyablePip
 export async function runGPUBenchmark(
     onProgress?: (progress: BenchmarkProgress) => void
 ): Promise<GPUBenchmarkResult> {
-    const tiers: PerformanceTier[] = ['performance', 'balanced', 'quality', 'ultra'];
+    const tiers = PERFORMANCE_TIER_ORDER;
+    const samplesByTier: TierFrameSamples = {};
     const scores: Record<PerformanceTier, number> = {
         performance: Infinity,
         balanced: Infinity,
@@ -105,6 +247,17 @@ export async function runGPUBenchmark(
         deviceLost = true;
     });
 
+    // Per-device texture pool. The benchmark's input texture has an identical
+    // descriptor for every tier, so consecutive tiers recycle the same texture
+    // instead of allocating/destroying one per tier.
+    const texturePool = new TexturePool(device);
+    const inputTextureDescriptor = {
+        width: TEST_WIDTH,
+        height: TEST_HEIGHT,
+        format: 'rgba8unorm' as const,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    };
+
     // Pre-generate test data (reused across all tiers)
     const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
     // crypto.getRandomValues has a 65536 byte limit, fill in chunks
@@ -118,8 +271,6 @@ export async function runGPUBenchmark(
         testData[j] = 255;
     }
 
-    let recommendedTier: PerformanceTier = 'performance';
-
     // Dynamically import anime4k-webgpu-async module
     console.log('[GPUBenchmark] Loading anime4k-webgpu-async module...');
     const Anime4K = await import('anime4k-webgpu-async');
@@ -129,11 +280,7 @@ export async function runGPUBenchmark(
     // Global warmup phase: run multiple frames with performance effect chain to warm up GPU
     console.log('[GPUBenchmark] Global warmup phase...');
     {
-        const warmupTexture = device.createTexture({
-            size: [TEST_WIDTH, TEST_HEIGHT],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-        });
+        const warmupTexture = texturePool.acquire(inputTextureDescriptor);
         device.queue.writeTexture(
             { texture: warmupTexture },
             testData,
@@ -144,7 +291,7 @@ export async function runGPUBenchmark(
 
         const warmupEffects = resolveEffectChain('A+A', 'performance');
         await runEffectChainTest(device, warmupTexture, warmupEffects, Anime4K);
-        warmupTexture.destroy();
+        texturePool.release(warmupTexture);
         console.log('[GPUBenchmark] Global warmup complete');
     }
 
@@ -164,14 +311,11 @@ export async function runGPUBenchmark(
             completed: false,
         });
 
-        // Create independent input texture for each tier test
+        // Acquire the input texture for this tier test from the pool. Every tier
+        // uses the same descriptor, so after the first tier this is a pool hit.
         let inputTexture: GPUTexture;
         try {
-            inputTexture = device.createTexture({
-                size: [TEST_WIDTH, TEST_HEIGHT],
-                format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-            });
+            inputTexture = texturePool.acquire(inputTextureDescriptor);
             device.queue.writeTexture(
                 { texture: inputTexture },
                 testData,
@@ -193,7 +337,7 @@ export async function runGPUBenchmark(
             const effects = resolveEffectChain('A+A', tier);
 
             // Run the test
-            const { avgTime, maxTime } = await runWithTimeout(
+            const { avgTime, maxTime, samples } = await runWithTimeout(
                 runEffectChainTest(device, inputTexture, effects, Anime4K),
                 TEST_TIMEOUT_MS
             );
@@ -203,20 +347,15 @@ export async function runGPUBenchmark(
 
             scores[tier] = avgTime;
             maxScores[tier] = maxTime;
+            samplesByTier[tier] = samples;
             console.log(`[GPUBenchmark] ${tier}: avg=${avgTime.toFixed(2)}ms, max=${maxTime.toFixed(2)}ms per frame`);
 
-            // If it can sustain 24fps stably, this tier is usable
-            // Requirement: max frame time < target frame time, avg frame time < target * 0.9
-            if (maxTime < TARGET_FRAME_TIME_24FPS && avgTime < TARGET_FRAME_TIME_24FPS * 0.9) {
-                recommendedTier = tier;
-            }
-
-            // Safely destroy texture
+            // Return the texture to the pool for reuse by the next tier
             try {
                 await device.queue.onSubmittedWorkDone();
-                inputTexture.destroy();
+                texturePool.release(inputTexture);
             } catch {
-                // Ignore destroy error
+                // Ignore cleanup error
             }
 
             // If current tier is too slow, skip heavier tiers
@@ -230,14 +369,15 @@ export async function runGPUBenchmark(
             await chrome.storage.local.remove('_benchmarkInProgress');
 
             try {
-                inputTexture.destroy();
+                texturePool.release(inputTexture);
             } catch {
-                // Ignore destroy error
+                // Ignore cleanup error
             }
 
             // If the first tier (performance) fails, throw immediately
             if (i === 0) {
                 intentionalDestroy = true;
+                texturePool.dispose();
                 device.destroy();
                 throw error;
             }
@@ -255,12 +395,19 @@ export async function runGPUBenchmark(
     // If no tier succeeded (all scores are Infinity), throw
     if (scores.performance === Infinity) {
         intentionalDestroy = true;
+        texturePool.dispose();
         device.destroy();
         throw new Error('All benchmark tests failed');
     }
 
+    // Apply the formal benchmark → tier policy (see recommendTierFromSamples).
+    // `null` means no tested tier met the budget; fall back to the lightest tier.
+    const recommendedTier: PerformanceTier =
+        recommendTierFromSamples(samplesByTier) ?? FALLBACK_PERFORMANCE_TIER;
+
     // Cleanup resources
     intentionalDestroy = true;
+    texturePool.dispose();
     device.destroy();
 
     const result: GPUBenchmarkResult = {
@@ -282,81 +429,83 @@ export async function runGPUBenchmark(
 
 /**
  * Run effect chain test
- * @returns Average frame time and max frame time
+ * @returns Average frame time, max frame time, and the raw stable per-frame samples
  */
-async function runEffectChainTest(
+export async function runEffectChainTest(
     device: GPUDevice,
     inputTexture: GPUTexture,
     effects: EnhancementEffect[],
-    Anime4K: typeof import('anime4k-webgpu-async')
-): Promise<{ avgTime: number; maxTime: number }> {
-    // Build pipelines
-    const pipelines: DestroyablePipeline[] = [];
-    let currentTexture: GPUTexture = inputTexture;
-    let curWidth = TEST_WIDTH;
-    let curHeight = TEST_HEIGHT;
-
+    Anime4K: typeof import('anime4k-webgpu-async'),
+    /** Source/input dimensions. Defaults to the benchmark's 1080p test input. */
+    sourceDimensions: Dimensions = { width: TEST_WIDTH, height: TEST_HEIGHT },
+): Promise<{ avgTime: number; maxTime: number; samples: number[] }> {
+    // Build pipelines through the shared effect-chain compiler (lockstep with
+    // the renderer's pipeline builder). The benchmark's device, warmup, batching
+    // and discard-window policy below are untouched.
     // Get Downscale class dynamically
-    const DownscaleClass = (Anime4K as unknown as Anime4KClassMap).Downscale;
+    const DownscaleClass = Anime4K.Downscale;
 
-    // Pre-calculate remaining upscale factors
-    const upscaleFactors = effects.map(e => e.upscaleFactor ?? 1);
-    const remainingUpscaleFactors = upscaleFactors.map((_, i) =>
-        upscaleFactors.slice(i + 1).reduce((acc, val) => acc * val, 1)
+    const targetDimensions = { width: TARGET_WIDTH, height: TARGET_HEIGHT };
+    const resolutions: EffectResolution[] = effects.map((effect) =>
+        resolveEffectReference(effect),
     );
 
-    for (let i = 0; i < effects.length; i++) {
-        const effect = effects[i];
-        try {
-            const EffectClass = (Anime4K as unknown as Anime4KClassMap)[effect.className];
-            if (!EffectClass) {
-                console.warn(`[GPUBenchmark] Effect class not found: ${effect.className}`);
-                continue;
-            }
-
-            const pipeline = new EffectClass({
-                device,
-                inputTexture: currentTexture,
-                nativeDimensions: { width: curWidth, height: curHeight },
-                targetDimensions: { width: TARGET_WIDTH, height: TARGET_HEIGHT },
-            });
-            pipelines.push(pipeline);
-
-            // Update current texture to this pipeline's output
-            currentTexture = pipeline.getOutputTexture();
-
-            // Update dimensions
-            const upscaleFactor = effect.upscaleFactor ?? 1;
-            if (upscaleFactor > 1) {
-                curWidth *= upscaleFactor;
-                curHeight *= upscaleFactor;
-
-                // Check if intermediate downscaling is needed (consistent with renderer.ts)
-                const remainingFactor = remainingUpscaleFactors[i];
-                if (DownscaleClass && remainingFactor > 1) {
-                    const idealIntermediateWidth = TARGET_WIDTH / remainingFactor;
-                    const idealIntermediateHeight = TARGET_HEIGHT / remainingFactor;
-
-                    if (curWidth > idealIntermediateWidth * 1.1) {
-                        const intermediateDownscale = new DownscaleClass({
-                            device,
-                            inputTexture: currentTexture,
-                            targetDimensions: {
-                                width: Math.ceil(idealIntermediateWidth),
-                                height: Math.ceil(idealIntermediateHeight),
-                            },
-                        });
-                        pipelines.push(intermediateDownscale);
-                        currentTexture = intermediateDownscale.getOutputTexture();
-                        curWidth = Math.ceil(idealIntermediateWidth);
-                        curHeight = Math.ceil(idealIntermediateHeight);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn(`[GPUBenchmark] Failed to create ${effect.className}:`, e);
-        }
+    if (!cachedBenchmarkRegistry) {
+        // Explicit `.js` specifier (TS node16 dynamic-import resolution); webpack's
+        // extensionAlias maps it to the `.ts`. Must stay dynamic so the library
+        // is not inlined into the benchmark's module graph.
+        const { getBackendRegistry } = await import('@core/engines/registry.js');
+        cachedBenchmarkRegistry = getBackendRegistry();
     }
+    const registry = cachedBenchmarkRegistry;
+
+    const upscaleFactors = deriveUpscaleFactors(effects, resolutions);
+
+    // Benchmark geometry uses the same restore policy as the renderer's
+    // new default ('gate'): no restore is dropped, and each one is gated by the
+    // same resolution-dependent profile. The role flags come from the
+    // resolved descriptor category (helpers are never restores).
+    const restoreFlags = deriveRestoreFlags(resolutions);
+
+    // Color-category effects (color grading) must run AFTER the deferred
+    // ClampHighlightsApply epilogue, exactly as the renderer's pipeline builder
+    // derives it, so benchmark and renderer share the same ordering.
+    const postEpilogueFlags = derivePostEpilogueFlags(resolutions);
+
+    const result = await compileEffectChain({
+        device,
+        inputTexture,
+        sourceDimensions,
+        targetDimensions,
+        effects,
+        upscaleFactors,
+        downscaleCtor: DownscaleClass,
+        restoreFlags,
+        postEpilogueFlags,
+        restoreSuppression: 'gate',
+        compileEffect: createEffectCompiler({
+            device,
+            registry,
+            resolutions,
+            resources: gpuResourceCache,
+            sourceDimensions,
+            isStale: () => false,
+            gating: selectGatedRestoreOptions(targetDimensions),
+            logging: {
+                registryFailure: (effect, _backendId, error) => {
+                    console.warn(`[GPUBenchmark] Registry compile failed for ${effect.className}:`, error);
+                },
+                skipped: (effect, status) => {
+                    console.warn(`[GPUBenchmark] ${status === 'unresolved' ? 'Unresolved' : 'Unknown'} effect "${effect.className}"; skipping.`);
+                },
+                unexpected: (effect, error) => {
+                    console.warn(`[GPUBenchmark] Failed to create ${effect.className}:`, error);
+                },
+            },
+        }),
+    });
+
+    const pipelines = result.pipelines;
 
     if (pipelines.length === 0) {
         throw new Error('No valid pipelines created');
@@ -425,7 +574,7 @@ async function runEffectChainTest(
     // Safely cleanup pipelines (wait for sync before destroying)
     await safeDestroyPipelines(device, pipelines);
 
-    return { avgTime, maxTime };
+    return { avgTime, maxTime, samples: stableFrameTimes };
 }
 
 /**

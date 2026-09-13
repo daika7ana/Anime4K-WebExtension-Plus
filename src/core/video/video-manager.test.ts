@@ -34,6 +34,7 @@ vi.mock('@utils/settings', () => ({
     whitelist: [],
     whitelistEnabled: false,
     autoEnableOnWhitelist: false,
+    autoEnableSettleMs: 300,
   }),
 }));
 
@@ -46,9 +47,33 @@ import {
   processVideoElement,
   initializeOnPage,
   deinitializeOnPage,
+  disableAllAutoEnabled,
+  DEFAULT_AUTO_ENABLE_SETTLE_MS,
 } from './video-manager';
 import * as EnhancerMap from './enhancer-map';
 import { getSettings } from '@utils/settings';
+
+/** jsdom reports a 0×0 rect by default, which would fail the eligibility gate. */
+function stubVideoRect(video: HTMLVideoElement, width = 640, height = 360): void {
+  vi.spyOn(video, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, width, height));
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+const AUTO_ENABLE_SETTINGS = {
+  selectedModeId: 'builtin-mode-a',
+  enhancementModes: [],
+  performanceTier: 'balanced',
+  customModes: [],
+  whitelist: [],
+  whitelistEnabled: true,
+  autoEnableOnWhitelist: true,
+  autoEnableSettleMs: 300,
+};
 
 describe('video-manager', () => {
   beforeEach(() => {
@@ -110,11 +135,12 @@ describe('video-manager', () => {
 
       const video = document.createElement('video');
       document.body.appendChild(video);
+      stubVideoRect(video);
 
       processVideoElement(video, 'test');
 
-      // Wait for the fire-and-forget maybeAutoEnable to complete
-      await vi.advanceTimersByTimeAsync(0);
+      // Wait out the settle window, then the fire-and-forget auto-enable completes.
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
 
       // Get the enhancer that was created
       const enhancer = EnhancerMap.getEnhancer(video);
@@ -166,6 +192,238 @@ describe('video-manager', () => {
       const enhancer = EnhancerMap.getEnhancer(video);
       expect(enhancer).toBeDefined();
       expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-enable a hidden/zero-size video', async () => {
+      vi.mocked(getSettings).mockResolvedValue({
+        selectedModeId: 'builtin-mode-a',
+        enhancementModes: [],
+        performanceTier: 'balanced',
+        customModes: [],
+        whitelist: [],
+        whitelistEnabled: true,
+        autoEnableOnWhitelist: true,
+      } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      // jsdom's getBoundingClientRect defaults to 0×0 — keep it that way.
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+      expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-enable an enhancer dissociated while settings load', async () => {
+      const settingsPromise = deferred<any>();
+      vi.mocked(getSettings).mockReturnValue(settingsPromise.promise);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+
+      processVideoElement(video, 'test');
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+
+      // Simulate the element being removed/dissociated while getSettings resolves.
+      EnhancerMap.dissociateEnhancer(video);
+
+      settingsPromise.resolve({ whitelistEnabled: true, autoEnableOnWhitelist: true });
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-enable a video that becomes ineligible during the settle window', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      const rectSpy = vi.spyOn(video, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 640, 360));
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(0); // settings resolve; settle timer armed
+
+      // The element collapses (e.g. a transient preview or ad) before the window ends.
+      rectSpy.mockReturnValue(new DOMRect(0, 0, 0, 0));
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+      expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-enable an enhancer dissociated during the settle window', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+
+      processVideoElement(video, 'test');
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+
+      await vi.advanceTimersByTimeAsync(0); // settle timer armed
+
+      // The element is removed/re-associated while the window is open.
+      EnhancerMap.dissociateEnhancer(video);
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('auto-enables a late-laid-out video that sizes within the settle window', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      const rectSpy = vi.spyOn(video, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 0, 0)); // not yet laid out at discovery
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(0); // settle timer armed
+
+      // The main player acquires its real size before the window closes.
+      rectSpy.mockReturnValue(new DOMRect(0, 0, 1280, 720));
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+      expect(enhancer!.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('auto-enables immediately when autoEnableSettleMs is 0', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS, autoEnableSettleMs: 0 } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+
+      processVideoElement(video, 'test');
+      // No timer advance needed: a 0 delay is skipped entirely.
+      await vi.advanceTimersByTimeAsync(0);
+
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+      expect(enhancer!.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not auto-enable a hidden/0×0 video even when autoEnableSettleMs is 0', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS, autoEnableSettleMs: 0 } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      // jsdom getBoundingClientRect defaults to 0×0 — the eligibility gate applies.
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(0);
+
+      const enhancer = EnhancerMap.getEnhancer(video);
+      expect(enhancer).toBeDefined();
+      expect(enhancer!.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('honours a custom autoEnableSettleMs value', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS, autoEnableSettleMs: 150 } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+
+      processVideoElement(video, 'test');
+
+      await vi.advanceTimersByTimeAsync(149);
+      const enhancer = EnhancerMap.getEnhancer(video)!;
+      expect(enhancer.toggleEnhancement).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(enhancer.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to DEFAULT_AUTO_ENABLE_SETTLE_MS when the setting is missing', async () => {
+      vi.mocked(getSettings).mockResolvedValue({
+        selectedModeId: 'builtin-mode-a',
+        enhancementModes: [],
+        performanceTier: 'balanced',
+        customModes: [],
+        whitelist: [],
+        whitelistEnabled: true,
+        autoEnableOnWhitelist: true,
+        // autoEnableSettleMs intentionally absent
+      } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+
+      processVideoElement(video, 'test');
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS - 1);
+      const enhancer = EnhancerMap.getEnhancer(video)!;
+      expect(enhancer.toggleEnhancement).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(enhancer.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('disableAllAutoEnabled', () => {
+    it('disables only active auto-enabled videos and returns the count', async () => {
+      vi.mocked(getSettings)
+        // First video is processed while auto-enable is off (manual enhancer).
+        .mockResolvedValueOnce({
+          selectedModeId: 'builtin-mode-a',
+          enhancementModes: [],
+          performanceTier: 'balanced',
+          customModes: [],
+          whitelist: [],
+          whitelistEnabled: true,
+          autoEnableOnWhitelist: false,
+        } as any)
+        // Second video is auto-enabled.
+        .mockResolvedValueOnce({
+          selectedModeId: 'builtin-mode-a',
+          enhancementModes: [],
+          performanceTier: 'balanced',
+          customModes: [],
+          whitelist: [],
+          whitelistEnabled: true,
+          autoEnableOnWhitelist: true,
+        } as any);
+
+      const manualVideo = document.createElement('video');
+      document.body.appendChild(manualVideo);
+      stubVideoRect(manualVideo);
+
+      const autoVideo = document.createElement('video');
+      document.body.appendChild(autoVideo);
+      stubVideoRect(autoVideo);
+
+      processVideoElement(manualVideo, 'manual');
+      processVideoElement(autoVideo, 'auto');
+      await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_ENABLE_SETTLE_MS);
+
+      const manualEnhancer = EnhancerMap.getEnhancer(manualVideo)!;
+      const autoEnhancer = EnhancerMap.getEnhancer(autoVideo)!;
+      vi.mocked(manualEnhancer.toggleEnhancement).mockClear();
+      vi.mocked(autoEnhancer.toggleEnhancement).mockClear();
+
+      manualVideo.setAttribute('data-anime4k-applied', 'true');
+      autoVideo.setAttribute('data-anime4k-applied', 'true');
+
+      expect(disableAllAutoEnabled()).toBe(1);
+      expect(autoEnhancer.toggleEnhancement).toHaveBeenCalledTimes(1);
+      expect(manualEnhancer.toggleEnhancement).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when no auto-enabled video is active', () => {
+      expect(disableAllAutoEnabled()).toBe(0);
     });
   });
 
