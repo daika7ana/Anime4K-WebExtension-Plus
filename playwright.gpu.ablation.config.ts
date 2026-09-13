@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import baseConfig from './playwright.gpu.config';
+import baseConfig, { ABLATION_GPU_SPECS } from './playwright.gpu.config';
 
 /**
  * Heavy chain-ablation experiments, split out of the default GPU gate.
@@ -9,16 +9,11 @@ import baseConfig from './playwright.gpu.config';
  *
  *   pnpm test:gpu:ablation
  *   pnpm test:gpu:ablation e2e/gpu/chain-ablation-wing.spec.ts
- *   pnpm test:gpu:ablation e2e/gpu/pass-dump.spec.ts
+ *
+ * PNG pass/restore dumps live in the separate `test:gpu:dumps` scope.
  */
 export default defineConfig({
   ...baseConfig,
   testIgnore: [],
-  testMatch: [
-    '**/chain-ablation*.spec.ts',
-    '**/pass-dump.spec.ts',
-    '**/restore-ab.spec.ts',
-    '**/restore-sweep.spec.ts',
-    '**/restore-gate.spec.ts',
-  ],
+  testMatch: ABLATION_GPU_SPECS,
 });

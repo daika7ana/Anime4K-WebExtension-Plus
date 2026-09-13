@@ -17,6 +17,7 @@
     "test:e2e": "playwright test",
     "test:gpu": "playwright test --config playwright.gpu.config.ts",
     "test:gpu:ablation": "playwright test --config playwright.gpu.ablation.config.ts",
+    "test:gpu:dumps": "playwright test --config playwright.gpu.dumps.config.ts",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "verify:wgsl": "node scripts/verify-wgsl-compilation.mjs",

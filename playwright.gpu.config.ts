@@ -25,12 +25,37 @@ const CHROMIUM_ARGS = [
 
 const isCI = Boolean(process.env.CI);
 
+/**
+ * Chain-ablation experiments: real-chain per-stage attribution diagnostics.
+ * Multi-minute, not pass/fail gates. Run on demand with `pnpm test:gpu:ablation`.
+ *
+ * `playwright.gpu.ablation.config.ts` matches exactly this list.
+ */
+export const ABLATION_GPU_SPECS = ['**/chain-ablation*.spec.ts'];
+
+/**
+ * PNG dump diagnostics: run a real chain over a still frame and write every
+ * pass (or restore variant) to PNG. Expensive (1080p -> 4K CNN chains) and not
+ * pass/fail gates. Run on demand with `pnpm test:gpu:dumps`.
+ *
+ * `playwright.gpu.dumps.config.ts` matches exactly this list.
+ */
+export const DUMP_GPU_SPECS = [
+  '**/pass-dump.spec.ts',
+  '**/restore-ab.spec.ts',
+  '**/restore-sweep.spec.ts',
+  '**/restore-gate.spec.ts',
+];
+
+/** Everything excluded from the default `pnpm test:gpu` gate. */
+export const HEAVY_GPU_SPECS = [...ABLATION_GPU_SPECS, ...DUMP_GPU_SPECS];
+
 export default defineConfig({
   testDir: './e2e/gpu',
 
-  // The chain-ablation specs are multi-minute experiments, not gates. Keep the
-  // default GPU run fast; execute them explicitly with `pnpm test:gpu:ablation`.
-  testIgnore: ['**/chain-ablation*.spec.ts'],
+  // Keep the default GPU gate fast: diagnostics run via test:gpu:ablation
+  // (chain ablations) and test:gpu:dumps (pass/restore PNG dumps).
+  testIgnore: HEAVY_GPU_SPECS,
 
   // One GPU device at a time; the suite is a numeric gate, not a throughput test.
   fullyParallel: false,

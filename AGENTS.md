@@ -14,7 +14,8 @@ manager is **pnpm** (CI pins pnpm 11.5.3, Node 23/24).
 - Single unit test: `pnpm exec vitest run src/path/to/file.test.ts`
 - `pnpm test:e2e` — GPU-free Playwright smoke. **Requires `pnpm build:chrome` first** (loads `dist-chrome/` unpacked).
 - `pnpm test:gpu` — headless-WebGPU correctness gate (SwiftShader; full Chromium, not the headless shell).
-- `pnpm test:gpu:ablation` — multi-minute diagnostic chain experiments, not pass/fail gates. Single spec: `pnpm test:gpu:ablation e2e/gpu/restore-gate.spec.ts`
+- `pnpm test:gpu:ablation` — multi-minute diagnostic chain experiments, not pass/fail gates. Single spec: `pnpm test:gpu:ablation e2e/gpu/chain-ablation-wing.spec.ts`
+- `pnpm test:gpu:dumps` — PNG pass/restore dump diagnostics (real chain, ~4K), not pass/fail gates. Single spec: `pnpm test:gpu:dumps e2e/gpu/pass-dump.spec.ts`
 - `pnpm verify:wgsl` — compiles every `src/**/*.wgsl` in headless Chromium; needs `pnpm exec playwright install chromium`.
 - `pnpm check:bundle` — scans `dist-chrome/` + `dist-firefox/` for required files and leaked test tokens; **requires both builds**.
 - `pnpm check:version` — asserts `package.json` == `manifest.json` == built dist manifests (missing dist manifests are skipped).
