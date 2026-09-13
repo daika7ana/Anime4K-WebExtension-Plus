@@ -968,6 +968,45 @@ describe('Renderer', () => {
       r.destroy();
     });
 
+    it('disambiguates repeated pipeline labels so every pass gets its own row', async () => {
+      mock.device.features.add('timestamp-query');
+      configureReadback({ seed: true });
+      captureCommandEncoder();
+      // A+A/ultra with "Fast mode" off runs CNNUL three times. The profiler keys
+      // stats by label, so without disambiguation all three collapse into one row
+      // even though the chain genuinely has three passes.
+      mockBuildEffectPipelines.mockImplementation(async (params: { labels?: string[] }) => {
+        params.labels?.push(
+          'ClampHighlights', 'CNNUL', 'CNNx2UL', 'Downscale', 'CNNUL', 'CNNUL', 'ClampHighlightsApply',
+        );
+        return Array.from({ length: 7 }, () => createMockPipeline());
+      });
+
+      const r = await createRenderer({ enableGpuTimings: true });
+
+      const profiler = (r as unknown as ProfilerAccess).profiler!;
+      await vi.waitFor(() => {
+        expect(profiler.snapshot().framesSampled).toBeGreaterThan(0);
+      });
+
+      // The presentation blit is timed separately; assert only the chain rows.
+      expect(
+        profiler.snapshot().passes
+          .map((pass) => pass.label)
+          .filter((label) => label !== 'blit'),
+      ).toEqual([
+        'ClampHighlights',
+        'CNNUL',
+        'CNNx2UL',
+        'Downscale',
+        'CNNUL #2',
+        'CNNUL #3',
+        'ClampHighlightsApply',
+      ]);
+
+      r.destroy();
+    });
+
     it('still presents and calls back when verification fails', async () => {
       mock.device.features.add('timestamp-query');
       configureReadback({ reject: true });

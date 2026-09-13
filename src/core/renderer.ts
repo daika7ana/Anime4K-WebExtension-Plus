@@ -574,8 +574,17 @@ export class Renderer {
 
       const commandEncoder = this.device.createCommandEncoder();
       const rec = this.profiler?.beginFrame(commandEncoder) ?? null;
+      // A chain may run the same effect several times (e.g. CNNUL appears three
+      // times in A+A/ultra). The profiler aggregates CPU/GPU stats by label, so
+      // identical labels would collapse every duplicate pass into a single HUD
+      // row and hide the real chain. Disambiguate occurrences here so each pass
+      // is measured and reported separately.
+      const labelCounts = new Map<string, number>();
       for (let i = 0; i < this.pipelines.length; i++) {
-        const label = this.pipelineLabels[i] ?? `pass ${i + 1}`;
+        const baseLabel = this.pipelineLabels[i] ?? `pass ${i + 1}`;
+        const occurrence = (labelCounts.get(baseLabel) ?? 0) + 1;
+        labelCounts.set(baseLabel, occurrence);
+        const label = occurrence === 1 ? baseLabel : `${baseLabel} #${occurrence}`;
         const t0 = performance.now();
         await this.pipelines[i].pass(commandEncoder);
         rec?.recordCpu(label, performance.now() - t0);
