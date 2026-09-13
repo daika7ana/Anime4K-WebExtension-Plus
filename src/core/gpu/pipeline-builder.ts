@@ -8,7 +8,7 @@
  *  - Generation counter to prevent concurrent builds from clobbering each other
  *  - Shallow params comparison (replaces JSON.stringify)
  */
-import type { Dimensions, EnhancementEffect, DestroyablePipeline } from '@/types';
+import type { Dimensions, EnhancementEffect, DestroyablePipeline, RestorePolicy } from '@/types';
 import type { BackendRegistry } from 'anime4k-webgpu-async';
 import { t } from '@utils/i18n';
 import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
@@ -17,7 +17,8 @@ import { PipelinePreWarmer } from './pipeline-prewarmer';
 import type { PreWarmEffectRef, PreWarmTarget } from './pipeline-prewarmer';
 import { computeRemainingUpscaleFactors, planChainGeometryPreview, isSuppressedIndex, DEFAULT_MAX_INTERMEDIATE_PIXELS, type ChainGeometryLimits, type RestoreSuppression } from './effect-chain';
 import { compileEffectChain, destroyPipelines } from './effect-chain-compiler';
-import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
+import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors, wrapGatedRestore } from './compile-policy';
+import { selectGatedRestoreOptions } from '@core/effects/gated-restore';
 
 /** Cached anime4k-webgpu-async module (avoids repeated dynamic imports) */
 let cachedAnime4KModule: typeof import('anime4k-webgpu-async') | null = null;
@@ -57,13 +58,12 @@ interface BuildPipelinesParams {
   /** Check if a newer build has superseded this one (generation counter) */
   isStale: () => boolean;
   /**
-   * Local "Fast mode — Preserve detail" preference. Applies to every mode, built-in
-   * or custom: when `true` (the default), keeps the V2 restore policy
-   * (`'trailing'`) and skips the scale-1 restore passes emitted after the
-   * target-exact final Downscale; when `false`, uses the full-enhancement V1
-   * chain (`'off'`, every restore retained).
+   * Restore-pass policy applied to every mode, built-in or custom. Defaults to
+   * `'gate'` (trailing drop set + local gate on retained restores); `'off'`
+   * keeps every restore; `'trailing'`/`'leading'` drop restores as documented
+   * in `effect-chain.ts`.
    */
-  preserveDetail?: boolean;
+  restorePolicy?: RestorePolicy;
   /**
    * Optional out-parameter receiving one label per built pipeline, in encode
    * order: the effect's `className` for each effect pipeline, `'Downscale'` for
@@ -88,7 +88,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   const {
     device, videoFrameTexture, video, targetDimensions, effects,
     oldPipelines, preWarmer: pipelinePreWarmer, onProgress, isStale, labels,
-    preserveDetail = true,
+    restorePolicy = 'gate',
   } = params;
 
   // Wait for the GPU queue to finish before destroying old pipelines to avoid resource contention
@@ -143,11 +143,18 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   // Color-category effects (color grading) must run AFTER the deferred
   // ClampHighlightsApply epilogue; see compileEffectChain.
   const postEpilogueFlags = derivePostEpilogueFlags(resolutions);
-  // The "Fast mode" policy applies to every mode, built-in and
-  // custom alike: it defaults to V2 (drop restores after the final Downscale),
-  // and turning "Fast mode" off restores the full-enhancement V1
-  // chain for that chain.
-  const restoreSuppression: RestoreSuppression = preserveDetail ? 'trailing' : 'off';
+  // The restore policy applies to every mode, built-in and custom alike:
+  // `'off'` keeps every restore; `'gate'` and `'trailing'` drop the trailing
+  // restores; `'leading'` drops the leading ones.
+  const restoreSuppression: RestoreSuppression = restorePolicy;
+  // `'gate'` shares the trailing drop set above; every restore that survives
+  // (i.e. is actually compiled) is wrapped in the local-luma gate. Suppressed
+  // restores are never compiled, so they are never wrapped. The gate profile is
+  // resolution-dependent: sub-4K targets gate only the leading restore, while
+  // ≥4K targets emit no final Downscale and gate all restores at the target.
+  const gating = restorePolicy === 'gate'
+    ? selectGatedRestoreOptions(targetDimensions)
+    : null;
   const remainingUpscaleFactors = computeRemainingUpscaleFactors(
     upscaleFactors.map((upscaleFactor) => ({ upscaleFactor })),
   );
@@ -192,6 +199,20 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
       .filter((target): target is PreWarmTarget => target !== null);
 
   /**
+   * Whether a pre-warm target resolves to a restore-category descriptor. Used
+   * only to decide if the gate wrapper (and therefore its mask shader) must be
+   * constructed for the dummy too.
+   */
+  const isRestorePrewarmTarget = (ref: PreWarmEffectRef): boolean =>
+    resolutions.some(
+      (resolution) =>
+        resolution.status === 'resolved'
+        && resolution.effect.descriptor.backendId === ref.backendId
+        && resolution.effect.descriptor.key === ref.key
+        && resolution.effect.descriptor.category === 'restore',
+    );
+
+  /**
    * Registry dummy construction. Returns `null` when the target has no backend
    * id or its backend cannot be resolved (such effects are skipped, never
    * pre-warmed).
@@ -221,7 +242,11 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
         isStale: () => false,
       },
     );
-    return node.pipeline;
+    // Under `'gate'`, build the same wrapper as the real compile so the gate
+    // mask shader is warmed alongside the inner restore.
+    return gating && isRestorePrewarmTarget(ref)
+      ? wrapGatedRestore(node.pipeline, { device: dev, inputTexture: tex, gating })
+      : node.pipeline;
   };
 
   // --- Phase 0: Speculative shader pre-warming ---
@@ -274,6 +299,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
       resources: gpuResourceCache,
       sourceDimensions: { width: video.videoWidth, height: video.videoHeight },
       isStale,
+      gating,
       logging: {
         registryFailure: (effect, backendId, error) => {
           console.warn(

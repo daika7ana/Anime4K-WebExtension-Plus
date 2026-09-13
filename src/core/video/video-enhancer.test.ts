@@ -826,6 +826,7 @@ describe('VideoEnhancer', () => {
         performanceTier: 'balanced',
         inputResolution: '1920×1080',
         targetResolution: '3840×2160',
+        restorePolicy: 'gate',
       });
       enhancer.destroy();
     });
@@ -869,6 +870,7 @@ describe('VideoEnhancer', () => {
         performanceTier: 'ultra',
         inputResolution: '1280×720',
         targetResolution: '1920×1080',
+        restorePolicy: 'gate',
       });
       enhancer.destroy();
     });
@@ -1308,11 +1310,11 @@ describe('VideoEnhancer', () => {
     });
   });
 
-  describe('preserveDetail threading', () => {
+  describe('restorePolicy threading', () => {
     /**
-     * A built-in mode paired with preserveDetail=false gives a distinct value,
-     * so a dropped argument is caught. The custom mode case below confirms the
-     * policy also reaches custom chains.
+     * A built-in mode paired with restorePolicy 'trailing' gives a distinct
+     * value, so a dropped argument is caught. The custom mode case below
+     * confirms the policy also reaches custom chains.
      */
     const BUILT_IN_MODE_SETTINGS = {
       selectedModeId: 'builtin-mode-a',
@@ -1324,10 +1326,10 @@ describe('VideoEnhancer', () => {
       enableCrossOriginFix: false,
     };
 
-    it('forwards preserveDetail=false to Renderer.create', async () => {
+    it('forwards restorePolicy trailing to Renderer.create', async () => {
       (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
         showDiagnostics: false,
-        preserveDetail: false,
+        restorePolicy: 'trailing',
       });
       (getSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...BUILT_IN_MODE_SETTINGS });
 
@@ -1335,17 +1337,17 @@ describe('VideoEnhancer', () => {
       await enhancer.toggleEnhancement();
 
       const createCall = (Renderer.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(createCall.preserveDetail).toBe(false);
+      expect(createCall.restorePolicy).toBe('trailing');
       enhancer.destroy();
     });
 
-    it('forwards preserveDetail=false to updateConfiguration', async () => {
+    it('forwards restorePolicy trailing to updateConfiguration', async () => {
       const enhancer = VideoEnhancer.create(video);
       await enhancer.toggleEnhancement();
 
       (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
         showDiagnostics: false,
-        preserveDetail: false,
+        restorePolicy: 'trailing',
       });
 
       await enhancer.updateSettings({
@@ -1367,14 +1369,14 @@ describe('VideoEnhancer', () => {
       } as any);
 
       const updateCall = (mockRenderer.updateConfiguration as ReturnType<typeof vi.fn>).mock.calls.at(-1)!;
-      expect(updateCall[0].preserveDetail).toBe(false);
+      expect(updateCall[0].restorePolicy).toBe('trailing');
       enhancer.destroy();
     });
 
-    it('forwards preserveDetail to Renderer.create for a custom mode', async () => {
+    it('forwards restorePolicy to Renderer.create for a custom mode', async () => {
       (getLocalSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
         showDiagnostics: false,
-        preserveDetail: true,
+        restorePolicy: 'leading',
       });
       (getSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
         selectedModeId: 'custom-mode',
@@ -1391,7 +1393,7 @@ describe('VideoEnhancer', () => {
 
       const createCall = (Renderer.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
       // The policy reaches custom chains too.
-      expect(createCall.preserveDetail).toBe(true);
+      expect(createCall.restorePolicy).toBe('leading');
       enhancer.destroy();
     });
   });

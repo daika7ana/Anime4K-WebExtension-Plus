@@ -7,7 +7,7 @@
 import { getEffectsForMode, getLocalSettings, saveSettings, synchronizeEffectsForCustomModes } from '@utils/settings';
 import { resolveEffectReference } from '@utils/effect-registry';
 import { AVAILABLE_EFFECTS } from '@utils/effects-map';
-import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '@/types';
+import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier, RestorePolicy } from '@/types';
 import { renderParamSliders } from './param-sliders';
 import { t } from '@utils/i18n';
 import { downloadJSON, openFile } from './import-export';
@@ -27,12 +27,35 @@ export interface AppContext {
   notifyUpdate(modifiedModeId?: string): void;
   /**
    * Set by {@link initModesPanel}. Other panels (notably the General panel's
-   * "Fast mode" toggle) call this to re-render the modes panel immediately
-   * after a local-settings change that affects the preserve-detail policy note.
+   * restore-policy select) call this to re-render the modes panel immediately
+   * after a local-settings change that affects the restore-policy note.
    * The options page's own cross-context listener never receives the options
    * page's own `SETTINGS_UPDATED` message, so an explicit refresh is required.
    */
   refreshModesPanel?: () => void;
+}
+
+/** i18n key + fallback for the selected restore policy's mode-card note, or `null` when it drops nothing. */
+function policyNoteI18nKey(policy: RestorePolicy): { key: string; fallback: string } | null {
+  switch (policy) {
+    case 'gate':
+      return {
+        key: 'restorePolicyNoteGate',
+        fallback: 'Trailing restores are skipped; the retained restores adapt to local contrast.',
+      };
+    case 'trailing':
+      return {
+        key: 'restorePolicyNoteTrailing',
+        fallback: 'Restore passes after the final Downscale may be skipped.',
+      };
+    case 'leading':
+      return {
+        key: 'restorePolicyNoteLeading',
+        fallback: 'Restore passes before the first upscaler may be skipped.',
+      };
+    default:
+      return null;
+  }
 }
 
 export function initModesPanel(
@@ -44,12 +67,12 @@ export function initModesPanel(
 ): { render(): void } {
 
   // -----------------------------------------------------------------------
-  //  "Fast mode — Preserve detail" policy cache
+  //  Restore-policy cache
   // -----------------------------------------------------------------------
   // The local setting is read asynchronously, but render() rebuilds every card
   // synchronously. Cache the latest value once here and reuse it for the whole
   // pass (never await per effect). A changed value triggers one re-render.
-  let preserveDetail = true;
+  let restorePolicy: RestorePolicy = 'off';
   let policyFetchInFlight = false;
 
   /** Resolve an effect and report whether it is a restore-category effect. */
@@ -61,14 +84,14 @@ export function initModesPanel(
     );
   }
 
-  function refreshPreserveDetailPolicy(): void {
+  function refreshRestorePolicy(): void {
     if (policyFetchInFlight) return;
     policyFetchInFlight = true;
     getLocalSettings()
       .then((local) => {
-        const next = local.preserveDetail ?? true;
-        if (next !== preserveDetail) {
-          preserveDetail = next;
+        const next = local.restorePolicy ?? 'off';
+        if (next !== restorePolicy) {
+          restorePolicy = next;
           render();
         }
       })
@@ -88,7 +111,7 @@ export function initModesPanel(
     const currentTier = ctx.getTier();
 
     // Refresh the cached policy asynchronously for this/next pass.
-    refreshPreserveDetailPolicy();
+    refreshRestorePolicy();
 
     // 1. Preserve expanded state before re-rendering
     const expandedModeIds = new Set<string>();
@@ -272,13 +295,11 @@ export function initModesPanel(
       // Policy note — not a computed prediction. Suppression depends on runtime
       // geometry (source resolution, render target, upscale factors), so we
       // describe the policy only. Applies to built-in and custom modes alike.
-      if (preserveDetail && hasRestoreEffects) {
+      const note = policyNoteI18nKey(restorePolicy);
+      if (note && hasRestoreEffects) {
         const policyNote = document.createElement('p');
         policyNote.className = 'mode-policy-note';
-        policyNote.textContent = t(
-          'preserveDetailModeNote',
-          'Trailing restore passes may be skipped by "Fast mode". Turning it off runs the full chain, which is not always higher quality.',
-        );
+        policyNote.textContent = t(note.key, note.fallback);
         cardContent.appendChild(policyNote);
       }
 
@@ -299,16 +320,16 @@ export function initModesPanel(
         effectNameRow.className = 'effect-name-row';
         effectNameRow.appendChild(effectName);
 
-        // Restore-category effects are subject to the "Fast mode"
-        // policy. This is a policy marker, not a claim that this effect will be
-        // skipped: whether suppression happens depends on runtime geometry.
+        // Restore-category effects are subject to the restore policy. This is a
+        // policy marker, not a claim that this effect will be skipped: whether
+        // suppression happens depends on runtime geometry.
         if (isRestoreEffect(effect)) {
           const policyBadge = document.createElement('span');
           policyBadge.className = 'effect-policy-badge';
           policyBadge.textContent = t('restorePolicyBadge', 'Restore');
           policyBadge.title = t(
             'restorePolicyBadgeTitle',
-            'Restore pass — may be skipped when "Fast mode" is on.',
+            'Restore pass — may be affected by the restore policy.',
           );
           effectNameRow.appendChild(policyBadge);
         }
@@ -506,7 +527,7 @@ export function initModesPanel(
   }
 
   // Expose the renderer through the shared context so other panels can refresh
-  // the preserve-detail policy note immediately after a local-settings change.
+  // the restore-policy note immediately after a local-settings change.
   ctx.refreshModesPanel = render;
 
   // -----------------------------------------------------------------------

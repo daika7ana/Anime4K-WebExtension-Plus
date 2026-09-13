@@ -125,6 +125,7 @@ describe('DiagnosticsOverlay', () => {
         performanceTier: 'balanced',
         inputResolution: '1920×1080',
         targetResolution: '3840×2160',
+        restorePolicy: 'gate',
       });
 
       const host = video.parentElement?.querySelector('div');
@@ -137,6 +138,8 @@ describe('DiagnosticsOverlay', () => {
       expect(textContent).toContain('1920×1080');
       expect(textContent).toContain('Target');
       expect(textContent).toContain('3840×2160');
+      expect(textContent).toContain('Restore policy');
+      expect(textContent).toContain('Gate');
 
       overlay.destroy();
     });
@@ -160,6 +163,7 @@ describe('DiagnosticsOverlay', () => {
         performanceTier: 'balanced',
         inputResolution: '1920×1080',
         targetResolution: '3840×2160',
+        restorePolicy: 'gate',
       });
 
       overlay.setInfo({ inputResolution: '1280×720' });
@@ -171,6 +175,7 @@ describe('DiagnosticsOverlay', () => {
       expect(textContent).toContain('Mode A');
       expect(textContent).toContain('balanced');
       expect(textContent).toContain('3840×2160');
+      expect(textContent).toContain('Gate');
 
       overlay.destroy();
     });
@@ -182,11 +187,77 @@ describe('DiagnosticsOverlay', () => {
         performanceTier: 'balanced',
         inputResolution: '1920×1080',
         targetResolution: '3840×2160',
+        restorePolicy: 'gate',
       });
 
       overlay.destroy();
 
       expect(() => overlay.setInfo({ inputResolution: '1280×720' })).not.toThrow();
+    });
+  });
+
+  describe('restore policy row', () => {
+    /** Reads the value cell of the row whose label is "Restore policy". */
+    function policyValue(video: HTMLVideoElement): string {
+      const shadow = video.parentElement?.querySelector('div')?.shadowRoot;
+      const rows = shadow ? Array.from(shadow.querySelectorAll('.metric')) : [];
+      for (const row of rows) {
+        if (row.querySelector('.metric-label')?.textContent === 'Restore policy') {
+          return row.querySelector('.metric-value')?.textContent ?? '';
+        }
+      }
+      return '';
+    }
+
+    function createWithPolicy(policy: string): { video: HTMLVideoElement; overlay: DiagnosticsOverlay } {
+      const video = createTestVideo();
+      const overlay = DiagnosticsOverlay.create(video, 'Test GPU', {
+        mode: 'Mode A',
+        performanceTier: 'balanced',
+        inputResolution: '640×360',
+        targetResolution: '1280×720',
+        restorePolicy: policy,
+      });
+      return { video, overlay };
+    }
+
+    it.each([
+      ['off', 'Off'],
+      ['gate', 'Gate'],
+      ['trailing', 'Trailing'],
+      ['leading', 'Leading'],
+    ])('renders the %s policy as the short label "%s"', (policy, expected) => {
+      const { video, overlay } = createWithPolicy(policy);
+
+      const shadow = video.parentElement?.querySelector('div')?.shadowRoot;
+      expect(shadow?.textContent).toContain('Restore policy');
+      expect(policyValue(video)).toBe(expected);
+
+      overlay.destroy();
+    });
+
+    it('updates the row through setInfo()', () => {
+      const { video, overlay } = createWithPolicy('off');
+
+      overlay.setInfo({ restorePolicy: 'leading' });
+      expect(policyValue(video)).toBe('Leading');
+
+      overlay.destroy();
+    });
+
+    it('falls back to the raw value for an unknown policy', () => {
+      const { video, overlay } = createWithPolicy('mystery');
+
+      expect(policyValue(video)).toBe('mystery');
+
+      overlay.destroy();
+    });
+
+    it('clears the element on destroy()', () => {
+      const { overlay } = createWithPolicy('gate');
+
+      overlay.destroy();
+      expect(overlay['restorePolicyEl']).toBeNull();
     });
   });
 

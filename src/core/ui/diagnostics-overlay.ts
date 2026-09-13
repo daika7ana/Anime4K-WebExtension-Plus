@@ -85,6 +85,28 @@ export interface DiagnosticsInfo {
   inputResolution: string;
   /** Computed output target resolution, e.g. '3840×2160'. */
   targetResolution: string;
+  /** Active restore policy, e.g. 'gate'. */
+  restorePolicy: string;
+}
+
+/**
+ * Map a restore policy value to a short HUD label. The diagnostics panel is a
+ * narrow monospace overlay, so the long options-page descriptors are never
+ * used; unknown values fall back to the raw string, then to the 'off' label.
+ */
+export function formatRestorePolicy(policy: string): string {
+  switch (policy) {
+    case 'off':
+      return t('restorePolicyNameOff', 'Off');
+    case 'gate':
+      return t('restorePolicyNameGate', 'Gate');
+    case 'trailing':
+      return t('restorePolicyNameTrailing', 'Trailing');
+    case 'leading':
+      return t('restorePolicyNameLeading', 'Leading');
+    default:
+      return policy || t('restorePolicyNameOff', 'Off');
+  }
 }
 
 /** Effective frame-budget state used for the HUD's semantic accent colors. */
@@ -140,6 +162,7 @@ export class DiagnosticsOverlay {
   private tierEl: HTMLElement | null = null;
   private inputResolutionEl: HTMLElement | null = null;
   private targetResolutionEl: HTMLElement | null = null;
+  private restorePolicyEl: HTMLElement | null = null;
   private gpuShareEl: HTMLElement | null = null;
   private timingSectionEl: HTMLElement | null = null;
   private timingTitleEl: HTMLElement | null = null;
@@ -608,6 +631,20 @@ export class DiagnosticsOverlay {
     targetRow.appendChild(targetValue);
     config.appendChild(targetRow);
 
+    // Restore policy row (short label; the long descriptor lives on the options page)
+    const policyRow = document.createElement('div');
+    policyRow.className = 'metric';
+    const policyLabel = document.createElement('span');
+    policyLabel.className = 'metric-label';
+    policyLabel.textContent = t('diagnosticsRestorePolicy', 'Restore policy');
+    const policyValue = document.createElement('span');
+    policyValue.className = 'metric-value';
+    policyValue.textContent = this.info ? formatRestorePolicy(this.info.restorePolicy) : '--';
+    this.restorePolicyEl = policyValue;
+    policyRow.appendChild(policyLabel);
+    policyRow.appendChild(policyValue);
+    config.appendChild(policyRow);
+
     container.appendChild(config);
 
     // GPU/CPU per-effect timing section (populated from a profiler snapshot)
@@ -805,7 +842,7 @@ export class DiagnosticsOverlay {
    */
   public setInfo(info: Partial<DiagnosticsInfo>): void {
     const base = this.info
-      ?? { mode: '', performanceTier: '', inputResolution: '', targetResolution: '' };
+      ?? { mode: '', performanceTier: '', inputResolution: '', targetResolution: '', restorePolicy: '' };
     this.info = { ...base, ...info };
 
     if (info.mode !== undefined && this.modeEl) {
@@ -819,6 +856,9 @@ export class DiagnosticsOverlay {
     }
     if (info.targetResolution !== undefined && this.targetResolutionEl) {
       this.targetResolutionEl.textContent = info.targetResolution;
+    }
+    if (info.restorePolicy !== undefined && this.restorePolicyEl) {
+      this.restorePolicyEl.textContent = formatRestorePolicy(info.restorePolicy);
     }
   }
 
@@ -1142,6 +1182,7 @@ export class DiagnosticsOverlay {
     this.tierEl = null;
     this.inputResolutionEl = null;
     this.targetResolutionEl = null;
+    this.restorePolicyEl = null;
     this.timingVisible = false;
     this.lastTimingRenderTime = Number.NEGATIVE_INFINITY;
     this.lastSnapshot = null;

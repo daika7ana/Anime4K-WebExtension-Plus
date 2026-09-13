@@ -12,7 +12,7 @@
     "message": "Anime4K Enhancement Plus"
   },
   "performanceTierLabel": {
-    "message": "Performance Tier:"
+    "message": "Performance Tier"
   },
   "selectTierDesc": {
     "message": "Manually select the performance tier. Higher tiers use larger AI models for better quality but require more GPU power."
@@ -253,16 +253,46 @@
     "message": "Restore"
   },
   "restorePolicyBadgeTitle": {
-    "message": "Restore pass — may be skipped when \"Fast mode\" is on."
+    "message": "Restore pass — may be affected by the restore policy."
   },
-  "preserveDetailLabel": {
-    "message": "Fast mode — Preserve detail"
+  "restorePolicyLabel": {
+    "message": "Restore policy"
   },
-  "preserveDetailDesc": {
-    "message": "Skips the trailing target-resolution restore passes for a large speedup. Applies to all modes, including custom ones. Off is not always higher quality — on many videos these passes change little, and some clips look as good or better without them."
+  "restorePolicyDesc": {
+    "message": "Controls which restore passes the chain keeps. \"Off\" runs the full chain (full enhancement); \"Gate\" skips restores after the final Downscale and adapts the retained restores to local contrast; \"Trailing\" skips restores after the final Downscale; \"Leading\" skips restores before the first upscaler."
   },
-  "preserveDetailModeNote": {
-    "message": "Trailing restore passes may be skipped by \"Fast mode\". Turning it off runs the full chain, which is not always higher quality."
+  "restorePolicyOff": {
+    "message": "Off — Full chain"
+  },
+  "restorePolicyGate": {
+    "message": "Gate — Adaptive restores"
+  },
+  "restorePolicyTrailing": {
+    "message": "Trailing — Skip restores after final Downscale"
+  },
+  "restorePolicyLeading": {
+    "message": "Leading — Skip restores before first upscaler"
+  },
+  "restorePolicyNameOff": {
+    "message": "Off"
+  },
+  "restorePolicyNameGate": {
+    "message": "Gate"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "Trailing"
+  },
+  "restorePolicyNameLeading": {
+    "message": "Leading"
+  },
+  "restorePolicyNoteGate": {
+    "message": "Restores after the final Downscale are skipped; the retained restores adapt to local contrast."
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "Restore passes after the final Downscale may be skipped."
+  },
+  "restorePolicyNoteLeading": {
+    "message": "Restore passes before the first upscaler may be skipped."
   },
   "modeDescA": {
     "message": "For most 1080p anime, older 720p, and blurry or heavily compressed SD."
@@ -541,6 +571,9 @@
   },
   "diagnosticsTargetResolution": {
     "message": "Target"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "Restore policy"
   },
   "diagnosticsCustomMode": {
     "message": "Custom"

@@ -9,9 +9,16 @@ import baseConfig from './playwright.gpu.config';
  *
  *   pnpm test:gpu:ablation
  *   pnpm test:gpu:ablation e2e/gpu/chain-ablation-wing.spec.ts
+ *   pnpm test:gpu:ablation e2e/gpu/pass-dump.spec.ts
  */
 export default defineConfig({
   ...baseConfig,
   testIgnore: [],
-  testMatch: ['**/chain-ablation*.spec.ts'],
+  testMatch: [
+    '**/chain-ablation*.spec.ts',
+    '**/pass-dump.spec.ts',
+    '**/restore-ab.spec.ts',
+    '**/restore-sweep.spec.ts',
+    '**/restore-gate.spec.ts',
+  ],
 });

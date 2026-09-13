@@ -257,19 +257,21 @@
             </div>
           </div>
 
-          <!-- Fast mode — Preserve detail (local): skips target-resolution restore passes -->
+          <!-- Restore policy (local): controls which scale-1 restore passes are emitted -->
           <div class="setting-item">
             <div class="setting-label">
-              <label for="preserve-detail-toggle" data-i18n="preserveDetailLabel">Fast mode — Preserve detail</label>
-              <p class="setting-description" data-i18n="preserveDetailDesc">
-                Skips the trailing target-resolution restore passes for a large speedup. Applies to all modes, including custom ones. Off is not always higher quality — on many videos these passes change little, and some clips look as good or better without them.
+              <label for="restore-policy-select" data-i18n="restorePolicyLabel">Restore policy</label>
+              <p class="setting-description" data-i18n="restorePolicyDesc">
+                Controls which restore passes the chain keeps. "Off" runs the full chain (full enhancement); "Gate" skips restores after the final Downscale and adapts the retained restores to local contrast; "Trailing" skips restores after the final Downscale; "Leading" skips restores before the first upscaler.
               </p>
             </div>
             <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" id="preserve-detail-toggle" checked>
-                <span class="slider round"></span>
-              </label>
+              <select id="restore-policy-select" class="theme-select">
+                <option value="off" data-i18n="restorePolicyOff">Off — Full chain</option>
+                <option value="gate" selected data-i18n="restorePolicyGate">Gate — Adaptive restores</option>
+                <option value="trailing" data-i18n="restorePolicyTrailing">Trailing — Skip restores after final Downscale</option>
+                <option value="leading" data-i18n="restorePolicyLeading">Leading — Skip restores before first upscaler</option>
+              </select>
             </div>
           </div>
         </div>

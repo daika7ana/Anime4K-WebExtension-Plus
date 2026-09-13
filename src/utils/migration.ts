@@ -1,6 +1,6 @@
 /**
  * Configuration migration module
- * Handles migration from v1 → v2 → v3 config formats.
+ * Handles migration from v1 → v2 → v3 → v4 config formats.
  *
  * Migrations run as an ordered, idempotent chain in `ensureLatestConfig`:
  * each step only runs when the stored `_configVersion` is below the version it
@@ -50,7 +50,8 @@ function syncV1Effect(raw: unknown): EnhancementEffect | undefined {
 }
 
 // Config version
-const CURRENT_CONFIG_VERSION = 3;
+const CURRENT_CONFIG_VERSION = 4;
+const CONFIG_VERSION_3 = 3;
 const CONFIG_VERSION_2 = 2;
 
 /**
@@ -163,7 +164,7 @@ async function migrateV2ToV3(): Promise<void> {
     ]);
 
     const syncBackfill: Record<string, unknown> = {
-        _configVersion: CURRENT_CONFIG_VERSION,
+        _configVersion: CONFIG_VERSION_3,
     };
     if (syncData.autoEnableOnWhitelist === undefined) {
         syncBackfill.autoEnableOnWhitelist = false;
@@ -203,6 +204,36 @@ async function migrateV2ToV3(): Promise<void> {
 }
 
 /**
+ * Execute migration from v3 to v4.
+ *
+ * v4 replaces the local boolean `preserveDetail` with the four-value
+ * `restorePolicy` enum. The legacy boolean is mapped so existing behavior is
+ * preserved: `true → 'trailing'`, `false → 'off'`, and an absent flag → `'off'`
+ * (the conservative opt-out for a pre-v4 config). The old key is removed. An
+ * already-present `restorePolicy` is never overwritten. Only the fresh-install
+ * default (`initializeDefaultConfig`) uses the new `'gate'` default.
+ */
+async function migrateV3ToV4(): Promise<void> {
+    console.log('[Migration] Starting v3 to v4 migration...');
+
+    await chrome.storage.sync.set({ _configVersion: CURRENT_CONFIG_VERSION });
+
+    const localData = await chrome.storage.local.get(['preserveDetail', 'restorePolicy']);
+    if (localData.restorePolicy === undefined) {
+        const preserveDetail = localData.preserveDetail;
+        const mappedPolicy = preserveDetail === true
+            ? 'trailing'
+            : preserveDetail === false
+                ? 'off'
+                : 'off';
+        await chrome.storage.local.set({ restorePolicy: mappedPolicy });
+    }
+    await chrome.storage.local.remove('preserveDetail');
+
+    console.log('[Migration] v3 to v4 migration completed');
+}
+
+/**
  * Initialize a fresh install directly on the latest config version.
  */
 async function initializeDefaultConfig(): Promise<void> {
@@ -227,7 +258,7 @@ async function initializeDefaultConfig(): Promise<void> {
         hasCompletedOnboarding: false,
         showDiagnostics: false,
         diagnosticsDetail: 'auto',
-        preserveDetail: true,
+        restorePolicy: 'gate',
     });
 
     console.log('[Migration] Initialized new config with defaults');
@@ -263,5 +294,11 @@ export async function ensureLatestConfig(): Promise<void> {
     // v2 → v3
     if (version < 3) {
         await migrateV2ToV3();
+        version = 3;
+    }
+
+    // v3 → v4
+    if (version < 4) {
+        await migrateV3ToV4();
     }
 }

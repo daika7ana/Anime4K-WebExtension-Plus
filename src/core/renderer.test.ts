@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { installGPUMock, removeGPUMock, createMockGPUBuffer, type MockGPUObjects } from '@/test/webgpu-mock';
-import type { Dimensions, EnhancementEffect, RendererOptions } from '@/types';
+import type { Dimensions, EnhancementEffect, RendererOptions, RestorePolicy } from '@/types';
 import type { ProfilerSnapshot } from '@core/gpu/gpu-timestamp-profiler';
 import type { GpuDeviceLease } from '@core/gpu/gpu-device-manager';
 import { RendererInitializationError } from '@core/errors';
@@ -191,7 +191,7 @@ describe('Renderer', () => {
       onFrameRendered: overrides.onFrameRendered as RendererOptions['onFrameRendered'],
       onProgress: overrides.onProgress as ((stage: string | null, current?: number, total?: number) => void) | undefined,
       enableGpuTimings: overrides.enableGpuTimings as boolean | undefined,
-      preserveDetail: overrides.preserveDetail as boolean | undefined,
+      restorePolicy: overrides.restorePolicy as RestorePolicy | undefined,
     });
     await Promise.resolve();
     return r;
@@ -531,29 +531,29 @@ describe('Renderer', () => {
       r.destroy();
     });
 
-    it('preserveDetail policy change alone → rebuild', async () => {
-      // Effects and dimensions are unchanged, so only the restore-suppression
-      // policy differs; the toggle must still rebuild or it would be a no-op.
+    it('restorePolicy change alone → rebuild', async () => {
+      // Effects and dimensions are unchanged, so only the restore policy
+      // differs; the policy must still rebuild or it would be a no-op.
       mockParamsEqual.mockReturnValue(true);
-      const r = await createRenderer({ preserveDetail: false });
+      const r = await createRenderer({ restorePolicy: 'off' });
       mockBuildEffectPipelines.mockClear();
       await r.updateConfiguration({
         effects: DEFAULT_EFFECTS,
         targetDimensions: DEFAULT_DIMENSIONS,
-        preserveDetail: true,
+        restorePolicy: 'trailing',
       });
       expect(mockBuildEffectPipelines).toHaveBeenCalled();
       r.destroy();
     });
 
-    it('unchanged preserveDetail policy → no rebuild', async () => {
+    it('unchanged restorePolicy → no rebuild', async () => {
       mockParamsEqual.mockReturnValue(true);
-      const r = await createRenderer({ preserveDetail: true });
+      const r = await createRenderer({ restorePolicy: 'trailing' });
       mockBuildEffectPipelines.mockClear();
       await r.updateConfiguration({
         effects: DEFAULT_EFFECTS,
         targetDimensions: DEFAULT_DIMENSIONS,
-        preserveDetail: true,
+        restorePolicy: 'trailing',
       });
       expect(mockBuildEffectPipelines).not.toHaveBeenCalled();
       r.destroy();

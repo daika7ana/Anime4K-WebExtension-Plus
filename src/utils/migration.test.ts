@@ -73,11 +73,24 @@ function mockStorageApi(): void {
       return Promise.resolve();
     },
   );
+
+  // remove is not stubbed by test-setup — register it for local too (v3→v4
+  // removes the legacy `preserveDetail` key).
+  if (!(chrome.storage.local as any).remove) {
+    (chrome.storage.local as any).remove = vi.fn();
+  }
+  vi.mocked((chrome.storage.local as any).remove).mockImplementation(
+    (keys: string | string[]): Promise<void> => {
+      const keyList = Array.isArray(keys) ? keys : [keys];
+      for (const k of keyList) delete localStore[k];
+      return Promise.resolve();
+    },
+  );
 }
 
-/** Assert that every v3 synced field is present with the expected defaults. */
-function expectV3SyncedDefaults(): void {
-  expect(syncStore['_configVersion']).toBe(3);
+/** Assert that every synced field is present with the expected defaults. */
+function expectSyncedDefaults(): void {
+  expect(syncStore['_configVersion']).toBe(4);
   expect(syncStore['selectedModeId']).toBe('builtin-mode-a');
   expect(syncStore['targetResolutionSetting']).toBe('x2');
   expect(syncStore['whitelistEnabled']).toBe(false);
@@ -97,8 +110,22 @@ describe('ensureLatestConfig', () => {
   });
 
   // ── No migration needed (already latest) ─────────────────────
-  it('is a no-op when _configVersion is already 3', async () => {
+  it('upgrades a v3 config to v4 (maps preserveDetail, removes the old key)', async () => {
     syncStore['_configVersion'] = 3;
+    syncStore['customModes'] = [];
+    syncStore['selectedModeId'] = 'builtin-mode-a';
+    localStore['preserveDetail'] = true;
+
+    await ensureLatestConfig();
+
+    expect(syncStore['_configVersion']).toBe(4);
+    // The legacy boolean is mapped to the enum and the old key removed.
+    expect(localStore['restorePolicy']).toBe('trailing');
+    expect(localStore['preserveDetail']).toBeUndefined();
+  });
+
+  it('is a no-op when _configVersion is already 4 (latest)', async () => {
+    syncStore['_configVersion'] = 4;
     syncStore['customModes'] = [];
     syncStore['selectedModeId'] = 'builtin-mode-a';
 
@@ -109,8 +136,8 @@ describe('ensureLatestConfig', () => {
     expect((chrome.storage.sync as any).remove).not.toHaveBeenCalled();
   });
 
-  it('is a no-op when _configVersion is > 3 (future version)', async () => {
-    syncStore['_configVersion'] = 4;
+  it('is a no-op when _configVersion is > 4 (future version)', async () => {
+    syncStore['_configVersion'] = 5;
     syncStore['customModes'] = [];
 
     await ensureLatestConfig();
@@ -119,7 +146,51 @@ describe('ensureLatestConfig', () => {
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
   });
 
-  // ── v2 → v3 ──────────────────────────────────────────────────
+  // ── v3 → v4 ──────────────────────────────────────────────────
+  it('maps a stored preserveDetail boolean to restorePolicy (true → trailing)', async () => {
+    syncStore['_configVersion'] = 3;
+    localStore['preserveDetail'] = true;
+
+    await ensureLatestConfig();
+
+    expect(syncStore['_configVersion']).toBe(4);
+    expect(localStore['restorePolicy']).toBe('trailing');
+    expect(localStore['preserveDetail']).toBeUndefined();
+  });
+
+  it('maps a stored preserveDetail boolean to restorePolicy (false → off)', async () => {
+    syncStore['_configVersion'] = 3;
+    localStore['preserveDetail'] = false;
+
+    await ensureLatestConfig();
+
+    expect(syncStore['_configVersion']).toBe(4);
+    expect(localStore['restorePolicy']).toBe('off');
+    expect(localStore['preserveDetail']).toBeUndefined();
+  });
+
+  it('defaults restorePolicy to off when preserveDetail is absent during v3 → v4', async () => {
+    syncStore['_configVersion'] = 3;
+
+    await ensureLatestConfig();
+
+    expect(syncStore['_configVersion']).toBe(4);
+    expect(localStore['restorePolicy']).toBe('off');
+    expect(localStore['preserveDetail']).toBeUndefined();
+  });
+
+  it('does not overwrite an existing restorePolicy during v3 → v4', async () => {
+    syncStore['_configVersion'] = 3;
+    localStore['restorePolicy'] = 'leading';
+    localStore['preserveDetail'] = true;
+
+    await ensureLatestConfig();
+
+    expect(localStore['restorePolicy']).toBe('leading');
+    expect(localStore['preserveDetail']).toBeUndefined();
+  });
+
+  // ── v2 → v4 ──────────────────────────────────────────────────
   it('backfills v3 fields when upgrading from v2 without overwriting existing values', async () => {
     syncStore['_configVersion'] = 2;
     syncStore['enableHotkey'] = false; // existing value must be preserved
@@ -137,21 +208,23 @@ describe('ensureLatestConfig', () => {
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     // Missing fields are backfilled with defaults (synced bucket)
     expect(syncStore['autoEnableOnWhitelist']).toBe(false);
     expect(syncStore['autoEnableSettleMs']).toBe(300);
     // Existing values are untouched
     expect(syncStore['enableHotkey']).toBe(false);
     expect(syncStore['colorGrading']).toEqual(existingGrading);
-    // Local backfill (local bucket)
+    // Local backfill (local bucket); the v2→v3 preserveDetail default (true)
+    // is then mapped by v3→v4.
     expect(localStore['showDiagnostics']).toBe(false);
     expect(localStore['diagnosticsDetail']).toBe('auto');
-    expect(localStore['preserveDetail']).toBe(true);
+    expect(localStore['restorePolicy']).toBe('trailing');
+    expect(localStore['preserveDetail']).toBeUndefined();
     expect(localStore['performanceTier']).toBe('quality');
   });
 
-  it('does not overwrite existing v3 fields during v2 → v3', async () => {
+  it('does not overwrite existing v3 fields during v2 → v4', async () => {
     syncStore['_configVersion'] = 2;
     syncStore['autoEnableSettleMs'] = 750;
     localStore['diagnosticsDetail'] = 'expanded';
@@ -159,26 +232,27 @@ describe('ensureLatestConfig', () => {
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     // Existing synced values preserved
     expect(syncStore['autoEnableSettleMs']).toBe(750);
-    // Existing local values preserved
+    // Existing local values preserved, then the legacy key is mapped.
     expect(localStore['diagnosticsDetail']).toBe('expanded');
-    expect(localStore['preserveDetail']).toBe(false);
+    expect(localStore['restorePolicy']).toBe('off');
+    expect(localStore['preserveDetail']).toBeUndefined();
   });
 
-  it('does not overwrite an existing showDiagnostics during v2 → v3', async () => {
+  it('does not overwrite an existing showDiagnostics during v2 → v4', async () => {
     syncStore['_configVersion'] = 2;
     localStore['showDiagnostics'] = true;
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(localStore['showDiagnostics']).toBe(true);
   });
 
-  // ── v1 → v3 ──────────────────────────────────────────────────
-  it('migrates v1 all the way to v3', async () => {
+  // ── v1 → v4 ──────────────────────────────────────────────────
+  it('migrates v1 all the way to v4', async () => {
     syncStore['enhancementModes'] = [
       {
         id: 'my-custom',
@@ -195,7 +269,7 @@ describe('ensureLatestConfig', () => {
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(syncStore['customModes']).toHaveLength(1);
     expect((syncStore['customModes'] as CustomMode[])[0].id).toBe('my-custom');
     expect(syncStore['selectedModeId']).toBe('builtin-mode-b');
@@ -203,7 +277,7 @@ describe('ensureLatestConfig', () => {
     expect(syncStore['whitelistEnabled']).toBe(true);
     // Old key removed
     expect(syncStore['enhancementModes']).toBeUndefined();
-    // v3 backfill applied by the second migration step
+    // v3 backfill applied by the v2→v3 step
     expect(syncStore['autoEnableOnWhitelist']).toBe(false);
     expect(syncStore['enableHotkey']).toBe(true);
     expect(syncStore['colorGrading']).toEqual(DEFAULT_COLOR_GRADING);
@@ -225,17 +299,17 @@ describe('ensureLatestConfig', () => {
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(syncStore['customModes']).toHaveLength(1);
     expect(syncStore['enhancementModes']).toBeUndefined();
   });
 
-  it('advances a v1 config without enhancementModes to v3', async () => {
+  it('advances a v1 config without enhancementModes to v4', async () => {
     syncStore['_configVersion'] = 1;
 
     await ensureLatestConfig();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(syncStore['autoEnableOnWhitelist']).toBe(false);
     expect(syncStore['enableHotkey']).toBe(true);
     expect(localStore['showDiagnostics']).toBe(false);
@@ -342,17 +416,17 @@ describe('ensureLatestConfig', () => {
   });
 
   // ── Fresh install ────────────────────────────────────────────
-  it('initializes default config at v3 for a fresh install', async () => {
+  it('initializes default config at v4 for a fresh install', async () => {
     await ensureLatestConfig();
 
-    expectV3SyncedDefaults();
+    expectSyncedDefaults();
     expect(localStore['performanceTier']).toBe('balanced');
     expect(localStore['gpuBenchmarkResult']).toBeNull();
     expect(localStore['gpuAdapterInfo']).toBeNull();
     expect(localStore['hasCompletedOnboarding']).toBe(false);
     expect(localStore['showDiagnostics']).toBe(false);
     expect(localStore['diagnosticsDetail']).toBe('auto');
-    expect(localStore['preserveDetail']).toBe(true);
+    expect(localStore['restorePolicy']).toBe('gate');
   });
 
   // ── Local defaults when performanceTier already set ──────────
@@ -368,7 +442,7 @@ describe('ensureLatestConfig', () => {
   // ── Idempotency ──────────────────────────────────────────────
   it('is idempotent: a second run after a fresh install performs no writes', async () => {
     await ensureLatestConfig();
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
 
     vi.clearAllMocks();
 
@@ -376,7 +450,7 @@ describe('ensureLatestConfig', () => {
 
     expect(chrome.storage.sync.set).not.toHaveBeenCalled();
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
   });
 
   it('is idempotent: a second run after a v1 migration performs no writes', async () => {
@@ -384,7 +458,7 @@ describe('ensureLatestConfig', () => {
     syncStore['enhancementModes'] = [];
 
     await ensureLatestConfig();
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
 
     vi.clearAllMocks();
 
@@ -400,7 +474,7 @@ describe('ensureLatestConfig', () => {
 
     await expect(ensureLatestConfig()).resolves.toBeUndefined();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(syncStore['customModes']).toEqual([]);
     expect(syncStore['enhancementModes']).toBeUndefined();
   });
@@ -410,7 +484,7 @@ describe('ensureLatestConfig', () => {
 
     await expect(ensureLatestConfig()).resolves.toBeUndefined();
 
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(syncStore['customModes']).toEqual([]);
   });
 
@@ -426,7 +500,7 @@ describe('ensureLatestConfig', () => {
     await expect(ensureLatestConfig()).resolves.toBeUndefined();
 
     const customModes = syncStore['customModes'] as CustomMode[];
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(customModes).toHaveLength(1);
     expect(customModes[0].id).toBe('my-custom');
   });
@@ -441,7 +515,7 @@ describe('ensureLatestConfig', () => {
     await expect(ensureLatestConfig()).resolves.toBeUndefined();
 
     const customModes = syncStore['customModes'] as CustomMode[];
-    expect(syncStore['_configVersion']).toBe(3);
+    expect(syncStore['_configVersion']).toBe(4);
     expect(customModes).toHaveLength(1);
     expect(customModes[0].id).toBe('valid');
     expect(customModes[0].effects).toEqual([]);

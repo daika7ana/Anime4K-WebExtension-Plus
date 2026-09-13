@@ -41,7 +41,7 @@ const tierSelect = document.getElementById('tier-select') as HTMLSelectElement;
 const enableHotkeyToggle = document.getElementById('enable-hotkey-toggle') as HTMLInputElement;
 const diagnosticsToggle = document.getElementById('diagnostics-toggle') as HTMLInputElement;
 const diagnosticsDetailSelect = document.getElementById('diagnostics-detail-select') as HTMLSelectElement | null;
-const preserveDetailToggle = document.getElementById('preserve-detail-toggle') as HTMLInputElement;
+const restorePolicySelect = document.getElementById('restore-policy-select') as HTMLSelectElement;
 
 // --- AppContext: shared state + callbacks for all panels ---
 const ctx: AppContext = {
@@ -100,7 +100,7 @@ const generalPanel = initGeneralPanel(
   versionNumberSpan,
   enableHotkeyToggle,
   diagnosticsToggle,
-  preserveDetailToggle,
+  restorePolicySelect,
   diagnosticsDetailSelect,
 );
 

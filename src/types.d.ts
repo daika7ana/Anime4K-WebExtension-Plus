@@ -147,6 +147,15 @@ interface SyncedSettings {
  */
 type DiagnosticsDetailMode = 'auto' | 'compact' | 'expanded';
 
+/**
+ * Restore-pass policy for the emitted effect chain.
+ * - `off`      — keep every restore (full V1 chain), no gating;
+ * - `gate`     — drop restores after the final Downscale, then gate the retained ones;
+ * - `trailing` — drop restores after the final Downscale (no gating);
+ * - `leading`  — drop restores before the first retained upscaler.
+ */
+type RestorePolicy = 'off' | 'gate' | 'trailing' | 'leading';
+
 // ===== Local-only Settings (storage.local) =====
 interface LocalSettings {
   performanceTier: PerformanceTier;
@@ -157,12 +166,11 @@ interface LocalSettings {
   /** Diagnostics HUD detail level; defaults to `'auto'`. */
   diagnosticsDetail?: DiagnosticsDetailMode;
   /**
-   * "Fast mode — Preserve detail" — applies to all modes, built-in and custom:
-   * keep the V2 restore policy, i.e. skip the scale-1 restore passes emitted
-   * after the target-exact final Downscale. `false` restores the full-enhancement
-   * V1 chain (every restore retained). Persisted locally; defaults to `true` (V2).
+   * Restore-pass policy applied to all modes, built-in and custom. Defaults to
+   * `'gate'` (trailing drop set + local-luma gating) for fresh/normalized-missing
+   * values. Persisted locally.
    */
-  preserveDetail?: boolean;
+  restorePolicy?: RestorePolicy;
 }
 
 // ===== Runtime-merged Full Settings =====
@@ -226,11 +234,13 @@ interface RendererOptions {
    */
   enableGpuTimings?: boolean;
   /**
-   * Local "Fast mode" preference. Applies to all modes: keeps the
-   * V2 restore policy (`'trailing'`) when `true`; `false` falls back to the
-   * full-enhancement V1 chain (`'off'`). Defaults to `true`.
+   * Restore-pass policy. Applies to all modes: `'gate'` (default) uses the
+   * `'trailing'` drop set and wraps each retained restore in the local-luma
+   * gate; `'off'` keeps every restore; `'trailing'` drops restores after the
+   * target-exact final Downscale; `'leading'` drops restores before the first
+   * retained upscaler.
    */
-  preserveDetail?: boolean;
+  restorePolicy?: RestorePolicy;
 }
 
 // Export interfaces for use by other modules
@@ -241,6 +251,7 @@ export {
   SyncedSettings,
   LocalSettings,
   DiagnosticsDetailMode,
+  RestorePolicy,
   ColorGradingSettings,
   Dimensions,
   WhitelistRule,

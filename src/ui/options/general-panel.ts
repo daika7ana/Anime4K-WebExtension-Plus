@@ -20,7 +20,7 @@ export function initGeneralPanel(
   versionNumberSpan: HTMLSpanElement,
   enableHotkeyToggle: HTMLInputElement,
   diagnosticsToggle: HTMLInputElement,
-  preserveDetailToggle: HTMLInputElement,
+  restorePolicySelect: HTMLSelectElement,
   diagnosticsDetailSelect: HTMLSelectElement | null,
 ): { render(): Promise<void>; renderGeneralSettings(): Promise<void> } {
 
@@ -30,10 +30,10 @@ export function initGeneralPanel(
     themeSelect.value = themeManager.getTheme();
     tierSelect.value = ctx.getTier();
 
-    // Diagnostics + "Fast mode — Preserve detail" toggles read from local settings
+    // Diagnostics + restore-policy controls read from local settings
     const localSettings = await getLocalSettings();
     diagnosticsToggle.checked = localSettings.showDiagnostics ?? false;
-    preserveDetailToggle.checked = localSettings.preserveDetail ?? true;
+    restorePolicySelect.value = localSettings.restorePolicy ?? 'gate';
     if (diagnosticsDetailSelect) {
       diagnosticsDetailSelect.value = localSettings.diagnosticsDetail ?? 'auto';
     }
@@ -137,10 +137,11 @@ export function initGeneralPanel(
     ctx.notifyUpdate();
   });
 
-  // --- Fast mode — Preserve detail Toggle (local; V2 restore suppression) ---
-  preserveDetailToggle.addEventListener('change', async (e) => {
-    const enabled = (e.target as HTMLInputElement).checked;
-    await saveLocalSettings({ preserveDetail: enabled });
+  // --- Restore policy (local) ---
+  restorePolicySelect.addEventListener('change', async (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    if (value !== 'off' && value !== 'gate' && value !== 'trailing' && value !== 'leading') return;
+    await saveLocalSettings({ restorePolicy: value });
     // The options page never receives its own cross-context update, so refresh
     // the modes panel here to update the restore-policy note immediately.
     ctx.refreshModesPanel?.();

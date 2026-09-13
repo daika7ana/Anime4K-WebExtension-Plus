@@ -396,6 +396,11 @@ interface Anime4kPipelineLike {
    * once after the chain tail; its output becomes the chain output.
    */
   getDeferredPipeline?(finalInputTexture: GPUTexture): Anime4kPipelineLike | null;
+  /**
+   * Optional per-effect parameter setter (e.g. `DoG.updateParam('strength', n)`).
+   * Effects that expose no tunable params simply omit it.
+   */
+  updateParam?(param: string, value: number): void;
 }
 
 /**
@@ -854,6 +859,25 @@ export type RealChainStageSpec =
       /** Catalog key resolved through `loadAnime4kConstructor`. */
       key: string;
       behavior: RealChainBehavior;
+      /**
+       * Optional tunable params applied after construction via
+       * `effect.updateParam(name, value)`. Effects that expose no setter ignore
+       * them (guarded by a `typeof updateParam === 'function'` check). Omitted
+       * by every pre-existing caller, so behavior is unchanged.
+       */
+      params?: Record<string, number>;
+      /**
+       * Optional production `gate`-policy wrapper for this restore stage. When
+       * present (PNG-dump path only) a compute pass runs after the effect,
+       * reading the stage INPUT and the effect OUTPUT and writing
+       * `mix(input, restoreOut, smoothstep(low, high, max9-min9) * strength)`
+       * into a new rgba16float texture that becomes the stage output. The WGSL
+       * text is supplied by the caller (the shipped
+       * `src/shaders/restore-gate.wgsl`), mirroring the CAS post-pass pattern.
+       * Only meaningful for same-geometry effects (e.g. restores); omitted by
+       * every pre-existing caller, so behavior is unchanged.
+       */
+      gate?: { wgsl: string; low: number; high: number; strength: number };
     }
   | {
       kind: 'downscale';
@@ -1191,6 +1215,15 @@ export async function runGpuRealChainAblation(
               nativeDimensions: { width: curWidth, height: curHeight },
               targetDimensions: { width: outWidth, height: outHeight },
             });
+            // Apply optional tunables (e.g. DoG strength) before recording.
+            // Restores expose no setter; they are simply skipped.
+            if (spec.params) {
+              for (const [name, value] of Object.entries(spec.params)) {
+                if (typeof effect.updateParam === 'function') {
+                  effect.updateParam(name, value);
+                }
+              }
+            }
             await recordPipelineList(encoder, [effect]);
             currentTexture = effect.getOutputTexture();
             curWidth = outWidth;
@@ -1333,6 +1366,596 @@ export async function runGpuRealChainAblation(
       clampHighlights: request.clampHighlights ?? false,
       postSharpen: request.postSharpen ?? null,
       readbackOnlyFinal: request.readbackOnlyFinal ?? false,
+      blitWgsl: IDENTITY_BLIT_WGSL,
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PNG pass dump: decode a source PNG in-page, run the real chain, encode every
+// stage back to PNG and stream it to a Node-side sink.
+//
+// Unlike {@link runGpuRealChainAblation} (which materializes every stage as a
+// float array and therefore cannot survive a full-resolution frame), all pixel
+// data here stays in the browser: the source PNG is decoded with
+// `createImageBitmap`, each stage is read back, converted to an `ImageData` and
+// PNG-encoded with `OffscreenCanvas.convertToBlob`, then handed to the sink one
+// stage at a time. Only base64 strings cross the Playwright bridge, and only
+// one at a time, so memory stays bounded by a single stage.
+// ---------------------------------------------------------------------------
+
+export interface GpuPngDumpRequest {
+  /** Base64 (no `data:` prefix) of the source PNG. */
+  srcPngBase64: string;
+  /**
+   * Ordered real stages after the source. The `ClampHighlights` head is *not*
+   * listed here; set {@link clampHighlights} to reproduce it (and its deferred
+   * tail apply).
+   */
+  stages: RealChainStageSpec[];
+  /**
+   * When true, reproduce the two-stage `ClampHighlights` epilogue: a
+   * pass-through head capture, then the clamp apply appended after the last
+   * stage (its output is dumped as `ClampHighlightsApply`).
+   */
+  clampHighlights?: boolean;
+  /**
+   * Optional test-only post-pass applied to the chain's final texture. `cas`
+   * runs the extension's SHIPPED `src/shaders/cas.wgsl` (rgba8unorm output,
+   * vec2<f32> uniform `[sharpness, unused]`) and dumps the result as an extra
+   * `CAS(sharp=...)` stage. The WGSL text is supplied by the caller so the
+   * harness stays free of `src/**` imports. Mirrors
+   * {@link GpuRealChainRequest.postSharpen}.
+   */
+  postSharpen?: {
+    kind: 'cas';
+    /** 0..1, matching the shipped effect's parameter. */
+    sharpness: number;
+    /** Contents of `src/shaders/cas.wgsl`. */
+    wgsl: string;
+  };
+}
+
+export interface GpuPngDumpStageMeta {
+  /** Reporting label (`stage.label`, `Downscale`, or `ClampHighlightsApply`). */
+  label: string;
+  /** Catalog key, or `Downscale` / `ClampHighlightsApply` for synthetic stages. */
+  key: string;
+  width: number;
+  height: number;
+}
+
+/** Sink invoked once per dumped stage, in execution order. */
+export type GpuPngDumpSink = (
+  meta: GpuPngDumpStageMeta,
+  pngBase64: string,
+) => void | Promise<void>;
+
+export interface GpuPngDumpSuccess {
+  ok: true;
+  /** One entry per streamed stage, in execution order. */
+  stages: GpuPngDumpStageMeta[];
+  adapterInfo: string;
+  software: boolean;
+}
+
+export interface GpuPngDumpFailure {
+  ok: false;
+  kind: 'unavailable' | 'validation';
+  error: string;
+}
+
+export type GpuPngDumpResult = GpuPngDumpSuccess | GpuPngDumpFailure;
+
+/** Monotonic suffix so repeated dumps in one page never collide on the binding name. */
+let pngDumpBindingCounter = 0;
+
+/**
+ * Decode `request.srcPngBase64` in the page, run the real effect chain, and
+ * stream every stage's pixels to `sink` as a PNG. See the module section doc.
+ */
+export async function runGpuRealChainPngDump(
+  page: Page,
+  request: GpuPngDumpRequest,
+  sink: GpuPngDumpSink,
+): Promise<GpuPngDumpResult> {
+  const binding = `__a4kPngDump${(pngDumpBindingCounter += 1)}`;
+  // The binding name is delivered to the page in the payload; the callback
+  // itself cannot be serialized, so `page.exposeFunction` is the only channel.
+  await page.exposeFunction(binding, sink);
+  return page.evaluate(
+    async (payload): Promise<GpuPngDumpResult> => {
+      const unavailable = (message: string): GpuPngDumpFailure => ({
+        ok: false,
+        kind: 'unavailable',
+        error: message,
+      });
+      const validation = (message: string): GpuPngDumpFailure => ({
+        ok: false,
+        kind: 'validation',
+        error: message,
+      });
+
+      if (typeof navigator === 'undefined' || !navigator.gpu) {
+        return unavailable('navigator.gpu is not defined');
+      }
+
+      // Prefer the software fallback adapter, then fall back to any adapter.
+      let adapter: GPUAdapter | null = null;
+      try {
+        adapter = await navigator.gpu.requestAdapter({ forceFallbackAdapter: true });
+      } catch {
+        // Fall through to the generic adapter request below.
+      }
+      if (!adapter) {
+        try {
+          adapter = await navigator.gpu.requestAdapter();
+        } catch (error) {
+          return unavailable(`requestAdapter() threw: ${String(error)}`);
+        }
+      }
+      if (!adapter) return unavailable('requestAdapter() returned null');
+
+      let device: GPUDevice;
+      try {
+        device = await adapter.requestDevice();
+      } catch (error) {
+        return unavailable(`requestDevice() threw: ${String(error)}`);
+      }
+
+      const adapterInfo = JSON.stringify({
+        vendor: adapter.info.vendor,
+        architecture: adapter.info.architecture,
+        device: adapter.info.device,
+      });
+      const software =
+        adapter.info.isFallbackAdapter || /swiftshader|llvmpipe|software/i.test(adapterInfo);
+
+      const halfToFloat = (h: number): number => {
+        const sign = (h & 0x8000) !== 0 ? -1 : 1;
+        const exponent = (h >> 10) & 0x1f;
+        const mantissa = h & 0x3ff;
+        if (exponent === 0) return sign * Math.pow(2, -14) * (mantissa / 1024);
+        if (exponent === 0x1f) return mantissa === 0 ? sign * Infinity : NaN;
+        return sign * Math.pow(2, exponent - 15) * (1 + mantissa / 1024);
+      };
+
+      // In-page float32 -> binary16 encoder (mirror of the Node helper; the
+      // evaluate callback cannot close over module scope).
+      const floatToHalf = (value: number): number => {
+        const scratch = new DataView(new ArrayBuffer(4));
+        scratch.setFloat32(0, value, true);
+        const bits = scratch.getUint32(0, true);
+        const sign = (bits >>> 16) & 0x8000;
+        const exponent = (bits >>> 23) & 0xff;
+        const mantissa = bits & 0x7fffff;
+        if (exponent === 0xff) return sign | 0x7c00 | (mantissa === 0 ? 0 : 0x200);
+        const unbiased = exponent - 127 + 15;
+        if (unbiased >= 0x1f) return sign | 0x7c00;
+        if (unbiased <= 0) {
+          if (unbiased < -10) return sign;
+          const withImplicit = mantissa | 0x800000;
+          const shift = 14 - unbiased;
+          const half = withImplicit >>> shift;
+          const remainder = withImplicit & ((1 << shift) - 1);
+          const halfway = 1 << (shift - 1);
+          if (remainder > halfway || (remainder === halfway && (half & 1) === 1)) {
+            return sign | (half + 1);
+          }
+          return sign | half;
+        }
+        let half = (unbiased << 10) | (mantissa >>> 13);
+        const remainder = mantissa & 0x1fff;
+        if (remainder > 0x1000 || (remainder === 0x1000 && (half & 1) === 1)) half += 1;
+        return sign | half;
+      };
+
+      const bytesToBase64 = (bytes: Uint8Array): string => {
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + chunk)));
+        }
+        return btoa(binary);
+      };
+
+      // --- Decode the source PNG entirely in the page ---
+      let srcWidth: number;
+      let srcHeight: number;
+      let srcRgba: Uint8ClampedArray;
+      try {
+        if (typeof createImageBitmap !== 'function') {
+          return unavailable('createImageBitmap is not available');
+        }
+        const binary = atob(payload.srcPngBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        srcWidth = bitmap.width;
+        srcHeight = bitmap.height;
+        const canvas = new OffscreenCanvas(srcWidth, srcHeight);
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return unavailable('OffscreenCanvas 2d context unavailable');
+        ctx.drawImage(bitmap, 0, 0);
+        srcRgba = ctx.getImageData(0, 0, srcWidth, srcHeight).data;
+      } catch (error) {
+        return unavailable(`PNG decode failed: ${String(error)}`);
+      }
+
+      let lib: Anime4kLibModule;
+      let engine: Anime4kEngineModule;
+      try {
+        // Dynamic specifiers (not literals): the `/vendor/...` modules only
+        // exist at runtime under the test secure origin, so TS must not try to
+        // resolve them statically.
+        const libSpecifier = '/vendor/anime4k/index.js';
+        const engineSpecifier = '/vendor/anime4k/engines/anime4k/index.js';
+        lib = (await import(libSpecifier)) as unknown as Anime4kLibModule;
+        engine = (await import(engineSpecifier)) as unknown as Anime4kEngineModule;
+      } catch (error) {
+        return unavailable(`library import failed: ${String(error)}`);
+      }
+
+      const { Downscale } = lib;
+      let recordPipelineList = lib.recordPipelineList;
+      if (typeof recordPipelineList !== 'function') {
+        try {
+          const fallbackSpecifier = '/vendor/anime4k/pipelines/recordPipelineList.js';
+          const fallback = (await import(fallbackSpecifier)) as {
+            recordPipelineList: Anime4kLibModule['recordPipelineList'];
+          };
+          recordPipelineList = fallback.recordPipelineList;
+        } catch (error) {
+          return unavailable(`recordPipelineList unavailable: ${String(error)}`);
+        }
+      }
+      if (typeof recordPipelineList !== 'function') {
+        return unavailable('recordPipelineList is not a function');
+      }
+
+      const effectKeys = Array.from(
+        new Set(
+          payload.stages
+            .filter(
+              (stage): stage is Extract<RealChainStageSpec, { kind: 'effect' }> =>
+                stage.kind === 'effect',
+            )
+            .map((stage) => stage.key),
+        ),
+      );
+      if (payload.clampHighlights) effectKeys.push('ClampHighlights');
+      const ctors = new Map<string, Anime4kEffectCtor>();
+      try {
+        for (const key of effectKeys) {
+          ctors.set(key, await engine.loadAnime4kConstructor(key));
+        }
+      } catch (error) {
+        return unavailable(`effect constructor unavailable: ${String(error)}`);
+      }
+
+      device.pushErrorScope('validation');
+      let scopeOpen = true;
+      let failure: GpuPngDumpFailure | null = null;
+      const dumped: GpuPngDumpStageMeta[] = [];
+
+      try {
+        const srcTexture = device.createTexture({
+          size: { width: srcWidth, height: srcHeight },
+          format: 'rgba16float',
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING
+            | GPUTextureUsage.COPY_DST
+            | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+
+        const srcBytesPerRow = Math.ceil((srcWidth * 8) / 256) * 256;
+        const srcBytes = new Uint8Array(srcBytesPerRow * srcHeight);
+        const srcView = new DataView(srcBytes.buffer);
+        for (let y = 0; y < srcHeight; y += 1) {
+          for (let x = 0; x < srcWidth; x += 1) {
+            const sourceIndex = (y * srcWidth + x) * 4;
+            const destIndex = y * srcBytesPerRow + x * 8;
+            for (let channel = 0; channel < 4; channel += 1) {
+              srcView.setUint16(
+                destIndex + channel * 2,
+                floatToHalf(srcRgba[sourceIndex + channel] / 255) & 0xffff,
+                true,
+              );
+            }
+          }
+        }
+        device.queue.writeTexture(
+          { texture: srcTexture },
+          srcBytes,
+          { bytesPerRow: srcBytesPerRow, rowsPerImage: srcHeight },
+          { width: srcWidth, height: srcHeight },
+        );
+
+        const blitModule = device.createShaderModule({
+          code: payload.blitWgsl,
+          label: 'png-dump-identity-blit',
+        });
+        const blitPipeline = device.createComputePipeline({
+          layout: 'auto',
+          compute: { module: blitModule, entryPoint: 'computeMain' },
+        });
+
+        interface PendingDump {
+          label: string;
+          key: string;
+          width: number;
+          height: number;
+          bytesPerRow: number;
+          buffer: GPUBuffer;
+          texture: GPUTexture;
+        }
+
+        const encoder = device.createCommandEncoder();
+        const pending: PendingDump[] = [];
+        const blit = (label: string, key: string, texture: GPUTexture): void => {
+          const width = texture.width;
+          const height = texture.height;
+          const bytesPerRow = Math.ceil((width * 8) / 256) * 256;
+          const destination = device.createTexture({
+            size: { width, height },
+            format: 'rgba16float',
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+          });
+          const buffer = device.createBuffer({
+            size: bytesPerRow * height,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          });
+          const bindGroup = device.createBindGroup({
+            layout: blitPipeline.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: texture.createView() },
+              { binding: 1, resource: destination.createView() },
+            ],
+          });
+          const pass = encoder.beginComputePass();
+          pass.setPipeline(blitPipeline);
+          pass.setBindGroup(0, bindGroup);
+          pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
+          pass.end();
+          encoder.copyTextureToBuffer(
+            { texture: destination },
+            { buffer, bytesPerRow, rowsPerImage: height },
+            { width, height },
+          );
+          pending.push({ label, key, width, height, bytesPerRow, buffer, texture: destination });
+        };
+
+        // Lazily built production `restore-gate` pipelines, memoized by WGSL so
+        // every gated stage in a chain shares one pipeline.
+        const gatePipelines = new Map<string, GPUComputePipeline>();
+        const gatePipelineFor = (wgsl: string): GPUComputePipeline => {
+          const existing = gatePipelines.get(wgsl);
+          if (existing) return existing;
+          const module = device.createShaderModule({ code: wgsl, label: 'restore-gate' });
+          const pipeline = device.createComputePipeline({
+            layout: 'auto',
+            compute: { module, entryPoint: 'main' },
+          });
+          gatePipelines.set(wgsl, pipeline);
+          return pipeline;
+        };
+
+        // Optional two-stage ClampHighlights head capture (pass-through).
+        let clamp: Anime4kPipelineLike | null = null;
+        if (payload.clampHighlights) {
+          const ClampHighlights = ctors.get('ClampHighlights');
+          if (!ClampHighlights) throw new Error('ClampHighlights constructor missing');
+          clamp = new ClampHighlights({ device, inputTexture: srcTexture });
+          await recordPipelineList(encoder, [clamp]);
+        }
+
+        let currentTexture = srcTexture;
+        let curWidth = srcWidth;
+        let curHeight = srcHeight;
+
+        for (const spec of payload.stages) {
+          if (spec.kind === 'downscale') {
+            const downscale = new Downscale({
+              device,
+              inputTexture: currentTexture,
+              targetDimensions: { width: spec.width, height: spec.height },
+            });
+            await recordPipelineList(encoder, [downscale]);
+            currentTexture = downscale.getOutputTexture();
+            curWidth = spec.width;
+            curHeight = spec.height;
+          } else {
+            const Ctor = ctors.get(spec.key);
+            if (!Ctor) throw new Error(`no constructor for effect key "${spec.key}"`);
+            const scale = spec.behavior.kind === 'scale' ? spec.behavior.scale : 1;
+            const outWidth = Math.round(curWidth * scale);
+            const outHeight = Math.round(curHeight * scale);
+            const inputTexture = currentTexture;
+            const effect = new Ctor({
+              device,
+              inputTexture,
+              nativeDimensions: { width: curWidth, height: curHeight },
+              targetDimensions: { width: outWidth, height: outHeight },
+            });
+            // Apply optional tunables (e.g. DoG strength) before recording.
+            // Restores expose no setter; they are simply skipped.
+            if (spec.params) {
+              for (const [name, value] of Object.entries(spec.params)) {
+                if (typeof effect.updateParam === 'function') {
+                  effect.updateParam(name, value);
+                }
+              }
+            }
+            await recordPipelineList(encoder, [effect]);
+            let stageTexture = effect.getOutputTexture();
+            if (spec.gate) {
+              // Production `gate` policy: blend the pre-restore input with this
+              // restore's output under the amplitude mask, then advance the
+              // chain to the gated texture so downstream stages see it.
+              const gatePipeline = gatePipelineFor(spec.gate.wgsl);
+              const gatedTexture = device.createTexture({
+                size: { width: outWidth, height: outHeight },
+                format: 'rgba16float',
+                usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+              });
+              const gateUniform = device.createBuffer({
+                size: 16,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+              });
+              device.queue.writeBuffer(
+                gateUniform,
+                0,
+                new Float32Array([spec.gate.low, spec.gate.high, spec.gate.strength, 0]),
+              );
+              const gateBindGroup = device.createBindGroup({
+                layout: gatePipeline.getBindGroupLayout(0),
+                entries: [
+                  { binding: 0, resource: inputTexture.createView() },
+                  { binding: 1, resource: stageTexture.createView() },
+                  { binding: 2, resource: gatedTexture.createView() },
+                  { binding: 3, resource: { buffer: gateUniform } },
+                ],
+              });
+              const gatePass = encoder.beginComputePass();
+              gatePass.setPipeline(gatePipeline);
+              gatePass.setBindGroup(0, gateBindGroup);
+              gatePass.dispatchWorkgroups(Math.ceil(outWidth / 8), Math.ceil(outHeight / 8));
+              gatePass.end();
+              stageTexture = gatedTexture;
+            }
+            currentTexture = stageTexture;
+            curWidth = outWidth;
+            curHeight = outHeight;
+          }
+          blit(spec.label, spec.kind === 'downscale' ? 'Downscale' : spec.key, currentTexture);
+        }
+
+        if (clamp && typeof clamp.getDeferredPipeline === 'function') {
+          const apply = clamp.getDeferredPipeline(currentTexture);
+          if (apply) {
+            await recordPipelineList(encoder, [apply]);
+            currentTexture = apply.getOutputTexture();
+            blit('ClampHighlightsApply', 'ClampHighlightsApply', currentTexture);
+          }
+        }
+
+        // Optional test-only post-pass: the SHIPPED CAS shader applied to the
+        // chain tail. Its output is rgba8unorm (as in the extension), so it is
+        // identity-blitted into an rgba16float readback texture for encoding.
+        if (payload.postSharpen && payload.postSharpen.kind === 'cas') {
+          const casModule = device.createShaderModule({
+            code: payload.postSharpen.wgsl,
+            label: 'shipped-cas-post',
+          });
+          const casPipeline = device.createComputePipeline({
+            layout: 'auto',
+            compute: { module: casModule, entryPoint: 'main' },
+          });
+          const casOutput = device.createTexture({
+            size: { width: curWidth, height: curHeight },
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+          });
+          const casParams = device.createBuffer({
+            size: 8,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+          });
+          device.queue.writeBuffer(
+            casParams,
+            0,
+            new Float32Array([payload.postSharpen.sharpness, 0]),
+          );
+          const casBindGroup = device.createBindGroup({
+            layout: casPipeline.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: currentTexture.createView() },
+              { binding: 1, resource: casOutput.createView() },
+              { binding: 2, resource: { buffer: casParams } },
+            ],
+          });
+          const casPass = encoder.beginComputePass();
+          casPass.setPipeline(casPipeline);
+          casPass.setBindGroup(0, casBindGroup);
+          casPass.dispatchWorkgroups(Math.ceil(curWidth / 8), Math.ceil(curHeight / 8));
+          casPass.end();
+          blit(
+            `CAS(sharp=${payload.postSharpen.sharpness.toFixed(2)})`,
+            'CAS',
+            casOutput,
+          );
+        }
+
+        device.queue.submit([encoder.finish()]);
+
+        const validationError = await device.popErrorScope();
+        scopeOpen = false;
+        if (validationError) {
+          failure = validation(validationError.message);
+        } else {
+          await device.queue.onSubmittedWorkDone();
+          const write = (globalThis as unknown as Record<
+            string,
+            (meta: GpuPngDumpStageMeta, png: string) => Promise<void>
+          >)[payload.binding];
+          if (typeof write !== 'function') {
+            failure = validation('PNG dump sink binding is not registered on the page');
+          } else {
+            for (const entry of pending) {
+              await entry.buffer.mapAsync(GPUMapMode.READ);
+              const view = new DataView(entry.buffer.getMappedRange());
+              const pixels = new Uint8ClampedArray(entry.width * entry.height * 4);
+              for (let y = 0; y < entry.height; y += 1) {
+                for (let x = 0; x < entry.width; x += 1) {
+                  const offset = y * entry.bytesPerRow + x * 8;
+                  const dest = (y * entry.width + x) * 4;
+                  for (let channel = 0; channel < 4; channel += 1) {
+                    const value = halfToFloat(view.getUint16(offset + channel * 2, true));
+                    pixels[dest + channel] = Math.round(Math.min(1, Math.max(0, value)) * 255);
+                  }
+                }
+              }
+              entry.buffer.unmap();
+              // Free the readback texture as soon as its pixels are in hand.
+              entry.texture.destroy();
+
+              const offscreen = new OffscreenCanvas(entry.width, entry.height);
+              const context = offscreen.getContext('2d');
+              if (!context) throw new Error('OffscreenCanvas 2d context unavailable (encode)');
+              context.putImageData(new ImageData(pixels, entry.width, entry.height), 0, 0);
+              const blob = await offscreen.convertToBlob({ type: 'image/png' });
+              const pngBase64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
+              const meta: GpuPngDumpStageMeta = {
+                label: entry.label,
+                key: entry.key,
+                width: entry.width,
+                height: entry.height,
+              };
+              await write(meta, pngBase64);
+              dumped.push(meta);
+            }
+          }
+        }
+      } catch (error) {
+        failure = validation(String(error));
+      } finally {
+        if (scopeOpen) {
+          try {
+            await device.popErrorScope();
+          } catch {
+            // Ignore; the device/page may already be gone.
+          }
+        }
+      }
+
+      if (failure) return failure;
+      return { ok: true, stages: dumped, adapterInfo, software };
+    },
+    {
+      srcPngBase64: request.srcPngBase64,
+      stages: request.stages,
+      clampHighlights: request.clampHighlights ?? false,
+      postSharpen: request.postSharpen ?? null,
+      binding,
       blitWgsl: IDENTITY_BLIT_WGSL,
     },
   );

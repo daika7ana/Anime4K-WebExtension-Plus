@@ -13,6 +13,7 @@ import type {
   EnhancementEffect,
   PerformanceTier,
   DiagnosticsDetailMode,
+  RestorePolicy,
 } from '../types';
 import { descriptorToCatalogEffect } from './effects-map';
 import { resolveEffectReference } from './effect-registry';
@@ -72,9 +73,10 @@ const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   showDiagnostics: false,
   // 'auto' expands on normal videos and compacts on small ones.
   diagnosticsDetail: 'auto',
-  // V2 (skip target-resolution restore passes) is the default; a missing key
-  // normalizes to `true`, so no migration is needed.
-  preserveDetail: true,
+  // Fresh/normalized-missing default: `gate` (trailing drop set + local gate).
+  // The v3→v4 migration maps the legacy `preserveDetail` boolean for existing
+  // users, so their behavior is unchanged.
+  restorePolicy: 'gate',
 };
 
 /**
@@ -157,6 +159,30 @@ function coerceDiagnosticsDetail(
   if (value === 'auto' || value === 'compact' || value === 'expanded') return value;
   warnInvalidSetting('diagnosticsDetail', value);
   return fallback;
+}
+
+function coerceRestorePolicy(value: unknown, fallback: RestorePolicy): RestorePolicy {
+  if (value === undefined) return fallback;
+  if (
+    value === 'off'
+    || value === 'gate'
+    || value === 'trailing'
+    || value === 'leading'
+  ) {
+    return value;
+  }
+  warnInvalidSetting('restorePolicy', value);
+  return fallback;
+}
+
+/**
+ * Map the pre-v4 local `preserveDetail` boolean to the new policy enum, or
+ * `undefined` when the stored value is absent/non-boolean. Used only as a
+ * fallback when `restorePolicy` itself is absent (see {@link normalizeLocalSettings}).
+ */
+function legacyRestorePolicyFromPreserveDetail(value: unknown): RestorePolicy | undefined {
+  if (typeof value !== 'boolean') return undefined;
+  return value ? 'trailing' : 'off';
 }
 
 function coerceAutoEnableSettleMs(value: unknown, fallback: number): number {
@@ -248,12 +274,14 @@ export function normalizeLocalSettings(data: Record<string, unknown>): LocalSett
       data.diagnosticsDetail,
       DEFAULT_LOCAL_SETTINGS.diagnosticsDetail ?? 'auto',
     ),
-    // A stale legacy `maxDetail` key is deliberately not read (ignored/dropped);
-    // a missing `preserveDetail` normalizes to the default `true`.
-    preserveDetail: coerceBoolean(
-      'preserveDetail',
-      data.preserveDetail,
-      DEFAULT_LOCAL_SETTINGS.preserveDetail ?? true,
+    // A stale legacy `maxDetail` key is deliberately not read (ignored/dropped).
+    // `restorePolicy` is authoritative; a legacy `preserveDetail` boolean is
+    // mapped only when the new key is absent (true → 'trailing', false → 'off').
+    restorePolicy: coerceRestorePolicy(
+      data.restorePolicy,
+      legacyRestorePolicyFromPreserveDetail(data.preserveDetail)
+        ?? DEFAULT_LOCAL_SETTINGS.restorePolicy
+        ?? 'gate',
     ),
   };
 }
@@ -292,6 +320,7 @@ export async function getLocalSettings(): Promise<LocalSettings> {
       'hasCompletedOnboarding',
       'showDiagnostics',
       'diagnosticsDetail',
+      'restorePolicy',
       'preserveDetail',
     ], (data) => {
       resolve(normalizeLocalSettings(data));
@@ -396,7 +425,7 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
     'hasCompletedOnboarding',
     'showDiagnostics',
     'diagnosticsDetail',
-    'preserveDetail',
+    'restorePolicy',
   ];
 
   const syncSettings: Partial<Record<keyof SyncedSettings, unknown>> = {};

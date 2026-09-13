@@ -11,6 +11,7 @@ import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 import { TexturePool } from './texture-pool';
 import { compileEffectChain } from './effect-chain-compiler';
 import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
+import { selectGatedRestoreOptions } from '@core/effects/gated-restore';
 
 // Test configuration
 const TEST_TIMEOUT_MS = 20000; // Individual test timeout
@@ -460,8 +461,9 @@ export async function runEffectChainTest(
 
     const upscaleFactors = deriveUpscaleFactors(effects, resolutions);
 
-    // Mirror the renderer's default restore policy (V2) so benchmark geometry
-    // matches what the pipeline builder emits. The role flags come from the
+    // Benchmark geometry uses the same restore policy as the renderer's
+    // new default ('gate'): the trailing drop set, with retained restores gated
+    // by the same resolution-dependent profile. The role flags come from the
     // resolved descriptor category (helpers are never restores).
     const restoreFlags = deriveRestoreFlags(resolutions);
 
@@ -480,7 +482,7 @@ export async function runEffectChainTest(
         downscaleCtor: DownscaleClass,
         restoreFlags,
         postEpilogueFlags,
-        restoreSuppression: 'trailing',
+        restoreSuppression: 'gate',
         compileEffect: createEffectCompiler({
             device,
             registry,
@@ -488,6 +490,7 @@ export async function runEffectChainTest(
             resources: gpuResourceCache,
             sourceDimensions,
             isStale: () => false,
+            gating: selectGatedRestoreOptions(targetDimensions),
             logging: {
                 registryFailure: (effect, _backendId, error) => {
                     console.warn(`[GPUBenchmark] Registry compile failed for ${effect.className}:`, error);

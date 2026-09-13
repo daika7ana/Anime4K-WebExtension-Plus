@@ -168,15 +168,17 @@ export function planIntermediateDownscale(params: {
 /**
  * How much scale-1 `restore` suppression the emitted chain applies.
  *
- *  - `'trailing'` — V2 (the default): drop scale-1 restores that run after the
- *                   emitted target-exact final Downscale. Their work is largely
- *                   redundant at the target resolution, so skipping them avoids
- *                   that softening (and is cheaper).
- *  - `'off'`      — V1: keep every restore, i.e. the original full-enhancement
- *                   chain. Used when the "Fast mode — Preserve detail" toggle is
- *                   off.
+ * | policy       | restores kept                       | rule                                                     |
+ * | ------------ | ----------------------------------- | -------------------------------------------------------- |
+ * | `'off'`      | all                                 | no restore drop, no gating (the full V1 chain).          |
+ * | `'gate'`     | those at/before the final Downscale | drop restores after the final Downscale; retained restores are wrapped/gated. |
+ * | `'trailing'` | those at/before the final Downscale | drop restores with `index > finalDownscaleAfterIndex`, no gating. |
+ * | `'leading'`  | those after the first upscaler      | drop restores with `index < firstRetainedUpscaleIndex`, no gating. |
+ *
+ * `'gate'` shares `'trailing'`'s drop set; the difference is that `'gate'`
+ * additionally wraps each retained restore in the local-luma gate.
  */
-export type RestoreSuppression = 'off' | 'trailing';
+export type RestoreSuppression = 'off' | 'gate' | 'trailing' | 'leading';
 
 /**
  * Result of the chain-level geometry pre-pass.
@@ -547,6 +549,41 @@ function planShrinkingTargetGeometry(
 }
 
 /**
+ * Whether an upscaling effect at `index` is suppressed by the geometry preview
+ * (the rule that predates restore suppression): every upscaling effect strictly
+ * after {@link ChainGeometryPreview.suppressFromIndex} is suppressed, except that
+ * the limit pass marks `suppressFromIndexInclusive` and also suppresses the
+ * upscaler at the anchor itself.
+ */
+function isUpscalerSuppressed(
+    preview: ChainGeometryPreview,
+    factor: number,
+    index: number,
+): boolean {
+    if (factor <= 1) return false;
+    if (preview.suppressFromIndex === null) return false;
+    return preview.suppressFromIndexInclusive
+        ? index >= preview.suppressFromIndex
+        : index > preview.suppressFromIndex;
+}
+
+/**
+ * Index of the first upscaling effect the preview retains (the first factor
+ * `> 1` that {@link isUpscalerSuppressed} does not drop), or `null` when the
+ * chain retains no upscaler.
+ */
+function firstRetainedUpscaleIndex(
+    preview: ChainGeometryPreview,
+    upscaleFactors: readonly number[],
+): number | null {
+    for (let i = 0; i < upscaleFactors.length; i++) {
+        const factor = upscaleFactors[i] ?? 1;
+        if (factor > 1 && !isUpscalerSuppressed(preview, factor, i)) return i;
+    }
+    return null;
+}
+
+/**
  * Whether effect `index` must be skipped under a geometry preview.
  *
  * Upscaler rule (unchanged): every upscaling effect strictly after
@@ -556,14 +593,17 @@ function planShrinkingTargetGeometry(
  * set and the upscaler at `suppressFromIndex` itself is suppressed too.
  *
  * Restore rule: a scale-1 effect flagged as a `restore` may additionally be
- * suppressed, but only while the geometry preview is active and only under the
- * `'trailing'` policy:
+ * suppressed, under the `'gate'`, `'trailing'` and `'leading'` policies:
  *
- *  - `'trailing'` (V2 default): suppress restores that run after the emitted
+ *  - `'off'`: never suppress a restore.
+ *  - `'gate'` / `'trailing'`: suppress restores that run after the emitted
  *    target-exact final Downscale (`index > finalDownscaleAfterIndex`). The
  *    anchor is only non-null when a Downscale is actually emitted, so a preview
- *    that triggers suppression without a final Downscale drops nothing.
- *  - `'off'` (V1): never suppress a restore.
+ *    that triggers suppression without a final Downscale drops nothing. `'gate'`
+ *    additionally wraps each retained restore in the local-luma gate.
+ *  - `'leading'`: suppress restores that run before the first retained
+ *    upscaler (`index < firstRetainedUpscaleIndex`). When the preview retains no
+ *    upscaler, nothing is dropped.
  *
  * Non-restore effects (helpers, deblur, denoise, color) and the limit pass are
  * never affected by the restore rule. `restoreFlags`/`restoreSuppression` are
@@ -578,16 +618,25 @@ export function isSuppressedIndex(
     upscaleFactors: readonly number[],
     index: number,
 ): boolean {
-    if ((upscaleFactors[index] ?? 1) > 1) {
-        if (preview.suppressFromIndex === null) return false;
-        return preview.suppressFromIndexInclusive
-            ? index >= preview.suppressFromIndex
-            : index > preview.suppressFromIndex;
-    }
+    const factor = upscaleFactors[index] ?? 1;
+
+    // Upscaler rule first; a retained upscaler is never a restore.
+    if (isUpscalerSuppressed(preview, factor, index)) return true;
+    if (factor > 1) return false;
 
     if (!preview.restoreFlags?.[index]) return false;
-    if ((preview.restoreSuppression ?? 'trailing') === 'off') return false;
 
+    const policy = preview.restoreSuppression ?? 'trailing';
+    // 'off' keeps every restore; 'gate' shares the trailing drop set below
+    // (retained restores are gated later at compile time).
+    if (policy === 'off') return false;
+
+    if (policy === 'leading') {
+        const first = firstRetainedUpscaleIndex(preview, upscaleFactors);
+        return first !== null && index < first;
+    }
+
+    // 'trailing' / 'gate'.
     return (
         preview.finalDownscaleAfterIndex !== null
         && index > preview.finalDownscaleAfterIndex

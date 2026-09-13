@@ -12,7 +12,7 @@
     "message": "Anime4K超解像 Plus"
   },
   "performanceTierLabel": {
-    "message": "パフォーマンス段階："
+    "message": "パフォーマンス段階"
   },
   "selectTierDesc": {
     "message": "パフォーマンス段階を手動で選択します。高い段階はより大きなAIモデルを使用し、より良い品質を提供しますが、より多くのGPUパワーが必要です。"
@@ -254,16 +254,46 @@
     "message": "復元"
   },
   "restorePolicyBadgeTitle": {
-    "message": "復元パス —「高速モード」オン時はスキップされることがあります。"
+    "message": "復元パス — 復元ポリシーの影響を受けることがあります。"
   },
-  "preserveDetailLabel": {
-    "message": "高速モード — 細部を保持"
+  "restorePolicyLabel": {
+    "message": "復元ポリシー"
   },
-  "preserveDetailDesc": {
-    "message": "目標解像度での末尾の復元パスを省略し、大幅な高速化を実現します。組み込み・カスタムを問わずすべてのモードに適用されます。オフが常に高画質になるとは限りません。多くの動画ではこれらのパスによる変化は小さく、むしろないほうが同等以上に見えるクリップもあります。"
+  "restorePolicyDesc": {
+    "message": "チェーンが保持する復元パスを制御します。「オフ」はフルチェーン（最大限の強調）、「ゲート」は最終ダウンスケール後の復元を省略し、残った復元を局所コントラストに適応、「末尾」は最終ダウンスケール後の復元を省略、「先頭」は最初のアップスケーラー前の復元を省略します。"
   },
-  "preserveDetailModeNote": {
-    "message": "「高速モード」がオンの場合、末尾の復元パスはスキップされることがあります。オフにするとチェーン全体を実行しますが、常に高画質になるとは限りません。"
+  "restorePolicyOff": {
+    "message": "オフ — フルチェーン"
+  },
+  "restorePolicyGate": {
+    "message": "ゲート — 適応的復元"
+  },
+  "restorePolicyTrailing": {
+    "message": "末尾 — 最終ダウンスケール後の復元を省略"
+  },
+  "restorePolicyLeading": {
+    "message": "先頭 — 最初のアップスケーラー前の復元を省略"
+  },
+  "restorePolicyNameOff": {
+    "message": "オフ"
+  },
+  "restorePolicyNameGate": {
+    "message": "ゲート"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "末尾"
+  },
+  "restorePolicyNameLeading": {
+    "message": "先頭"
+  },
+  "restorePolicyNoteGate": {
+    "message": "最終ダウンスケール後の復元は省略され、残った復元は局所コントラストに適応します。"
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "最終ダウンスケール後の復元パスは省略されることがあります。"
+  },
+  "restorePolicyNoteLeading": {
+    "message": "最初のアップスケーラーより前の復元パスは省略されることがあります。"
   },
   "modeDescA": {
     "message": "多くの 1080p アニメ、古い 720p、ぼやけた／強く圧縮された SD 向け。"
@@ -542,6 +572,9 @@
   },
   "diagnosticsTargetResolution": {
     "message": "出力"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "復元ポリシー"
   },
   "diagnosticsCustomMode": {
     "message": "カスタム"

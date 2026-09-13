@@ -1,8 +1,8 @@
 /**
- * Regression tests for the General panel's "Fast mode — Preserve detail" toggle.
+ * Regression tests for the General panel's restore-policy select.
  *
  * The options page does not receive its own cross-context `SETTINGS_UPDATED`
- * message, so the toggle must explicitly refresh the modes panel to keep the
+ * message, so the select must explicitly refresh the modes panel to keep the
  * restore-policy note in sync with the saved setting.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -32,6 +32,12 @@ import { initGeneralPanel } from './general-panel';
 import type { AppContext } from './modes-panel';
 
 function createElements() {
+  const restorePolicySelect = document.createElement('select');
+  for (const value of ['off', 'gate', 'trailing', 'leading']) {
+    const option = document.createElement('option');
+    option.value = value;
+    restorePolicySelect.appendChild(option);
+  }
   return {
     crossOriginFixToggle: document.createElement('input'),
     themeSelect: document.createElement('select'),
@@ -41,7 +47,7 @@ function createElements() {
     versionNumberSpan: document.createElement('span'),
     enableHotkeyToggle: document.createElement('input'),
     diagnosticsToggle: document.createElement('input'),
-    preserveDetailToggle: document.createElement('input'),
+    restorePolicySelect,
     diagnosticsDetailSelect: document.createElement('select'),
   };
 }
@@ -68,12 +74,12 @@ function initWithElements(ctx: AppContext, els: ReturnType<typeof createElements
     els.versionNumberSpan,
     els.enableHotkeyToggle,
     els.diagnosticsToggle,
-    els.preserveDetailToggle,
+    els.restorePolicySelect,
     els.diagnosticsDetailSelect,
   );
 }
 
-describe('initGeneralPanel — Fast mode preserve-detail toggle', () => {
+describe('initGeneralPanel — restore policy select', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     saveLocalSettings.mockClear();
@@ -85,7 +91,7 @@ describe('initGeneralPanel — Fast mode preserve-detail toggle', () => {
     document.body.innerHTML = '';
   });
 
-  it('saves the setting, refreshes the modes panel, and notifies on toggle', async () => {
+  it('saves the setting, refreshes the modes panel, and notifies on change', async () => {
     const els = createElements();
     const refreshModesPanel = vi.fn();
     const notifyUpdate = vi.fn();
@@ -93,14 +99,28 @@ describe('initGeneralPanel — Fast mode preserve-detail toggle', () => {
 
     initWithElements(ctx, els);
 
-    els.preserveDetailToggle.checked = false;
-    els.preserveDetailToggle.dispatchEvent(new Event('change'));
+    els.restorePolicySelect.value = 'trailing';
+    els.restorePolicySelect.dispatchEvent(new Event('change'));
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(saveLocalSettings).toHaveBeenCalledWith({ preserveDetail: false });
+    expect(saveLocalSettings).toHaveBeenCalledWith({ restorePolicy: 'trailing' });
     expect(refreshModesPanel).toHaveBeenCalledTimes(1);
     expect(notifyUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an unknown policy value', async () => {
+    const els = createElements();
+    const ctx = createContext();
+
+    initWithElements(ctx, els);
+
+    els.restorePolicySelect.value = 'bogus';
+    els.restorePolicySelect.dispatchEvent(new Event('change'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(saveLocalSettings).not.toHaveBeenCalled();
   });
 
   it('does not throw when no modes-panel refresher has been registered', async () => {
@@ -109,11 +129,11 @@ describe('initGeneralPanel — Fast mode preserve-detail toggle', () => {
 
     initWithElements(ctx, els);
 
-    els.preserveDetailToggle.checked = true;
-    expect(() => els.preserveDetailToggle.dispatchEvent(new Event('change'))).not.toThrow();
+    els.restorePolicySelect.value = 'off';
+    expect(() => els.restorePolicySelect.dispatchEvent(new Event('change'))).not.toThrow();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(saveLocalSettings).toHaveBeenCalledWith({ preserveDetail: true });
+    expect(saveLocalSettings).toHaveBeenCalledWith({ restorePolicy: 'off' });
   });
 });

@@ -20,6 +20,7 @@ import {
     MAX_INTERMEDIATE_BYTES,
     DEFAULT_MAX_INTERMEDIATE_PIXELS,
     type ChainGeometryLimits,
+    type RestoreSuppression,
 } from './effect-chain';
 
 /** Build a minimal effect whose only relevant field is `upscaleFactor`. */
@@ -317,7 +318,7 @@ describe('isSuppressedIndex (restore rule)', () => {
         upscaleFactors: number[],
         restoreFlags: boolean[],
         target: Dimensions,
-        restoreSuppression: 'off' | 'trailing',
+        restoreSuppression: RestoreSuppression,
     ): boolean[] => {
         const preview = planChainGeometryPreview({
             sourceDimensions: RESTORE_SOURCE,
@@ -369,6 +370,44 @@ describe('isSuppressedIndex (restore rule)', () => {
     it("'off' keeps every restore (only upscalers are suppressed)", () => {
         expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 2560, height: 1440 }, 'off'))
             .toEqual([false, false, false, false, true, false, true]);
+    });
+
+    it("'gate' shares the trailing drop set (retained restores are gated downstream)", () => {
+        // 'gate' drops exactly what 'trailing' drops (restores after the final
+        // Downscale); the retained restores are wrapped in the gate at compile
+        // time. At 2K the final Downscale sits after index 2, so indices 3 and 5
+        // are dropped; at 4K there is no final Downscale, so nothing is dropped.
+        expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 2560, height: 1440 }, 'gate'))
+            .toEqual([false, false, false, true, true, true, true]);
+        expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 3840, height: 2160 }, 'gate'))
+            .toEqual([false, false, false, false, true, false, true]);
+    });
+
+    it("'leading' drops only the restores before the first retained upscaler (A+A @2K and @4K)", () => {
+        // A+A / ultra: the first retained upscaler is the CNNx2UL at index 2.
+        // The head restore at index 1 sits before it and is dropped; the two
+        // target-resolution restores (indices 3 and 5) are kept. At 4K there is
+        // no final Downscale, but the leading boundary is unchanged.
+        expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 2560, height: 1440 }, 'leading'))
+            .toEqual([false, true, false, false, true, false, true]);
+        expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 3840, height: 2160 }, 'leading'))
+            .toEqual([false, true, false, false, true, false, true]);
+    });
+
+    it("'leading' drops the same leading restore in the equal-target branch (A+A @1080p)", () => {
+        expect(suppressed(A_A_ULTRA, A_A_ULTRA_RESTORE, { width: 1920, height: 1080 }, 'leading'))
+            .toEqual([false, true, false, false, true, false, true]);
+    });
+
+    it("'leading' drops nothing when the preview retains no upscaler", () => {
+        // All-scale-1 chain: there is no retained upscaler to define the leading
+        // boundary, so no restore can be "before" one.
+        const factors = [1, 1, 1];
+        const flags = [false, true, true];
+        expect(suppressed(factors, flags, { width: 2560, height: 1440 }, 'leading'))
+            .toEqual([false, false, false]);
+        expect(suppressed(factors, flags, { width: 2560, height: 1440 }, 'off'))
+            .toEqual([false, false, false]);
     });
 
     it('never suppresses an index that is not flagged as a restore', () => {

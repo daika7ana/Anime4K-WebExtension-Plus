@@ -16,9 +16,13 @@
  * library. Logging text stays at each call site via {@link EffectCompilerLogging}
  * because the renderer and the benchmark intentionally use different prefixes.
  */
-import type { Dimensions, EnhancementEffect } from '@/types';
+import type { Dimensions, EnhancementEffect, DestroyablePipeline } from '@/types';
 import type { BackendRegistry, GpuResourceCacheLike } from 'anime4k-webgpu-async';
 import type { EffectResolution } from '@utils/effect-registry';
+import {
+  GatedRestore,
+  type GatedRestoreOptions,
+} from '@core/effects/gated-restore';
 import type {
   ChainEffectStep,
   CompileChainEffect,
@@ -95,7 +99,31 @@ export interface EffectCompilerOptions {
   sourceDimensions: Dimensions;
   /** Chain-level stale check forwarded to every backend compile. */
   isStale: () => boolean;
+  /**
+   * When set, every compiled resolved `descriptor.category === 'restore'` node
+   * is wrapped in a {@link GatedRestore} so its residual is applied only where
+   * the local luma amplitude passes the gate. Suppressed restores are never
+   * compiled, so they are never wrapped. `null`/absent leaves restores unwrapped.
+   */
+  gating?: GatedRestoreOptions | null;
   logging: EffectCompilerLogging;
+}
+
+/**
+ * Wrap a compiled restore pipeline in the gate wrapper. Shared by the per-effect
+ * compiler and the pre-warm dummy path so the mask shader is compiled by exactly
+ * the same construction.
+ */
+export function wrapGatedRestore(
+  pipeline: DestroyablePipeline,
+  params: { device: GPUDevice; inputTexture: GPUTexture; gating: GatedRestoreOptions },
+): DestroyablePipeline {
+  return new GatedRestore({
+    device: params.device,
+    inputTexture: params.inputTexture,
+    restore: pipeline,
+    options: params.gating,
+  });
 }
 
 /**
@@ -108,7 +136,7 @@ export interface EffectCompilerOptions {
  * unresolved effect returns `null`, which keeps the chain and skips the effect.
  */
 export function createEffectCompiler(options: EffectCompilerOptions): CompileChainEffect {
-  const { device, registry, resolutions, resources, sourceDimensions, isStale, logging } = options;
+  const { device, registry, resolutions, resources, sourceDimensions, isStale, gating, logging } = options;
 
   const compile = async ({
     effect,
@@ -133,8 +161,11 @@ export function createEffectCompiler(options: EffectCompilerOptions): CompileCha
           resources,
           isStale,
         });
+        const pipeline = gating && descriptor.category === 'restore'
+          ? wrapGatedRestore(node.pipeline, { device, inputTexture, gating })
+          : node.pipeline;
         return {
-          pipeline: node.pipeline,
+          pipeline,
           label: node.profileLabel,
           scaleApplied: descriptor.dimensionBehavior.kind === 'scale',
           postDimensions: node.outputDimensions,

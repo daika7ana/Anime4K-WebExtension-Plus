@@ -13,7 +13,7 @@
     "message": "Anime4K超解析 Plus"
   },
   "performanceTierLabel": {
-    "message": "效能檔位："
+    "message": "效能檔位"
   },
   "selectTierDesc": {
     "message": "手動選擇效能檔位。更高的檔位使用更大的AI模型，提供更好的品質，但需要更多的GPU效能。"
@@ -258,16 +258,46 @@
     "message": "還原"
   },
   "restorePolicyBadgeTitle": {
-    "message": "還原通道 — 開啟「快速模式」時可能會被略過。"
+    "message": "還原通道 — 可能受還原策略影響。"
   },
-  "preserveDetailLabel": {
-    "message": "快速模式 — 保留細節"
+  "restorePolicyLabel": {
+    "message": "還原策略"
   },
-  "preserveDetailDesc": {
-    "message": "略過目標解析度下的結尾還原通道，大幅提升速度。適用於所有模式，包括自訂模式。關閉並不總是畫質更高——在許多影片中這些通道變化很小，有些片段在沒有它們時看起來同樣好甚至更好。"
+  "restorePolicyDesc": {
+    "message": "控制效果鏈保留哪些還原通道。「關閉」執行完整鏈（完整增強）；「閘控」略過最終降採樣之後的還原，並讓保留的還原適應局部對比度；「結尾」略過最終降採樣之後的還原；「開頭」略過第一個放大器之前的還原。"
   },
-  "preserveDetailModeNote": {
-    "message": "開啟「快速模式」後，結尾的還原通道可能會被略過。關閉它會執行完整鏈，但不一定畫質更高。"
+  "restorePolicyOff": {
+    "message": "關閉 — 完整鏈"
+  },
+  "restorePolicyGate": {
+    "message": "閘控 — 自適應還原"
+  },
+  "restorePolicyTrailing": {
+    "message": "結尾 — 略過最終降採樣後的還原"
+  },
+  "restorePolicyLeading": {
+    "message": "開頭 — 略過第一個放大器之前的還原"
+  },
+  "restorePolicyNameOff": {
+    "message": "關閉"
+  },
+  "restorePolicyNameGate": {
+    "message": "閘控"
+  },
+  "restorePolicyNameTrailing": {
+    "message": "結尾"
+  },
+  "restorePolicyNameLeading": {
+    "message": "開頭"
+  },
+  "restorePolicyNoteGate": {
+    "message": "最終降採樣之後的還原會被略過；保留的還原會適應局部對比度。"
+  },
+  "restorePolicyNoteTrailing": {
+    "message": "最終降採樣之後的還原通道可能會被略過。"
+  },
+  "restorePolicyNoteLeading": {
+    "message": "第一個放大器之前的還原通道可能會被略過。"
   },
   "modeDescA": {
     "message": "適用於大多數 1080p 動畫、較舊的 720p，以及模糊或嚴重壓縮的標清來源。"
@@ -546,6 +576,9 @@
   },
   "diagnosticsTargetResolution": {
     "message": "輸出"
+  },
+  "diagnosticsRestorePolicy": {
+    "message": "還原策略"
   },
   "diagnosticsCustomMode": {
     "message": "自訂"

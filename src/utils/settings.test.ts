@@ -390,32 +390,42 @@ describe('normalizeLocalSettings', () => {
       gpuBenchmarkResult: { tier: 'nope' },
       hasCompletedOnboarding: 'no',
       showDiagnostics: 1,
-      preserveDetail: 'yes',
+      restorePolicy: 'yes',
     });
 
     expect(result.performanceTier).toBe('balanced');
     expect(result.gpuBenchmarkResult).toBeNull();
     expect(result.hasCompletedOnboarding).toBe(false);
     expect(result.showDiagnostics).toBe(false);
-    // A corrupt value falls back to the default, which is ON (V2).
-    expect(result.preserveDetail).toBe(true);
+    // A corrupt value falls back to the default (`gate`).
+    expect(result.restorePolicy).toBe('gate');
   });
 
-  it('defaults preserveDetail to true when absent', () => {
+  it('defaults restorePolicy to gate when absent', () => {
     const result = normalizeLocalSettings({});
-    expect(result.preserveDetail).toBe(true);
+    expect(result.restorePolicy).toBe('gate');
   });
 
-  it('preserves a valid preserveDetail boolean', () => {
-    expect(normalizeLocalSettings({ preserveDetail: true }).preserveDetail).toBe(true);
-    expect(normalizeLocalSettings({ preserveDetail: false }).preserveDetail).toBe(false);
+  it('accepts each valid restorePolicy value', () => {
+    for (const policy of ['off', 'gate', 'trailing', 'leading'] as const) {
+      expect(normalizeLocalSettings({ restorePolicy: policy }).restorePolicy).toBe(policy);
+    }
   });
 
-  it('ignores a stale legacy maxDetail key (no migration; defaults to true)', () => {
-    // The renamed setting must not read the old key: an absent `preserveDetail`
-    // normalizes to the default `true` even when `maxDetail` is present.
+  it('maps a legacy preserveDetail boolean when restorePolicy is absent', () => {
+    expect(normalizeLocalSettings({ preserveDetail: true }).restorePolicy).toBe('trailing');
+    expect(normalizeLocalSettings({ preserveDetail: false }).restorePolicy).toBe('off');
+    // The new key wins when both are present.
+    expect(
+      normalizeLocalSettings({ restorePolicy: 'leading', preserveDetail: true }).restorePolicy,
+    ).toBe('leading');
+  });
+
+  it('ignores a stale legacy maxDetail key (no migration; defaults to gate)', () => {
+    // The renamed setting must not read the old key: an absent `restorePolicy`
+    // normalizes to the default `gate` even when `maxDetail` is present.
     const result = normalizeLocalSettings({ maxDetail: false });
-    expect(result.preserveDetail).toBe(true);
+    expect(result.restorePolicy).toBe('gate');
     expect('maxDetail' in result).toBe(false);
   });
 
@@ -439,14 +449,14 @@ describe('normalizeLocalSettings', () => {
       },
       hasCompletedOnboarding: true,
       showDiagnostics: true,
-      preserveDetail: false,
+      restorePolicy: 'gate',
     });
 
     expect(result.performanceTier).toBe('quality');
     expect(result.gpuBenchmarkResult?.tier).toBe('quality');
     expect(result.hasCompletedOnboarding).toBe(true);
     expect(result.showDiagnostics).toBe(true);
-    expect(result.preserveDetail).toBe(false);
+    expect(result.restorePolicy).toBe('gate');
   });
 });
 

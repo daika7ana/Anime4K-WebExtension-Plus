@@ -1,4 +1,4 @@
-import type { Dimensions, EnhancementEffect, RendererOptions, DestroyablePipeline } from '@/types';
+import type { Dimensions, EnhancementEffect, RendererOptions, DestroyablePipeline, RestorePolicy } from '@/types';
 import { RendererInitializationError, RendererRuntimeError } from '@core/errors';
 import { t } from '@utils/i18n';
 
@@ -30,8 +30,8 @@ export class Renderer {
   private onProgress?: (stage: string | null, current?: number, total?: number) => void;
   /** Whether GPU timestamp profiling should be enabled for this renderer */
   private enableGpuTimings = false;
-  /** Local "Fast mode — Preserve detail" preference (V2 restore policy when true). */
-  private preserveDetail = true;
+  /** Restore-pass policy for the emitted chain (default `'gate'`). */
+  private restorePolicy: RestorePolicy = 'gate';
 
   // --- State flags ---
   private destroyed = false;
@@ -100,7 +100,7 @@ export class Renderer {
     this.onFrameRendered = options.onFrameRendered;
     this.onProgress = options.onProgress;
     this.enableGpuTimings = options.enableGpuTimings ?? false;
-    this.preserveDetail = options.preserveDetail ?? true;
+    this.restorePolicy = options.restorePolicy ?? 'gate';
   }
 
   /**
@@ -348,7 +348,7 @@ export class Renderer {
         preWarmer: GPUDeviceManager.getPreWarmer(),
         onProgress: this.onProgress,
         isStale: () => this.buildGeneration !== generation,
-        preserveDetail: this.preserveDetail,
+        restorePolicy: this.restorePolicy,
         labels, // Out-param filled with one label per built pipeline, in encode order
       });
       if (this.buildGeneration !== generation) {
@@ -780,7 +780,7 @@ export class Renderer {
    * Uses shallow params comparison instead of JSON.stringify.
    * @param options Object containing new effects and target dimensions
    */
-  public async updateConfiguration(options: { effects: EnhancementEffect[], targetDimensions: Dimensions, preserveDetail?: boolean }): Promise<void> {
+  public async updateConfiguration(options: { effects: EnhancementEffect[], targetDimensions: Dimensions, restorePolicy?: RestorePolicy }): Promise<void> {
     if (this.destroyed) return;
 
     const { effects, targetDimensions } = options;
@@ -792,11 +792,10 @@ export class Renderer {
         !paramsEqual(e.params, effects[i].params)
       );
     const dimensionsChanged = this.targetDimensions.width !== targetDimensions.width || this.targetDimensions.height !== targetDimensions.height;
-    // Restore-suppression policy changes do not alter the effect list, so they
-    // must be detected explicitly or toggling "Fast mode" would be a
-    // no-op.
-    const nextPreserveDetail = options.preserveDetail ?? this.preserveDetail;
-    const policyChanged = nextPreserveDetail !== this.preserveDetail;
+    // Restore-policy changes do not alter the effect list, so they must be
+    // detected explicitly or a policy change would be a no-op.
+    const nextRestorePolicy = options.restorePolicy ?? this.restorePolicy;
+    const policyChanged = nextRestorePolicy !== this.restorePolicy;
 
     if (!effectsChanged && !dimensionsChanged && !policyChanged) {
       console.log('[Anime4KWebExt] Configuration unchanged, skipping pipeline rebuild.');
@@ -814,8 +813,8 @@ export class Renderer {
     }
 
     if (policyChanged) {
-      console.log(`[Anime4KWebExt] Updating restore suppression (preserveDetail=${nextPreserveDetail}).`);
-      this.preserveDetail = nextPreserveDetail;
+      console.log(`[Anime4KWebExt] Updating restore policy (restorePolicy=${nextRestorePolicy}).`);
+      this.restorePolicy = nextRestorePolicy;
     }
 
     console.log('[Anime4KWebExt] Rebuilding pipeline due to configuration update.');

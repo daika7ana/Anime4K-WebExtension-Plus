@@ -298,6 +298,7 @@ export class VideoEnhancer {
         performanceTier: settings.performanceTier,
         inputResolution: formatResolution(this.video.videoWidth, this.video.videoHeight),
         targetResolution: formatResolution(targetDimensions.width, targetDimensions.height),
+        restorePolicy: localSettings.restorePolicy ?? 'gate',
       };
       this.diagnosticsOverlay = DiagnosticsOverlay.create(
         this.video,
@@ -315,9 +316,9 @@ export class VideoEnhancer {
       targetDimensions,
       // GPU timings are only collected while the diagnostics overlay is shown.
       enableGpuTimings: showDiagnostics,
-      // Restore-suppression policy: "trailing" (V2) when "Fast mode — Preserve detail"
-      // is on, and the V1 full-enhancement chain when off. Applies to all modes.
-      preserveDetail: localSettings.preserveDetail ?? true,
+      // Restore-pass policy. Defaults to 'gate' (trailing drop set + local
+      // gating); the value applies to all modes, built-in and custom.
+      restorePolicy: localSettings.restorePolicy ?? 'gate',
       onError: async (error: Error) => {
         // A destroyed enhancer has no live UI/resources; never surface errors or
         // re-run teardown for it (e.g. a frame failing after the element was removed).
@@ -410,7 +411,7 @@ export class VideoEnhancer {
     const baseEffects = getEffectsForMode(selectedMode, newSettings.performanceTier);
     const effects = this.getEffectsWithColorGrading(baseEffects, newSettings.colorGrading);
 
-    // Local prefs ("Fast mode") are applied at build time; read them
+    // Local prefs (restore policy) are applied at build time; read them
     // before the configuration update so a policy change is detected and the
     // chain rebuilds.
     const localSettings = await getLocalSettings();
@@ -424,7 +425,7 @@ export class VideoEnhancer {
     await renderer.updateConfiguration({
       effects: effects,
       targetDimensions: newTargetDimensions,
-      preserveDetail: localSettings.preserveDetail ?? true,
+      restorePolicy: localSettings.restorePolicy ?? 'gate',
     });
 
     // The renderer may have been torn down while updateConfiguration() was in
@@ -443,6 +444,7 @@ export class VideoEnhancer {
       performanceTier: newSettings.performanceTier,
       inputResolution: formatResolution(this.video.videoWidth, this.video.videoHeight),
       targetResolution: formatResolution(newTargetDimensions.width, newTargetDimensions.height),
+      restorePolicy: localSettings.restorePolicy ?? 'gate',
     };
 
     // Handle diagnostics overlay toggle (localSettings read above)
