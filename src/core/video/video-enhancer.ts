@@ -7,6 +7,7 @@ import { Dimensions, Anime4KWebExtSettings, EnhancementMode, EnhancementEffect, 
 import { OverlayManager } from '@core/ui/overlay-manager';
 import { DiagnosticsOverlay, type DiagnosticsInfo } from '@core/ui/diagnostics-overlay';
 import { yieldToAnimationFrame } from '@core/utils/yield-utils';
+import { waitForMediaEvent } from '@core/utils/media-events';
 
 /** Debounce delay before reacting to monitor size / DPR changes. */
 const DISPLAY_RESIZE_DEBOUNCE_MS = 200;
@@ -103,35 +104,24 @@ export class VideoEnhancer {
     const originalSrc = this.video.src;
     const isPaused = this.video.paused;
 
-    return new Promise<void>((resolve, reject) => {
-      const onCanPlay = () => {
-        cleanup();
-        this.video.currentTime = currentTime;
-        if (!isPaused) {
-          this.video.play().catch(e => console.warn('[Anime4KWebExt] Autoplay after reload was blocked.', e));
-        }
-        console.log('[Anime4KWebExt] Video reloaded successfully with crossOrigin attribute.');
-        resolve();
-      };
+    // Listener attached before the reload; the bounded helper owns the timeout
+    // and the error path, so this can never hang.
+    const ready = waitForMediaEvent(
+      this.video,
+      'canplay',
+      new Error(t('videoNotReady', "Video isn't ready. Start playback, then try again.")),
+    );
 
-      const onError = (e: Event) => {
-        cleanup();
-        console.error('[Anime4KWebExt] Failed to reload video after setting crossOrigin.', e);
-        reject(new Error('Failed to reload video with cross-origin attribute.'));
-      };
+    this.video.src = '';
+    this.video.src = originalSrc;
+    this.video.load();
 
-      const cleanup = () => {
-        this.video.removeEventListener('canplay', onCanPlay);
-        this.video.removeEventListener('error', onError);
-      };
-
-      this.video.addEventListener('canplay', onCanPlay, { once: true });
-      this.video.addEventListener('error', onError, { once: true });
-
-      this.video.src = '';
-      this.video.src = originalSrc;
-      this.video.load();
-    });
+    await ready;
+    this.video.currentTime = currentTime;
+    if (!isPaused) {
+      this.video.play().catch(e => console.warn('[Anime4KWebExt] Autoplay after reload was blocked.', e));
+    }
+    console.log('[Anime4KWebExt] Video reloaded successfully with crossOrigin attribute.');
   }
 
   /**
@@ -245,9 +235,11 @@ export class VideoEnhancer {
     // Ensure metadata is loaded before initializing the renderer
     if (this.video.readyState < 1) { // HAVE_METADATA
       this.button.innerText = t('waitingVideoLoad', '⏳ Waiting for video...');
-      await new Promise(resolve => {
-        this.video.addEventListener('loadedmetadata', resolve, { once: true });
-      });
+      await waitForMediaEvent(
+        this.video,
+        'loadedmetadata',
+        new Error(t('videoNotReady', "Video isn't ready. Start playback, then try again.")),
+      );
     }
 
     if (this.destroyed) return;

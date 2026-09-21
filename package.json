@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm build:chrome",
     "build:chrome": "cross-env TARGET_BROWSER=chrome webpack --mode production",
+    "build:dev": "cross-env TARGET_BROWSER=chrome KEEP_CONSOLE_LOGS=1 webpack --mode production",
     "build:firefox": "cross-env TARGET_BROWSER=firefox webpack --mode production",
     "dev": "pnpm dev:chrome",
     "dev:chrome": "cross-env TARGET_BROWSER=chrome webpack --mode development",

@@ -52,10 +52,14 @@ import {
 } from './video-manager';
 import * as EnhancerMap from './enhancer-map';
 import { getSettings } from '@utils/settings';
+import { MEDIA_READY_TIMEOUT_MS } from '@core/utils/media-events';
 
-/** jsdom reports a 0×0 rect by default, which would fail the eligibility gate. */
+/** jsdom reports a 0×0 rect and zero media dimensions by default. */
 function stubVideoRect(video: HTMLVideoElement, width = 640, height = 360): void {
   vi.spyOn(video, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, width, height));
+  Object.defineProperty(video, 'readyState', { value: 1, configurable: true }); // HAVE_METADATA
+  Object.defineProperty(video, 'videoWidth', { value: width, configurable: true });
+  Object.defineProperty(video, 'videoHeight', { value: height, configurable: true });
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -285,6 +289,9 @@ describe('video-manager', () => {
       document.body.appendChild(video);
       const rectSpy = vi.spyOn(video, 'getBoundingClientRect')
         .mockReturnValue(new DOMRect(0, 0, 0, 0)); // not yet laid out at discovery
+      Object.defineProperty(video, 'readyState', { value: 1, configurable: true }); // HAVE_METADATA
+      Object.defineProperty(video, 'videoWidth', { value: 1280, configurable: true });
+      Object.defineProperty(video, 'videoHeight', { value: 720, configurable: true });
 
       processVideoElement(video, 'test');
       await vi.advanceTimersByTimeAsync(0); // settle timer armed
@@ -370,6 +377,47 @@ describe('video-manager', () => {
 
       await vi.advanceTimersByTimeAsync(1);
       expect(enhancer.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers auto-enable for a video without metadata and proceeds once metadata arrives', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS, autoEnableSettleMs: 0 } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+      Object.defineProperty(video, 'readyState', { value: 0, configurable: true }); // HAVE_NOTHING
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(0); // settings resolve -> metadata defer armed
+
+      const enhancer = EnhancerMap.getEnhancer(video)!;
+      expect(enhancer).toBeDefined();
+      expect(enhancer.toggleEnhancement).not.toHaveBeenCalled();
+
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(enhancer.toggleEnhancement).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up silently when a video without metadata never loads', async () => {
+      vi.mocked(getSettings).mockResolvedValue({ ...AUTO_ENABLE_SETTINGS, autoEnableSettleMs: 0 } as any);
+
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      stubVideoRect(video);
+      Object.defineProperty(video, 'readyState', { value: 0, configurable: true }); // HAVE_NOTHING
+
+      processVideoElement(video, 'test');
+      await vi.advanceTimersByTimeAsync(0); // metadata defer armed
+
+      const enhancer = EnhancerMap.getEnhancer(video)!;
+      expect(enhancer).toBeDefined();
+      expect(enhancer.toggleEnhancement).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(MEDIA_READY_TIMEOUT_MS);
+
+      expect(enhancer.toggleEnhancement).not.toHaveBeenCalled();
     });
   });
 

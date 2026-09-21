@@ -243,6 +243,9 @@
   "waitingVideoLoad": {
     "message": "⏳ Waiting for video..."
   },
+  "videoNotReady": {
+    "message": "Video isn't ready. Start playback, then try again."
+  },
   "builtInModes": {
     "message": "Built-in Modes"
   },

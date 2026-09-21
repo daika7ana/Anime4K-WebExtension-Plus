@@ -1,6 +1,8 @@
 import { VideoEnhancer } from './video-enhancer';
 import { ANIME4K_APPLIED_ATTR } from '@/constants';
 import { getSettings } from '@utils/settings';
+import { t } from '@utils/i18n';
+import { waitForMediaEvent } from '@core/utils/media-events';
 import { stashEnhancer, findAndUnstashEnhancer, clearAllStash } from './enhancer-stash';
 import * as EnhancerMap from './enhancer-map';
 
@@ -93,7 +95,12 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
 export function isEligibleForAutoEnable(video: HTMLVideoElement): boolean {
   if (!video.isConnected || !video.parentElement) return false;
   const rect = video.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  if (!(rect.width > 0 && rect.height > 0)) return false;
+  // Audio-only elements have no video track. Their dimensions only become
+  // meaningful at HAVE_METADATA, so don't reject before then (the metadata
+  // defer in maybeAutoEnable re-checks once metadata is available).
+  if (video.readyState >= video.HAVE_METADATA && (video.videoWidth <= 0 || video.videoHeight <= 0)) return false;
+  return true;
 }
 
 /**
@@ -154,6 +161,27 @@ async function maybeAutoEnable(videoEl: HTMLVideoElement, enhancer: VideoEnhance
 
     // The eligibility gate applies on both paths (delay and no-delay).
     if (!isEligibleForAutoEnable(videoEl)) return;
+
+    // A video can be discovered before it has metadata (dimensions). Wait a
+    // bounded time for the track to appear, then re-validate everything that
+    // could have changed while waiting. Silence on failure: auto-enable must
+    // never pop an error modal.
+    if (videoEl.readyState < videoEl.HAVE_METADATA) {
+      try {
+        await waitForMediaEvent(
+          videoEl,
+          'loadedmetadata',
+          new Error(t('videoNotReady', "Video isn't ready. Start playback, then try again.")),
+        );
+      } catch {
+        return; // never loaded, or errored: give up silently (no modal)
+      }
+      if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
+      if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return; // user enabled manually meanwhile
+      if (!isEligibleForAutoEnable(videoEl)) return;          // collapsed/hidden during the wait
+      const latest = await getSettings();
+      if (!latest.autoEnableOnWhitelist || !latest.whitelistEnabled) return;
+    }
 
     autoEnabledEnhancers.add(enhancer);
     await enhancer.toggleEnhancement();

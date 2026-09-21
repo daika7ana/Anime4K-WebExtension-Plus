@@ -48,7 +48,7 @@ vi.mock('@shaders/sample-external-texture.wgsl', () => ({ default: '// mock' }))
 import { Renderer } from '@core/renderer';
 
 const HAVE_ENOUGH_DATA = 4;
-const HAVE_NOTHING = 0;
+const HAVE_METADATA = 1;
 
 const DEFAULT_EFFECTS: EnhancementEffect[] = [
   { id: 'test/effect', name: 'Test Effect', className: 'TestEffect', params: { strength: 1.0 } },
@@ -204,16 +204,30 @@ describe('Renderer', () => {
       r.destroy();
     });
 
-    it('waits for video loadeddata when readyState < HAVE_FUTURE_DATA', async () => {
-      const slowVideo = createMockVideo({ readyState: HAVE_NOTHING });
+    it('initializes without waiting for loadeddata once metadata is available', async () => {
+      const metadataVideo = createMockVideo({ readyState: HAVE_METADATA });
+      const onFirstFrameRendered = vi.fn();
 
-      const createPromise = createRenderer({ video: slowVideo });
-      expect(mockAcquireGPUDevice).not.toHaveBeenCalled();
+      const r = await createRenderer({ video: metadataVideo, onFirstFrameRendered });
 
-      slowVideo.dispatchEvent(new Event('loadeddata'));
-      const r = await createPromise;
       expect(mockAcquireGPUDevice).toHaveBeenCalled();
+      const rvfc = (metadataVideo as unknown as { requestVideoFrameCallback: ReturnType<typeof vi.fn> }).requestVideoFrameCallback;
+      expect(rvfc).toHaveBeenCalled();
+      expect(onFirstFrameRendered).not.toHaveBeenCalled();
       r.destroy();
+    });
+
+    it('rejects with a no-video-track error without waiting when dimensions are zero', async () => {
+      const noTrackVideo = createMockVideo({ readyState: HAVE_METADATA, videoWidth: 0, videoHeight: 0 });
+
+      await expect(Renderer.create({
+        video: noTrackVideo,
+        canvas,
+        effects: DEFAULT_EFFECTS,
+        targetDimensions: DEFAULT_DIMENSIONS,
+      })).rejects.toThrow('Video has no video track.');
+
+      expect(mockAcquireGPUDevice).not.toHaveBeenCalled();
     });
 
     it('gets WebGPU context from canvas', async () => {

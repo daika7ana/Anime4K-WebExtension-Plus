@@ -36,5 +36,9 @@ export async function yieldToMain(): Promise<void> {
  * For general responsiveness, prefer `yieldToMain()`.
  */
 export async function yieldToAnimationFrame(): Promise<void> {
-  return new Promise<void>(resolve => { requestAnimationFrame(() => resolve()); });
+  return new Promise<void>(resolve => {
+    requestAnimationFrame(() => resolve());
+    // rAF is paused for hidden/backgrounded documents; never hang the caller.
+    setTimeout(() => resolve(), 1000);
+  });
 }

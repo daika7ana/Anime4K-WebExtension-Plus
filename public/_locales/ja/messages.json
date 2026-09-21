@@ -244,6 +244,9 @@
   "waitingVideoLoad": {
     "message": "⏳ 動画読み込み待ち..."
   },
+  "videoNotReady": {
+    "message": "動画の準備ができていません。再生を開始してから、もう一度お試しください。"
+  },
   "builtInModes": {
     "message": "組み込みモード"
   },

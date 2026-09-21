@@ -120,11 +120,12 @@ export class Renderer {
    */
   private async initialize(): Promise<void> {
     try {
-      // Wait for video data to finish loading
-      if (this.video.readyState < this.video.HAVE_FUTURE_DATA) {
-        await new Promise<void>((resolve) => {
-          this.video.addEventListener('loadeddata', () => resolve(), { once: true });
-        });
+      // Dimensions are all initialization needs; frame availability is the render
+      // loop's job (processFrame skips until HAVE_CURRENT_DATA and
+      // renderFirstFrameAndStartLoop retries via requestVideoFrameCallback). The
+      // enhancer guarantees metadata first; a zero-dimension element is audio-only.
+      if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
+        throw new RendererInitializationError('Video has no video track.');
       }
 
       // Request GPU adapter and set power preference based on platform

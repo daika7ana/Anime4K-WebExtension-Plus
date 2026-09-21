@@ -243,6 +243,9 @@
   "waitingVideoLoad": {
     "message": "⏳ 等待视频加载..."
   },
+  "videoNotReady": {
+    "message": "视频尚未就绪。请先开始播放，然后重试。"
+  },
   "builtInModes": {
     "message": "内置模式"
   },

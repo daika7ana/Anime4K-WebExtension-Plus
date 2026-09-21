@@ -171,6 +171,37 @@ describe('VideoEnhancer', () => {
       enhancer.destroy();
     });
 
+    it('times out waiting for loadedmetadata and surfaces an error instead of hanging', async () => {
+      vi.useFakeTimers();
+      try {
+        Object.defineProperty(video, 'readyState', { value: 0, configurable: true });
+
+        const enhancer = VideoEnhancer.create(video);
+        const toggle = enhancer.toggleEnhancement();
+
+        await vi.advanceTimersByTimeAsync(20_000);
+        await toggle;
+
+        expect(document.body.textContent).toContain("Video isn't ready");
+        enhancer.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('enables a metadata-only paused video without dispatching loadeddata', async () => {
+      const button = document.createElement('button');
+      mockOverlay.getButton.mockReturnValue(button);
+
+      const enhancer = VideoEnhancer.create(video);
+      await enhancer.toggleEnhancement();
+
+      expect(video.getAttribute('data-anime4k-applied')).toBe('true');
+      expect(button.innerText).toBe('cancelEnhance');
+
+      enhancer.destroy();
+    });
+
     it('does not reinitialize while already initializing', async () => {
       const enhancer = VideoEnhancer.create(video);
 

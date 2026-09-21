@@ -243,6 +243,9 @@
   "waitingVideoLoad": {
     "message": "⏳ Ожидание видео..."
   },
+  "videoNotReady": {
+    "message": "Видео не готово. Запустите воспроизведение и попробуйте снова."
+  },
   "builtInModes": {
     "message": "Встроенные режимы"
   },

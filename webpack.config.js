@@ -8,6 +8,8 @@ const pkg = require("./package.json");
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === "development";
   const targetBrowser = process.env.TARGET_BROWSER || "chrome";
+  // `build:dev` sets this to keep console.log/warn in an otherwise production build.
+  const keepConsoleLogs = process.env.KEEP_CONSOLE_LOGS === "1";
 
   const manifest = require("./manifest.json");
 
@@ -145,8 +147,9 @@ module.exports = (env, argv) => {
       minimizeOptions: {
         javascript: {
           compress: {
-            // Remove console.log and console.warn in production (keep console.error)
-            pure_funcs: ["console.log", "console.warn"],
+            // Remove console.log and console.warn in production (keep console.error).
+            // `build:dev` (KEEP_CONSOLE_LOGS=1) retains them for debugging.
+            pure_funcs: keepConsoleLogs ? [] : ["console.log", "console.warn"],
             // Match webpack's default of 2 compression passes (overriding
             // minimizeOptions is not merged with the defaults).
             passes: 2,
