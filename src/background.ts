@@ -61,23 +61,50 @@ async function checkBenchmarkCrash(): Promise<void> {
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[Background] Browser startup');
 
-  await checkBenchmarkCrash();
-  await updateDNRuleset();
+  try {
+    await checkBenchmarkCrash();
+  } catch (error) {
+    console.error('[Background] Benchmark crash check failed:', error);
+  }
+
+  try {
+    await updateDNRuleset();
+  } catch (error) {
+    console.error('[Background] Failed to update DNR ruleset:', error);
+  }
 });
 
 // Initialize on install or update
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[Background] Extension installed/updated:', details.reason);
 
-  // Ensure config is on the latest version (handle migration)
-  await ensureLatestConfig();
+  // Each startup step is failure-isolated so one failure cannot abort the rest.
+  try {
+    // Ensure config is on the latest version (handle migration)
+    await ensureLatestConfig();
+  } catch (error) {
+    console.error('[Background] Config migration failed:', error);
+  }
 
-  await checkBenchmarkCrash();
-  await updateDNRuleset();
+  try {
+    await checkBenchmarkCrash();
+  } catch (error) {
+    console.error('[Background] Benchmark crash check failed:', error);
+  }
+
+  try {
+    await updateDNRuleset();
+  } catch (error) {
+    console.error('[Background] Failed to update DNR ruleset:', error);
+  }
 
   // Open onboarding page on fresh install or update if not completed
   if (details.reason === 'install' || details.reason === 'update') {
-    await checkOnboarding();
+    try {
+      await checkOnboarding();
+    } catch (error) {
+      console.error('[Background] Onboarding check failed:', error);
+    }
   }
 });
 

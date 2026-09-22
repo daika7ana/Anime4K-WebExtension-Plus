@@ -5,7 +5,7 @@
  * and provides add/import/export actions.
  */
 import { getSettings, saveSettings } from '@utils/settings';
-import { validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
+import { validateRulePattern, removeWhitelistRules, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
 import type { WhitelistRule } from '@/types';
 import { downloadJSON, openFile } from './import-export';
 import { t } from '@utils/i18n';
@@ -20,11 +20,15 @@ export function initWhitelistPanel(
   exportBtn: HTMLButtonElement,
   importBtn: HTMLButtonElement,
   autoEnableToggle: HTMLInputElement,
+  autoEnableSettleInput: HTMLInputElement,
+  whitelistEnabledToggle: HTMLInputElement,
 ): { render(): void } {
 
   function render() {
     const state = ctx.getState();
+    whitelistEnabledToggle.checked = state.whitelistEnabled;
     autoEnableToggle.checked = state.autoEnableOnWhitelist;
+    autoEnableSettleInput.value = String(state.autoEnableSettleMs);
     rulesContainer.textContent = ''; // Clear existing rules
     state.whitelist.forEach((rule) => {
       const row = document.createElement('tr');
@@ -69,7 +73,7 @@ export function initWhitelistPanel(
       deleteBtn.textContent = t('delete', 'Delete');
       deleteBtn.className = 'action-btn';
       deleteBtn.addEventListener('click', async () => {
-        await removeWhitelistRule(rule.pattern);
+        await removeWhitelistRules([rule.pattern]);
         state.whitelist = state.whitelist.filter(r => r.pattern !== rule.pattern);
         render();
       });
@@ -82,12 +86,31 @@ export function initWhitelistPanel(
     });
   }
 
+  // --- Enable Whitelist Mode Toggle ---
+  whitelistEnabledToggle.addEventListener('change', async (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    ctx.getState().whitelistEnabled = enabled;
+    await saveSettings({ whitelistEnabled: enabled });
+    ctx.notifyUpdate();
+  });
+
   // --- Auto-enable on Whitelist Toggle ---
   autoEnableToggle.addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;
     ctx.getState().autoEnableOnWhitelist = enabled;
     await saveSettings({ autoEnableOnWhitelist: enabled });
     ctx.notifyUpdate();
+  });
+
+  // --- Auto-enable Delay (ms) ---
+  // Only affects future auto-enables, so it must not trigger a reapply via
+  // ctx.notifyUpdate().
+  autoEnableSettleInput.addEventListener('change', async (e) => {
+    const raw = Number((e.target as HTMLInputElement).value);
+    const value = Number.isNaN(raw) ? 300 : Math.min(Math.max(raw, 0), 10000);
+    autoEnableSettleInput.value = String(value);
+    ctx.getState().autoEnableSettleMs = value;
+    await saveSettings({ autoEnableSettleMs: value });
   });
 
   // --- Add Rule ---

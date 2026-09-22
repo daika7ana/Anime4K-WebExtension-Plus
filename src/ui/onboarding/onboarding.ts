@@ -2,26 +2,17 @@ import './onboarding.css';
 import '../common-vars.css';
 import { saveLocalSettings } from '@utils/settings';
 import { sendMessage } from '@utils/messaging';
-import { t, applyI18n } from '@utils/i18n';
+import { t, applyI18n, TIER_DISPLAY } from '@utils/i18n';
 import type { BenchmarkProgress } from '@/types';
 import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 import { themeManager } from '../theme-manager';
 import type { PerformanceTier, GPUBenchmarkResult } from '@/types';
 
-// Tier display names
-const TIER_DISPLAY: Record<PerformanceTier, { icon: string; name: string }> = {
-    performance: { icon: '🚀', name: t('tierPerformance', 'Fast') },
-    balanced: { icon: '⚖️', name: t('tierBalanced', 'Balanced') },
-    quality: { icon: '🎨', name: t('tierQuality', 'Quality') },
-    ultra: { icon: '🔬', name: t('tierUltra', 'Ultra') },
-};
-
 let selectedTier: PerformanceTier = 'balanced';
 let benchmarkResult: GPUBenchmarkResult | null = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize theme
-    themeManager.getTheme();
+    themeManager.initTheme();
 
     // Apply internationalization
     applyI18n();

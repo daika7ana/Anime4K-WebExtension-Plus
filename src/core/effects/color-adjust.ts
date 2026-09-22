@@ -17,6 +17,7 @@
  */
 
 import COLOR_ADJUST_SHADER from '@shaders/color-adjust.wgsl';
+import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 
 /**
  * ColorAdjust pipeline implementing the Anime4KPipeline interface.
@@ -89,10 +90,8 @@ export class ColorAdjust {
 
     this.writeParams();
 
-    // Create shader module
-    const shaderModule = this.device.createShaderModule({
-      code: COLOR_ADJUST_SHADER,
-    });
+    // Create shader module (shared/cached per device — immutable)
+    const shaderModule = gpuResourceCache.getShaderModule(this.device, COLOR_ADJUST_SHADER, 'color-adjust');
 
     // Create compute pipeline
     this.pipeline = this.device.createComputePipeline({

@@ -52,7 +52,11 @@ function createToastElement(message: string, type: ToastType): HTMLElement {
   return toast;
 }
 
-function removeToast(toast: HTMLElement): void {
+/**
+ * Remove a toast element and clear its auto-dismiss timer.
+ * @param toast - The toast HTMLElement returned by showToast.
+ */
+export function removeToast(toast: HTMLElement): void {
   if (!toast.parentNode) return;
 
   const timerId = Number(toast.dataset.timerId);
@@ -106,14 +110,6 @@ export function showToast(message: string, type: ToastType = 'info', durationMs 
 
   container.appendChild(toast);
   return toast;
-}
-
-/**
- * Remove a toast element and clear its auto-dismiss timer.
- * @param toast - The toast HTMLElement returned by showToast.
- */
-export function dismissToast(toast: HTMLElement): void {
-  removeToast(toast);
 }
 
 /**

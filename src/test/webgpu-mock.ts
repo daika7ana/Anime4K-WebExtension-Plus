@@ -16,13 +16,23 @@ import { vi } from 'vitest';
 
 // ─── TypeScript interfaces for mock objects (exported for downstream test annotations) ───
 
-export interface MockGPUAdapter {
+interface MockGPUAdapter {
   limits: { maxBufferSize: number; maxStorageBufferBindingSize: number };
+  /** Adapter-supported optional features. Mutable so tests can toggle e.g. 'timestamp-query'. */
+  features: Set<string>;
   requestDevice: ReturnType<typeof vi.fn>;
   requestAdapterInfo: ReturnType<typeof vi.fn>;
 }
 
 export interface MockGPUDevice {
+  /** Device-enabled optional features. Mutable so tests can toggle e.g. 'timestamp-query'. */
+  features: Set<string>;
+  /** Adapter/device limits exposed to geometry planners (e.g. maxTextureDimension2D). */
+  limits: {
+    maxTextureDimension2D: number;
+    maxBufferSize: number;
+    maxStorageBufferBindingSize: number;
+  };
   createTexture: ReturnType<typeof vi.fn>;
   createBuffer: ReturnType<typeof vi.fn>;
   createShaderModule: ReturnType<typeof vi.fn>;
@@ -32,6 +42,7 @@ export interface MockGPUDevice {
   createPipelineLayout: ReturnType<typeof vi.fn>;
   createBindGroup: ReturnType<typeof vi.fn>;
   createSampler: ReturnType<typeof vi.fn>;
+  createQuerySet: ReturnType<typeof vi.fn>;
   createCommandEncoder: ReturnType<typeof vi.fn>;
   queue: MockGPUQueue;
   lost: Promise<{ reason: string; message: string }>;
@@ -40,7 +51,7 @@ export interface MockGPUDevice {
   popErrorScope: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUQueue {
+interface MockGPUQueue {
   submit: ReturnType<typeof vi.fn>;
   onSubmittedWorkDone: ReturnType<typeof vi.fn>;
   writeBuffer: ReturnType<typeof vi.fn>;
@@ -48,7 +59,7 @@ export interface MockGPUQueue {
   copyExternalImageToTexture: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUCanvasContext {
+interface MockGPUCanvasContext {
   configure: ReturnType<typeof vi.fn>;
   getCurrentTexture: ReturnType<typeof vi.fn>;
   unconfigure: ReturnType<typeof vi.fn>;
@@ -61,6 +72,34 @@ export interface MockGPUTexture {
   usage: number;
   createView: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
+}
+
+interface MockGPUBuffer {
+  size: number;
+  usage: number;
+  /**
+   * True when the mock rejected the usage combination. WebGPU only permits
+   * `MAP_READ` together with `COPY_DST`; any other combination models Dawn's
+   * asynchronous validation failure: the buffer exists but is invalid and
+   * `mapAsync()` rejects.
+   */
+  invalid: boolean;
+  /**
+   * Writable/assignable BigUint64Array over the buffer's backing store.
+   * Timestamp-profiler tests write nanosecond values here before settling
+   * a pending `mapAsync()`.
+   */
+  data: BigUint64Array;
+  destroy: ReturnType<typeof vi.fn>;
+  /** Returns the backing ArrayBuffer (what `new BigUint64Array(range)` reads). */
+  getMappedRange: ReturnType<typeof vi.fn>;
+  /** Pending until the test calls {@link settleMap} or {@link rejectMapWith}. */
+  mapAsync: ReturnType<typeof vi.fn>;
+  unmap: ReturnType<typeof vi.fn>;
+  /** Resolve the most recent pending `mapAsync()` (test control). */
+  settleMap(): void;
+  /** Reject the most recent pending `mapAsync()` (test control). */
+  rejectMapWith(error: unknown): void;
 }
 
 export interface MockGPUObjects {
@@ -84,6 +123,14 @@ const GPUTextureUsageValues = {
 const GPUBufferUsageValues = {
   UNIFORM: 1,
   COPY_DST: 2,
+  MAP_READ: 1,
+  COPY_SRC: 4,
+  QUERY_RESOLVE: 512,
+} as const;
+
+const GPUMapModeValues = {
+  READ: 1,
+  WRITE: 2,
 } as const;
 
 const GPUShaderStageValues = {
@@ -111,6 +158,64 @@ export function createMockGPUTexture(width = 1, height = 1): MockGPUTexture {
   };
 }
 
+// ─── Factory: create a standalone mock GPUBuffer ───
+
+/**
+ * Create a mock GPUBuffer with a controllable `mapAsync()` and a writable
+ * BigUint64Array backing store. Timestamp tests assign `data[i] = ns` then call
+ * `settleMap()` (or `rejectMapWith(err)`); profiler readback does
+ * `new BigUint64Array(buffer.getMappedRange())` over the same store.
+ */
+export function createMockGPUBuffer(size = 0, usage = 0): MockGPUBuffer {
+  // Backing store is rounded up to a whole BigUint64 so `data` is always valid.
+  const byteLength = Math.ceil(Math.max(0, Number(size)) / 8) * 8;
+  const backing = new ArrayBuffer(byteLength);
+  const data = new BigUint64Array(backing);
+
+  // WebGPU rule: a buffer whose usage includes MAP_READ may not include any
+  // other flag except COPY_DST. Chrome/Dawn rejects this at createBuffer
+  // without throwing (async uncaptured validation error) and returns an invalid
+  // buffer whose mapAsync() rejects.
+  const hasMapRead = (usage & GPUBufferUsageValues.MAP_READ) !== 0;
+  const hasForbiddenFlag =
+    (usage & ~(GPUBufferUsageValues.MAP_READ | GPUBufferUsageValues.COPY_DST)) !== 0;
+  const invalid = hasMapRead && hasForbiddenFlag;
+
+  let resolveMap: (() => void) | null = null;
+  let rejectMap: ((error: unknown) => void) | null = null;
+
+  return {
+    size,
+    usage,
+    invalid,
+    data,
+    destroy: vi.fn(),
+    getMappedRange: vi.fn(() => backing),
+    mapAsync: vi.fn(
+      (_mode: number) =>
+        new Promise<void>((resolve, reject) => {
+          if (invalid) {
+            reject(new Error('[webgpu-mock] invalid buffer: MAP_READ combined with a forbidden usage flag'));
+            return;
+          }
+          resolveMap = resolve;
+          rejectMap = reject;
+        }),
+    ),
+    unmap: vi.fn(),
+    settleMap: () => {
+      resolveMap?.();
+      resolveMap = null;
+      rejectMap = null;
+    },
+    rejectMapWith: (error: unknown) => {
+      rejectMap?.(error);
+      rejectMap = null;
+      resolveMap = null;
+    },
+  };
+}
+
 // ─── Internal: parse createTexture size descriptor to {width, height} ───
 
 function parseTextureSize(size: unknown): { width: number; height: number } {
@@ -128,8 +233,6 @@ function parseTextureSize(size: unknown): { width: number; height: number } {
 
 interface InternalMockOptions {
   adapterNull: boolean;
-  deviceLostImmediately: boolean;
-  deviceLostReason: string;
 }
 
 function buildMockObjects(options: InternalMockOptions): {
@@ -145,10 +248,6 @@ function buildMockObjects(options: InternalMockOptions): {
     deviceLostResolve = resolve;
   });
 
-  if (options.deviceLostImmediately) {
-    deviceLostResolve({ reason: options.deviceLostReason, message: `Device ${options.deviceLostReason}` });
-  }
-
   const deviceLostDeferred = { resolve: deviceLostResolve };
 
   // ── Mock GPUQueue ──
@@ -162,6 +261,12 @@ function buildMockObjects(options: InternalMockOptions): {
 
   // ── Mock GPUDevice ──
   const mockDevice: MockGPUDevice = {
+    features: new Set<string>(),
+    limits: {
+      maxTextureDimension2D: 8192,
+      maxBufferSize: 268435456,
+      maxStorageBufferBindingSize: 134217728,
+    },
     createTexture: vi.fn((descriptor?: Record<string, unknown>) => {
       const { width, height } = parseTextureSize(descriptor?.size);
       return {
@@ -173,14 +278,9 @@ function buildMockObjects(options: InternalMockOptions): {
         destroy: vi.fn(),
       };
     }),
-    createBuffer: vi.fn((descriptor?: Record<string, unknown>) => ({
-      size: descriptor?.size ?? 0,
-      usage: descriptor?.usage ?? 0,
-      destroy: vi.fn(),
-      getMappedRange: vi.fn(() => new ArrayBuffer(0)),
-      mapAsync: vi.fn().mockResolvedValue(undefined),
-      unmap: vi.fn(),
-    })),
+    createBuffer: vi.fn((descriptor?: Record<string, unknown>) =>
+      createMockGPUBuffer(Number(descriptor?.size ?? 0), Number(descriptor?.usage ?? 0)),
+    ),
     createShaderModule: vi.fn((descriptor?: Record<string, unknown>) => ({
       label: (descriptor?.label as string) ?? 'shader',
     })),
@@ -194,6 +294,12 @@ function buildMockObjects(options: InternalMockOptions): {
     createPipelineLayout: vi.fn(() => ({ label: 'pipeline-layout' })),
     createBindGroup: vi.fn(() => ({ label: 'bind-group' })),
     createSampler: vi.fn(() => ({ label: 'sampler' })),
+    createQuerySet: vi.fn((descriptor?: Record<string, unknown>) => ({
+      type: (descriptor?.type as string) ?? 'timestamp',
+      count: (descriptor?.count as number) ?? 0,
+      label: (descriptor?.label as string) ?? 'query-set',
+      destroy: vi.fn(),
+    })),
     createCommandEncoder: vi.fn(() => ({
       beginRenderPass: vi.fn(() => ({
         setPipeline: vi.fn(),
@@ -209,9 +315,11 @@ function buildMockObjects(options: InternalMockOptions): {
         dispatchWorkgroups: vi.fn(),
         end: vi.fn(),
       })),
+      resolveQuerySet: vi.fn(),
       finish: vi.fn(() => ({ label: 'command-buffer' })),
       copyTextureToTexture: vi.fn(),
       copyBufferToTexture: vi.fn(),
+      copyBufferToBuffer: vi.fn(),
     })),
     queue: mockQueue,
     lost: deviceLost,
@@ -226,6 +334,7 @@ function buildMockObjects(options: InternalMockOptions): {
       maxBufferSize: 268435456,
       maxStorageBufferBindingSize: 134217728,
     },
+    features: new Set<string>(),
     requestDevice: vi.fn().mockResolvedValue(mockDevice),
     requestAdapterInfo: vi.fn().mockResolvedValue({
       vendor: 'mock-vendor',
@@ -257,13 +366,9 @@ function buildMockObjects(options: InternalMockOptions): {
 
 // ─── Main install function ───
 
-export function installGPUMock(
-  opts?: { adapterNull?: boolean; deviceLostImmediately?: boolean; deviceLostReason?: string }
-): MockGPUObjects {
+export function installGPUMock(opts?: { adapterNull?: boolean }): MockGPUObjects {
   const options: InternalMockOptions = {
     adapterNull: opts?.adapterNull ?? false,
-    deviceLostImmediately: opts?.deviceLostImmediately ?? false,
-    deviceLostReason: opts?.deviceLostReason ?? 'destroyed',
   };
 
   // Save originals
@@ -309,6 +414,7 @@ export function installGPUMock(
   vi.stubGlobal('GPUTextureUsage', GPUTextureUsageValues);
   vi.stubGlobal('GPUBufferUsage', GPUBufferUsageValues);
   vi.stubGlobal('GPUShaderStage', GPUShaderStageValues);
+  vi.stubGlobal('GPUMapMode', GPUMapModeValues);
 
   return { adapter: mockAdapter, device: mockDevice, context: mockContext, deviceLostDeferred };
 }

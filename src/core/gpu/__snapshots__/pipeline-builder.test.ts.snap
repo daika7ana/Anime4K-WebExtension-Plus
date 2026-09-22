@@ -1,0 +1,2549 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNVL",
+    "CNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNVL",
+    "CNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNM",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2M",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNM",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A+A / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNVL",
+    "CNNx2VL",
+    "Downscale",
+    "CNNVL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNVL",
+    "CNNx2VL",
+    "Downscale",
+    "CNNVL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A+A / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNM",
+    "CNNx2M",
+    "Downscale",
+    "CNNM",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2M",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNM",
+    "CNNx2M",
+    "Downscale",
+    "CNNM",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A+A / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for A+A / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNUL",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNUL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNUL",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 7,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftM",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2M",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftM",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B+B / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2VL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2VL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B+B / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftM",
+    "CNNx2M",
+    "Downscale",
+    "CNNSoftM",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2M",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftM",
+    "CNNx2M",
+    "Downscale",
+    "CNNSoftM",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B+B / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for B+B / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2UL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNSoftVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "CNNSoftVL",
+    "CNNx2UL",
+    "Downscale",
+    "CNNSoftVL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 6,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for BilateralMean params 1`] = `
+{
+  "classSequence": [
+    "BilateralMean",
+  ],
+  "constructors": [
+    {
+      "effectName": "BilateralMean",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+  ],
+  "labels": [
+    "BilateralMean",
+  ],
+  "paramUpdates": [
+    [
+      [
+        "strength",
+        0.35,
+      ],
+      [
+        "strength2",
+        3,
+      ],
+    ],
+  ],
+  "pipelineCount": 1,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 4,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 4,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 4,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 4,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C+A / balanced 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNVL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNVL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNVL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C+A / performance 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNM",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNM",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNM",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C+A / quality 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for C+A / ultra 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DenoiseCNNx2VL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNUL",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DenoiseCNNx2VL",
+    "Downscale",
+    "CNNUL",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for DoG params 1`] = `
+{
+  "classSequence": [
+    "DoG",
+  ],
+  "constructors": [
+    {
+      "effectName": "DoG",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+  ],
+  "labels": [
+    "DoG",
+  ],
+  "paramUpdates": [
+    [
+      [
+        "strength",
+        7,
+      ],
+    ],
+  ],
+  "pipelineCount": 1,
+}
+`;
+
+exports[`buildEffectPipelines golden (engine registry) > records the registry sequence for upscale + params + final Downscale 1`] = `
+{
+  "classSequence": [
+    "ClampHighlights",
+    "DoG",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "constructors": [
+    {
+      "effectName": "ClampHighlights",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "DoG",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "CNNx2M",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "Downscale",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": {
+        "height": 1080,
+        "width": 1920,
+      },
+    },
+    {
+      "effectName": "ClampHighlightsApply",
+      "inputTexture": {
+        "height": 1080,
+        "width": 1920,
+      },
+      "nativeDimensions": null,
+      "targetDimensions": null,
+    },
+  ],
+  "labels": [
+    "ClampHighlights",
+    "DoG",
+    "CNNx2M",
+    "Downscale",
+    "ClampHighlightsApply",
+  ],
+  "paramUpdates": [
+    [],
+    [
+      [
+        "strength",
+        7,
+      ],
+    ],
+    [],
+    [],
+    [],
+  ],
+  "pipelineCount": 5,
+}
+`;

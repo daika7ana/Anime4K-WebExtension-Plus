@@ -4,6 +4,10 @@ import { t } from '@utils/i18n';
 // Param keys that are numeric (excludes `enabled` which is boolean)
 type ColorGradingNumericKey = 'brightness' | 'gamma' | 'contrast' | 'saturation' | 'vibrance' | 'exposure'
 
+// All 6 sliders use the same ×100 / ÷100 mapping.
+const toSlider = (v: number) => Math.round(v * 100)
+const fromSlider = (v: number) => v / 100
+
 // Slider configs for the 6 color grading params.
 // Each maps a param value to a slider position and back.
 const COLOR_GRADING_PARAMS: {
@@ -26,8 +30,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'exposureDesc',
     descFallback: 'Controls the overall light level. Measured in EV stops.',
     sliderMin: -300, sliderMax: 300, defaultValue: 0,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => (v > 0 ? '+' : '') + v.toFixed(2) + ' EV',
   },
   {
@@ -37,8 +41,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'brightnessDesc',
     descFallback: 'Adjusts the overall lightness or darkness of the image.',
     sliderMin: -100, sliderMax: 100, defaultValue: 0,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%',
   },
   {
@@ -48,8 +52,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'contrastDesc',
     descFallback: 'Controls the difference between light and dark areas.',
     sliderMin: 0, sliderMax: 200, defaultValue: 100,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => Math.round(v * 100) + '%',
   },
   {
@@ -59,8 +63,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'gammaDesc',
     descFallback: 'Adjusts midtone brightness. Higher values brighten, lower values darken.',
     sliderMin: 10, sliderMax: 400, defaultValue: 100,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => v.toFixed(2),
   },
   {
@@ -70,8 +74,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'saturationDesc',
     descFallback: 'Controls the intensity of all colors uniformly.',
     sliderMin: 0, sliderMax: 200, defaultValue: 100,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => Math.round(v * 100) + '%',
   },
   {
@@ -81,8 +85,8 @@ const COLOR_GRADING_PARAMS: {
     descKey: 'vibranceDesc',
     descFallback: 'Selectively boosts less-saturated colors while preserving already vivid ones.',
     sliderMin: -100, sliderMax: 100, defaultValue: 0,
-    toSlider: (v: number) => Math.round(v * 100),
-    fromSlider: (v: number) => v / 100,
+    toSlider,
+    fromSlider,
     formatValue: (v: number) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%',
   },
 ]

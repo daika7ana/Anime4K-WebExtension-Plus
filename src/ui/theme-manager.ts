@@ -5,120 +5,97 @@
 
 type ThemeMode = 'light' | 'dark' | 'auto';
 
-class ThemeManager {
-  private static instance: ThemeManager;
-  private currentTheme: ThemeMode = 'auto';
+let currentTheme: ThemeMode = 'auto';
 
-  private constructor() {
-    this.loadTheme();
-    this.setupSystemThemeListener();
-  }
+/**
+ * Apply theme to the DOM
+ */
+function applyTheme(): void {
+  const root = document.documentElement;
 
-  public static getInstance(): ThemeManager {
-    if (!ThemeManager.instance) {
-      ThemeManager.instance = new ThemeManager();
-    }
-    return ThemeManager.instance;
-  }
+  // Remove existing theme classes
+  root.classList.remove('light', 'dark');
 
-  /**
-   * Set the theme mode
-   */
-  public setTheme(theme: ThemeMode): void {
-    this.currentTheme = theme;
-    this.applyTheme();
-    this.saveTheme();
-  }
-
-  /**
-   * Get the current theme mode
-   */
-  public getTheme(): ThemeMode {
-    return this.currentTheme;
-  }
-
-  /**
-   * Apply theme to the DOM
-   */
-  private applyTheme(): void {
-    const root = document.documentElement;
-    
-    // Remove existing theme classes
-    root.classList.remove('light', 'dark');
-    
-    if (this.currentTheme === 'auto') {
-      // Auto mode: follow system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.add('light');
-      }
+  if (currentTheme === 'auto') {
+    // Auto mode: follow system preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (prefersDark) {
+      root.classList.add('dark');
     } else {
-      // Manual mode: apply the selected theme directly
-      root.classList.add(this.currentTheme);
+      root.classList.add('light');
     }
-  }
-
-  /**
-   * Load theme settings from storage
-   */
-  private async loadTheme(): Promise<void> {
-    try {
-      const result = await chrome.storage.sync.get(['theme']);
-      if (result.theme && ['light', 'dark', 'auto'].includes(result.theme)) {
-        this.currentTheme = result.theme as ThemeMode;
-      }
-      this.applyTheme();
-    } catch (error) {
-      console.warn('Failed to load theme from storage:', error);
-      this.applyTheme();
-    }
-  }
-
-  /**
-   * Save theme settings to storage
-   */
-  private async saveTheme(): Promise<void> {
-    try {
-      await chrome.storage.sync.set({ theme: this.currentTheme });
-    } catch (error) {
-      console.warn('Failed to save theme to storage:', error);
-    }
-  }
-
-  /**
-   * Listen for system theme changes
-   */
-  private setupSystemThemeListener(): void {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addEventListener('change', () => {
-      if (this.currentTheme === 'auto') {
-        this.applyTheme();
-      }
-    });
-  }
-
-  /**
-   * Get the currently applied theme (resolves auto mode)
-   */
-  public getEffectiveTheme(): 'light' | 'dark' {
-    if (this.currentTheme === 'auto') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return this.currentTheme;
-  }
-
-  /**
-   * Switch to the next theme
-   */
-  public toggleTheme(): void {
-    const themes: ThemeMode[] = ['light', 'dark', 'auto'];
-    const currentIndex = themes.indexOf(this.currentTheme);
-    const nextIndex = (currentIndex + 1) % themes.length;
-    this.setTheme(themes[nextIndex]);
+  } else {
+    // Manual mode: apply the selected theme directly
+    root.classList.add(currentTheme);
   }
 }
 
-// Export singleton instance
-export const themeManager = ThemeManager.getInstance();
+/**
+ * Load theme settings from storage
+ */
+async function loadTheme(): Promise<void> {
+  try {
+    const result = await chrome.storage.sync.get(['theme']);
+    if (result.theme && ['light', 'dark', 'auto'].includes(result.theme)) {
+      currentTheme = result.theme as ThemeMode;
+    }
+    applyTheme();
+  } catch (error) {
+    console.warn('Failed to load theme from storage:', error);
+    applyTheme();
+  }
+}
+
+/**
+ * Save theme settings to storage
+ */
+async function saveTheme(): Promise<void> {
+  try {
+    await chrome.storage.sync.set({ theme: currentTheme });
+  } catch (error) {
+    console.warn('Failed to save theme to storage:', error);
+  }
+}
+
+/**
+ * Listen for system theme changes
+ */
+function setupSystemThemeListener(): void {
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  mediaQuery.addEventListener('change', () => {
+    if (currentTheme === 'auto') {
+      applyTheme();
+    }
+  });
+}
+
+/**
+ * Set the theme mode
+ */
+function setTheme(theme: ThemeMode): void {
+  currentTheme = theme;
+  applyTheme();
+  saveTheme();
+}
+
+/**
+ * Get the current theme mode
+ */
+function getTheme(): ThemeMode {
+  return currentTheme;
+}
+
+let initialized = false;
+
+/**
+ * Load the saved theme and start following system preference.
+ * Call once per page entry; safe to call again (no-op).
+ */
+function initTheme(): void {
+  if (initialized) return;
+  initialized = true;
+  loadTheme();
+  setupSystemThemeListener();
+}
+
+export const themeManager = { initTheme, setTheme, getTheme };

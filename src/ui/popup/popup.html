@@ -46,9 +46,10 @@
       <!-- Mode selector -->
       <div class="setting-group">
         <label id="mode-label" for="mode-select" data-i18n="enhancementModeLabel">Enhancement Mode</label>
-        <select id="mode-select" aria-labelledby="mode-label">
+        <select id="mode-select" aria-labelledby="mode-label" aria-describedby="mode-description">
           <!-- Mode options will be dynamically populated by popup.ts -->
         </select>
+        <p id="mode-description" class="mode-description" hidden></p>
       </div>
 
       <!-- Resolution selector -->
@@ -62,6 +63,7 @@
           <option value="1080p">1080p</option>
           <option value="2k">2K (1440p)</option>
           <option value="4k">4K (2160p)</option>
+          <option value="display" data-i18n="matchDisplayResolution">Match Display</option>
           <option value="native" data-i18n="nativeResolution">Native</option>
         </select>
       </div>
@@ -83,7 +85,7 @@
       <!-- Whitelist section -->
       <div class="whitelist-section">
         <div class="whitelist-toggle">
-          <label for="whitelist-toggle" data-i18n="whitelistEnable">Enable Whitelist</label>
+          <label for="whitelist-toggle" data-i18n="whitelistEnable">Enable Whitelist Mode</label>
           <label class="switch">
             <input type="checkbox" id="whitelist-toggle">
             <span class="slider"></span>
@@ -104,6 +106,8 @@
             <span data-i18n="addParentPath">Path</span>
           </button>
         </div>
+
+        <button id="remove-from-whitelist" class="whitelist-remove-btn" data-i18n="removeFromWhitelist" hidden title="Remove this site from the whitelist">Remove from Whitelist</button>
       </div>
 
       <button id="open-settings" data-i18n="openSettings">Settings</button>

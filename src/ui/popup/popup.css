@@ -29,7 +29,7 @@ body {
   color: var(--on-primary-container);
   position: relative;
   overflow: hidden;
-  min-height: 44px;
+  min-height: 32px;
   display: flex;
   align-items: center;
 }
@@ -173,7 +173,11 @@ h3 {
   box-sizing: border-box;
 }
 
-select {
+/* Scoped to .card select so this longhand beats the .card select background
+   shorthand above (equal specificity, later in source) — otherwise the caret
+   is reset to none. Border matches the tier box for a coherent control set. */
+.card select {
+  border-color: var(--outline-variant);
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2389b4fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right var(--spacing-2) center;
@@ -195,6 +199,27 @@ select {
 .card select:hover {
   background-color: var(--surface-container);
   border-color: var(--on-surface-variant);
+}
+
+/* ===== Mode Guidance =====
+   Single per-mode description in a bordered box anchored to the mode select:
+   indented to the select's value, with its left rule on the select's frame.
+   Smaller and dimmer than the section label so it reads as helper copy. */
+.mode-description {
+  margin: 6px 0 0;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid var(--outline-variant);
+  border-left: 3px solid var(--md-sys-color-tertiary);
+  border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+  background: var(--surface-container);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--on-surface-variant);
+  text-wrap: pretty;
+}
+
+.mode-description[hidden] {
+  display: none;
 }
 
 
@@ -225,31 +250,36 @@ select {
   box-shadow: none;
 }
 
-/* ===== Tier Selector ===== */
+/* ===== Tier Selector =====
+   Sized to hug the cards symmetrically. The generic `.card button` rule sets a
+   margin-bottom that out-specifies a bare `.tier-btn`; scoping this rule to
+   `.tier-selector .tier-btn` lets `margin: 0` win, so the row is centered
+   instead of sitting above the box (top gap 4px / bottom gap 12px). */
 .tier-selector {
   display: flex;
   gap: 4px;
-  padding: 4px;
+  padding: 6px;
   background: var(--surface-container-low);
   border-radius: 14px;
   border: 1px solid var(--outline-variant);
 }
 
-.tier-btn {
+.tier-selector .tier-btn {
   flex: 1;
-  padding: 5px 2px;
+  padding: 6px 4px;
   border: none;
   background: transparent;
+  color: var(--on-surface-variant);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.2, 0.0, 0, 1.0);
-  min-height: 40px;
+  min-height: 46px;
   margin: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   position: relative;
   overflow: hidden;
 }
@@ -281,6 +311,7 @@ select {
 
 .tier-btn:hover:not(.disabled):not(.active) {
   background: var(--surface-container);
+  color: var(--on-surface);
   transform: none;
   box-shadow: none;
 }
@@ -289,10 +320,13 @@ select {
   transform: scale(1.15);
 }
 
+/* Filled, brighter-than-track selected chip (previously a gradient whose
+   transparent stop made the selected card darker than the unselected ones).
+   Glow is tight enough to stay inside the selector's 6px padding. */
 .tier-btn.active {
-  background: linear-gradient(135deg, var(--primary-container) 0%, rgba(137, 180, 250, 0.2) 100%);
+  background: var(--primary-container);
   color: var(--on-primary-container);
-  box-shadow: 0 2px 8px rgba(137, 180, 250, 0.25);
+  box-shadow: 0 1px 4px rgba(137, 180, 250, 0.3);
 }
 
 .tier-btn.active::before {
@@ -307,6 +341,15 @@ select {
   opacity: 0.4;
   cursor: not-allowed;
   filter: grayscale(0.5);
+}
+
+/* Keep disabled chips flat; the generic .card button:hover would otherwise
+   fill them on pointer-over while a custom mode is selected. */
+.tier-selector .tier-btn.disabled:hover {
+  background: transparent;
+  color: var(--on-surface-variant);
+  box-shadow: none;
+  transform: none;
 }
 
 /* ===== Primary Button ===== */
@@ -428,6 +471,58 @@ select {
   transform: scale(1.2);
 }
 
+/* `[hidden]` must beat the author `display: flex` on the container, otherwise
+   the attribute is visually ignored. */
+.whitelist-buttons[hidden] {
+  display: none;
+}
+
+/* ===== Whitelist Remove Button =====
+   Replaces the three add buttons when the active page is already whitelisted.
+   Full-width block, neutral surface by default, error-accented on hover so it
+   reads as a removal action without competing with the primary CTA. */
+.whitelist-section .whitelist-remove-btn {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 6px 8px;
+  min-height: 32px;
+  font-size: 12px;
+  background-color: var(--surface-container);
+  color: var(--on-surface-variant);
+  border: 1px solid var(--outline);
+  border-radius: var(--border-radius);
+  transition: all 0.2s cubic-bezier(0.2, 0.0, 0, 1.0);
+  white-space: nowrap;
+}
+
+.whitelist-section .whitelist-remove-btn::before {
+  content: '\2716'; /* ✖ removal affordance */
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.whitelist-section .whitelist-remove-btn:hover {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+  box-shadow: 0 4px 12px rgba(243, 139, 168, 0.3);
+  transform: translateY(-1px);
+}
+
+.whitelist-section .whitelist-remove-btn:hover::before {
+  transform: scale(1.2);
+}
+
+.whitelist-section .whitelist-remove-btn:active {
+  transform: translateY(0);
+}
+
+/* Same `[hidden]` override, scoped so it wins over `.card button`'s display. */
+.whitelist-section .whitelist-remove-btn[hidden] {
+  display: none;
+}
+
 /* ===== Color Grading Section ===== */
 .color-grading-section {
   margin-top: var(--spacing-3);
@@ -523,46 +618,6 @@ select {
 
 #extension-footer span {
   opacity: 0.5;
-}
-
-/* ===== Save Status Message ===== */
-.save-status {
-  color: var(--secondary);
-  text-align: center;
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  animation: fadeInSlide 0.3s ease-out;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.save-status::before {
-  content: '✓';
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  background: var(--secondary);
-  color: var(--surface);
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ===== Subtle entrance animation for card ===== */

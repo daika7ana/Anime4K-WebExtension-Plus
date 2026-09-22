@@ -15,7 +15,8 @@
 .anime4k-toast {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  /* centers 27/21/18px line boxes */
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   background: var(--surface);

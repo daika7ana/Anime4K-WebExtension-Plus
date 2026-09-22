@@ -58,6 +58,28 @@ describe('enhancer-stash', () => {
       // Both are empty → early return, detach should not be called
       expect(enhancer.detach).not.toHaveBeenCalled();
     });
+
+    it('destroys the previous enhancer and cancels its stale timer when re-stashing the same src', () => {
+      const src = 'https://example.com/video.mp4';
+      const first = makeMockEnhancer(src);
+      const second = makeMockEnhancer(src);
+
+      stashEnhancer(first);
+      vi.advanceTimersByTime(1000); // t=1000
+      stashEnhancer(second);
+
+      // The orphaned previous enhancer is torn down immediately.
+      expect(first.destroy).toHaveBeenCalledOnce();
+
+      // Advance past the first entry's original TTL (t=2000). Its stale timer
+      // must not destroy the enhancer now stored under the same key.
+      vi.advanceTimersByTime(1200); // t=2200
+      expect(second.destroy).not.toHaveBeenCalled();
+
+      // The new entry still expires on its own timer (stashed at t=1000).
+      vi.advanceTimersByTime(1000); // t=3200 > 3000
+      expect(second.destroy).toHaveBeenCalledOnce();
+    });
   });
 
   describe('findAndUnstashEnhancer', () => {

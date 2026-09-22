@@ -73,4 +73,23 @@ describe('yieldToAnimationFrame', () => {
     await promise;
     expect(resolved).toBe(true);
   });
+
+  it('resolves via the timer fallback when rAF callback is never delivered', async () => {
+    vi.useFakeTimers();
+    try {
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 1);
+
+      const promise = yieldToAnimationFrame();
+      let resolved = false;
+      promise.then(() => { resolved = true; });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await promise;
+
+      expect(resolved).toBe(true);
+      expect(rafSpy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

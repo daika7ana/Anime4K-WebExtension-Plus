@@ -6,7 +6,7 @@ import type { Anime4KWebExtSettings, PerformanceTier } from '@/types';
 import { themeManager } from '../theme-manager';
 import { Sidebar } from './Sidebar';
 import { sendMessage, onMessage } from '@utils/messaging';
-import { applyI18n } from '@utils/i18n';
+import { applyI18n, TIER_DISPLAY } from '@utils/i18n';
 import { initModesPanel } from './modes-panel';
 import { initWhitelistPanel } from './whitelist-panel';
 import { initBenchmarkPanel } from './benchmark-panel';
@@ -28,6 +28,8 @@ const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
 const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
 const crossOriginFixToggle = document.getElementById('cross-origin-fix-toggle') as HTMLInputElement;
 const autoEnableToggle = document.getElementById('auto-enable-toggle') as HTMLInputElement;
+const autoEnableSettleInput = document.getElementById('auto-enable-settle-ms') as HTMLInputElement;
+const whitelistEnabledToggle = document.getElementById('whitelist-enabled-toggle') as HTMLInputElement;
 const colorGradingToggle = document.getElementById('color-grading-toggle') as HTMLInputElement;
 const colorGradingSliders = document.getElementById('color-grading-sliders') as HTMLElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
@@ -38,17 +40,14 @@ const runBenchmarkBtn = document.getElementById('run-benchmark-btn') as HTMLButt
 const tierSelect = document.getElementById('tier-select') as HTMLSelectElement;
 const enableHotkeyToggle = document.getElementById('enable-hotkey-toggle') as HTMLInputElement;
 const diagnosticsToggle = document.getElementById('diagnostics-toggle') as HTMLInputElement;
+const diagnosticsDetailSelect = document.getElementById('diagnostics-detail-select') as HTMLSelectElement | null;
+const restorePolicySelect = document.getElementById('restore-policy-select') as HTMLSelectElement;
 
 // --- AppContext: shared state + callbacks for all panels ---
 const ctx: AppContext = {
   getState: () => settingsState,
   getTier: () => currentTier,
   setTier: (tier: PerformanceTier) => { currentTier = tier; },
-  refresh: async () => {
-    settingsState = await getSettings();
-    const localSettings = await getLocalSettings();
-    currentTier = localSettings.performanceTier;
-  },
   notifyUpdate: (modifiedModeId?: string) => {
     sendMessage({ type: 'SETTINGS_UPDATED', modifiedModeId });
   },
@@ -59,30 +58,27 @@ const setupInternationalization = () => {
   applyI18n();
 
   // Add icons to tier select options
-  const tierIcons: Record<string, string> = {
-    performance: '🚀',
-    balanced: '⚖️',
-    quality: '🎨',
-    ultra: '🔬',
-  };
   document.querySelectorAll<HTMLOptionElement>('#tier-select option').forEach(option => {
-    const icon = tierIcons[option.value];
-    if (icon && option.textContent && !option.textContent.startsWith(icon)) {
-      option.textContent = `${icon} ${option.textContent}`;
+    const display = TIER_DISPLAY[option.value as PerformanceTier];
+    if (display && option.textContent && !option.textContent.startsWith(display.icon)) {
+      option.textContent = `${display.icon} ${option.textContent}`;
     }
   });
 };
 
 // --- Initialize panels (bind DOM + events; returns render handles) ---
 const modesPanel = initModesPanel(ctx, modesContainer, addModeBtn, exportModesBtn, importModesBtn);
-const whitelistPanel = initWhitelistPanel(ctx, rulesContainer, addRuleBtn, exportBtn, importBtn, autoEnableToggle);
+const whitelistPanel = initWhitelistPanel(ctx, rulesContainer, addRuleBtn, exportBtn, importBtn, autoEnableToggle, autoEnableSettleInput, whitelistEnabledToggle);
 
 // onTierChanged is called when the tier changes (manual select or benchmark apply).
 // It syncs the tier-select display AND re-renders mode chains (which depend on tier).
 const onTierChanged = () => {
-  generalPanel.renderGeneralSettings();
+  // Sync the tier-select display. Fire-and-forget to match the previous
+  // unawaited renderGeneralSettings() ordering (modes re-render runs first).
+  void getLocalSettings().then((localSettings) => {
+    if (tierSelect) tierSelect.value = localSettings.performanceTier;
+  });
   modesPanel.render();
-  // Note: tierSelect.value is updated by renderGeneralSettings()
 };
 initBenchmarkPanel(ctx, runBenchmarkBtn, tierSelect, onTierChanged);
 
@@ -96,6 +92,8 @@ const generalPanel = initGeneralPanel(
   versionNumberSpan,
   enableHotkeyToggle,
   diagnosticsToggle,
+  restorePolicySelect,
+  diagnosticsDetailSelect,
 );
 
 // --- Cross-context message listener ---
@@ -120,9 +118,7 @@ onMessage(async (message) => {
 
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize theme
-  themeManager.getTheme(); // This will automatically apply the saved theme
-
+  themeManager.initTheme();
   setupInternationalization();
 
   // Initialize sidebar

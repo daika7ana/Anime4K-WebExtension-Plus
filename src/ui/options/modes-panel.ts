@@ -4,25 +4,56 @@
  * Renders built-in and custom mode cards with drag-and-drop reordering,
  * expand/collapse, effect chain editing, cloning, and import/export.
  */
-import { getEffectsForMode, saveSettings, synchronizeEffectsForCustomModes } from '@utils/settings';
+import { getEffectsForMode, getLocalSettings, saveSettings, synchronizeEffectsForCustomModes } from '@utils/settings';
+import { resolveEffectReference } from '@utils/effect-registry';
 import { AVAILABLE_EFFECTS } from '@utils/effects-map';
-import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier } from '@/types';
+import type { EnhancementMode, EnhancementEffect, CustomMode, PerformanceTier, RestorePolicy } from '@/types';
 import { renderParamSliders } from './param-sliders';
 import { t } from '@utils/i18n';
 import { downloadJSON, openFile } from './import-export';
+import { formatValidationIssues, parseAndValidateModesImport } from '@utils/validation';
 import { showToast } from '../common/toast';
 
 // --- Drag and Drop State (module-local — no other panel touches it) ---
 let draggedElement: HTMLElement | null = null;
 let draggedModeId: string | null = null;
-let draggedEffectIndex: number | null = null;
 
 export interface AppContext {
   getState(): import('@/types').Anime4KWebExtSettings;
   getTier(): PerformanceTier;
   setTier(tier: PerformanceTier): void;
-  refresh(): Promise<void>;
   notifyUpdate(modifiedModeId?: string): void;
+  /**
+   * Set by {@link initModesPanel}. Other panels (notably the General panel's
+   * restore-policy select) call this to re-render the modes panel immediately
+   * after a local-settings change that affects the restore-policy note.
+   * The options page's own cross-context listener never receives the options
+   * page's own `SETTINGS_UPDATED` message, so an explicit refresh is required.
+   */
+  refreshModesPanel?: () => void;
+}
+
+/** i18n key + fallback for the selected restore policy's mode-card note, or `null` when the policy needs no note. */
+function policyNoteI18nKey(policy: RestorePolicy): { key: string; fallback: string } | null {
+  switch (policy) {
+    case 'gate':
+      return {
+        key: 'restorePolicyNoteGate',
+        fallback: 'Restore passes run adaptively: faint low-contrast detail bypasses them; strong edges are enhanced.',
+      };
+    case 'trailing':
+      return {
+        key: 'restorePolicyNoteTrailing',
+        fallback: 'Restore passes after the final Downscale may be skipped.',
+      };
+    case 'leading':
+      return {
+        key: 'restorePolicyNoteLeading',
+        fallback: 'Restore passes before the first upscaler may be skipped.',
+      };
+    default:
+      return null;
+  }
 }
 
 export function initModesPanel(
@@ -34,11 +65,60 @@ export function initModesPanel(
 ): { render(): void } {
 
   // -----------------------------------------------------------------------
+  //  Restore-policy cache
+  // -----------------------------------------------------------------------
+  // The local setting is read asynchronously, but render() rebuilds every card
+  // synchronously. Cache the latest value once here and reuse it for the whole
+  // pass (never await per effect). A changed value triggers one re-render.
+  let restorePolicy: RestorePolicy = 'off';
+  let policyFetchInFlight = false;
+
+  /** Resolve an effect and report whether it is a restore-category effect. */
+  function isRestoreEffect(effect: EnhancementEffect): boolean {
+    const resolution = resolveEffectReference(effect);
+    return (
+      resolution.status === 'resolved' &&
+      resolution.effect.descriptor.category === 'restore'
+    );
+  }
+
+  function refreshRestorePolicy(): void {
+    if (policyFetchInFlight) return;
+    policyFetchInFlight = true;
+    getLocalSettings()
+      .then((local) => {
+        const next = local.restorePolicy ?? 'off';
+        if (next !== restorePolicy) {
+          restorePolicy = next;
+          render();
+        }
+      })
+      .catch(() => {
+        // Keep the last known policy value if storage is unavailable.
+      })
+      .finally(() => {
+        policyFetchInFlight = false;
+      });
+  }
+
+  // Persist custom modes; re-reads state at call time (post-render mutations make snapshots stale).
+  function persistCustomModes(extra?: Partial<import('@/types').Anime4KWebExtSettings>): Promise<void> {
+    const state = ctx.getState();
+    return saveSettings({
+      customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
+      ...extra,
+    });
+  }
+
+  // -----------------------------------------------------------------------
   //  Main render function
   // -----------------------------------------------------------------------
   function render() {
     const settingsState = ctx.getState();
     const currentTier = ctx.getTier();
+
+    // Refresh the cached policy asynchronously for this/next pass.
+    refreshRestorePolicy();
 
     // 1. Preserve expanded state before re-rendering
     const expandedModeIds = new Set<string>();
@@ -102,7 +182,7 @@ export function initModesPanel(
           settingsState.enhancementModes.splice(toIndex, 0, movedMode);
 
           render(); // Re-render from state
-          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] }); // Persist changes
+          await persistCustomModes(); // Persist changes
           ctx.notifyUpdate();
         }
       });
@@ -148,7 +228,7 @@ export function initModesPanel(
         if (targetMode && newName && newName !== targetMode.name) {
           targetMode.name = newName;
           mode.name = newName; // Update local object for consistency
-          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+          await persistCustomModes();
           ctx.notifyUpdate(mode.id);
         } else {
           (e.target as HTMLElement).textContent = mode.name;
@@ -167,10 +247,7 @@ export function initModesPanel(
             settingsState.selectedModeId = 'builtin-mode-a'; // Fall back to default mode
           }
           render();
-          await saveSettings({
-            customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
-            selectedModeId: settingsState.selectedModeId,
-          });
+          await persistCustomModes({ selectedModeId: settingsState.selectedModeId });
           ctx.notifyUpdate(deletedModeId);
         }
       };
@@ -190,7 +267,7 @@ export function initModesPanel(
         };
         settingsState.enhancementModes.unshift(clonedMode);
         render();
-        await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+        await persistCustomModes();
         ctx.notifyUpdate(clonedMode.id);
       };
 
@@ -211,9 +288,25 @@ export function initModesPanel(
       summary.textContent = summaryText || (t('noEffects', 'No effects'));
       card.appendChild(summary);
 
+      // Whether this chain contains any restore-category effect. Computed from
+      // the descriptors, not from runtime geometry (see note below).
+      const hasRestoreEffects = modeEffects.some(isRestoreEffect);
+
       // --- Card Content (shown when expanded) ---
       const cardContent = document.createElement('div');
       cardContent.className = 'mode-card-content';
+
+      // Policy note — not a computed prediction. Suppression depends on runtime
+      // geometry (source resolution, render target, upscale factors), so we
+      // describe the policy only. Applies to built-in and custom modes alike.
+      const note = policyNoteI18nKey(restorePolicy);
+      if (note && hasRestoreEffects) {
+        const policyNote = document.createElement('p');
+        policyNote.className = 'mode-policy-note';
+        policyNote.textContent = t(note.key, note.fallback);
+        cardContent.appendChild(policyNote);
+      }
+
       const effectsList = document.createElement('ul');
       effectsList.className = 'effects-list';
 
@@ -226,13 +319,32 @@ export function initModesPanel(
         // --- Configurable parameters (e.g. CAS sharpness, DoG strength) ---
         const effectContent = document.createElement('div');
         effectContent.className = 'effect-content';
-        effectContent.appendChild(effectName);
+
+        const effectNameRow = document.createElement('div');
+        effectNameRow.className = 'effect-name-row';
+        effectNameRow.appendChild(effectName);
+
+        // Restore-category effects are subject to the restore policy. This is a
+        // policy marker, not a claim that this effect will be skipped: whether
+        // suppression happens depends on runtime geometry.
+        if (isRestoreEffect(effect)) {
+          const policyBadge = document.createElement('span');
+          policyBadge.className = 'effect-policy-badge';
+          policyBadge.textContent = t('restorePolicyBadge', 'Restore');
+          policyBadge.title = t(
+            'restorePolicyBadgeTitle',
+            'Restore pass — may be affected by the restore policy.',
+          );
+          effectNameRow.appendChild(policyBadge);
+        }
+
+        effectContent.appendChild(effectNameRow);
 
         if (effect.params && !mode.isBuiltIn) {
           const paramsWrapper = document.createElement('div');
           paramsWrapper.className = 'effect-params-wrapper';
-          renderParamSliders(effect, mode.id, effectItem, paramsWrapper, async (modeId) => {
-            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+          renderParamSliders(effect, mode.id, paramsWrapper, async (modeId) => {
+            await persistCustomModes();
             ctx.notifyUpdate(modeId);
           });
           effectContent.appendChild(paramsWrapper);
@@ -241,58 +353,8 @@ export function initModesPanel(
         effectItem.appendChild(effectContent);
 
         if (!mode.isBuiltIn) {
-          effectItem.draggable = true;
-
-          // --- Drag and drop for effect reordering ---
-          effectItem.addEventListener('dragstart', (e) => {
-            e.stopPropagation();
-            draggedElement = effectItem;
-            draggedModeId = mode.id;
-            draggedEffectIndex = index;
-            if (e.dataTransfer) {
-              e.dataTransfer.effectAllowed = 'move';
-            }
-            setTimeout(() => effectItem.classList.add('dragging'), 0);
-          });
-
-          effectItem.addEventListener('dragend', (e) => {
-            e.stopPropagation();
-            effectItem.classList.remove('dragging');
-            draggedElement = null;
-            draggedModeId = null;
-            draggedEffectIndex = null;
-          });
-
-          effectItem.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (draggedModeId === mode.id) {
-              effectItem.classList.add('drag-over');
-            }
-          });
-
-          effectItem.addEventListener('dragleave', (e) => {
-            e.stopPropagation();
-            effectItem.classList.remove('drag-over');
-          });
-
-          effectItem.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            effectItem.classList.remove('drag-over');
-            if (draggedModeId !== mode.id || draggedEffectIndex === null || draggedEffectIndex === index) return;
-
-            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-            if (targetMode && !targetMode.isBuiltIn) {
-              const [movedEffect] = targetMode.effects.splice(draggedEffectIndex, 1);
-              targetMode.effects.splice(index, 0, movedEffect);
-              render();
-              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-              ctx.notifyUpdate(mode.id);
-            }
-          });
-
-          // --- Effect Action Buttons ---
+          // Reordering is button-only (keyboard/AT accessible). Mode cards keep
+          // their own drag-and-drop, but effect rows do not.
           const effectActions = document.createElement('div');
           effectActions.className = 'effect-actions';
 
@@ -315,7 +377,9 @@ export function initModesPanel(
 
             btn.appendChild(arrowSvg);
             btn.className = 'btn-move-effect';
-            btn.title = t(dir === 'up' ? 'moveUp' : 'moveDown', dir === 'up' ? 'Move Up' : 'Move Down');
+            const label = t(dir === 'up' ? 'moveUp' : 'moveDown', dir === 'up' ? 'Move Up' : 'Move Down');
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
             btn.disabled = (dir === 'up' && index === 0) || (dir === 'down' && index === mode.effects.length - 1);
             btn.onclick = async () => {
               const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
@@ -324,7 +388,7 @@ export function initModesPanel(
                 const [movedEffect] = targetMode.effects.splice(index, 1);
                 targetMode.effects.splice(newIndex, 0, movedEffect);
                 render();
-                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+                await persistCustomModes();
                 ctx.notifyUpdate(mode.id);
               }
             };
@@ -334,13 +398,15 @@ export function initModesPanel(
           const removeEffectBtn = document.createElement('button');
           removeEffectBtn.textContent = '×';
           removeEffectBtn.className = 'btn-remove-effect';
-          removeEffectBtn.title = t('removeEffect', 'Remove effect');
+          const removeLabel = t('removeEffect', 'Remove effect');
+          removeEffectBtn.title = removeLabel;
+          removeEffectBtn.setAttribute('aria-label', removeLabel);
           removeEffectBtn.onclick = async () => {
             const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
             if (targetMode && !targetMode.isBuiltIn) {
               targetMode.effects.splice(index, 1);
               render();
-              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+              await persistCustomModes();
               ctx.notifyUpdate(mode.id);
             }
           };
@@ -380,7 +446,7 @@ export function initModesPanel(
           if (targetMode && !targetMode.isBuiltIn && effectToAdd) {
             targetMode.effects.push(effectToAdd);
             render();
-            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+            await persistCustomModes();
             ctx.notifyUpdate(mode.id);
           }
           (e.target as HTMLSelectElement).value = defaultOption.value; // Reset dropdown
@@ -418,6 +484,10 @@ export function initModesPanel(
     }
   }
 
+  // Expose the renderer through the shared context so other panels can refresh
+  // the restore-policy note immediately after a local-settings change.
+  ctx.refreshModesPanel = render;
+
   // -----------------------------------------------------------------------
   //  Add Mode
   // -----------------------------------------------------------------------
@@ -431,7 +501,7 @@ export function initModesPanel(
     };
     state.enhancementModes.unshift(newMode);
     render();
-    await saveSettings({ customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+    await persistCustomModes();
   });
 
   // -----------------------------------------------------------------------
@@ -448,33 +518,20 @@ export function initModesPanel(
   importModesBtn.addEventListener('click', async () => {
     try {
       const json = await openFile();
-      const importedRaw: unknown = JSON.parse(json);
+      const result = parseAndValidateModesImport(json);
 
-      if (!Array.isArray(importedRaw)) throw new Error('Invalid format: not an array');
-
-      const newModes: CustomMode[] = [];
-      for (const item of importedRaw) {
-        if (typeof item !== 'object' || item === null) {
-          console.warn('Skipping invalid mode object on import:', item);
-          continue;
-        }
-        const mode = item as Record<string, unknown>;
-        if (typeof mode.name !== 'string' || !Array.isArray(mode.effects)) {
-          console.warn('Skipping invalid mode object on import:', mode);
-          continue;
-        }
-
-        const newMode: CustomMode = {
-          id: `custom-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          name: mode.name,
-          isBuiltIn: false,
-          effects: mode.effects as EnhancementEffect[],
-        };
-        newModes.push(newMode);
+      // Atomic: reject the whole payload rather than partially applying valid modes.
+      if (!result.ok) {
+        console.error('Import validation failed:', result.issues);
+        showToast(
+          `${t('importError', 'Import failed: invalid format or file error.')} (${formatValidationIssues(result.issues)})`,
+          'error',
+        );
+        return;
       }
 
       const state = ctx.getState();
-      const syncedNewModes = synchronizeEffectsForCustomModes(newModes);
+      const syncedNewModes = synchronizeEffectsForCustomModes(result.value);
       const allCustomModes = [...state.customModes, ...syncedNewModes];
       state.customModes = allCustomModes;
       state.enhancementModes = [

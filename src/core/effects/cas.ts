@@ -13,6 +13,7 @@
  */
 
 import CAS_SHADER from '@shaders/cas.wgsl';
+import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 
 /**
  * CAS (Contrast Adaptive Sharpening) pipeline implementing the Anime4KPipeline interface.
@@ -57,10 +58,8 @@ export class CAS {
     });
     this.device.queue.writeBuffer(this.paramsBuffer, 0, new Float32Array([this.sharpness, 0]));
 
-    // Create shader module
-    const shaderModule = this.device.createShaderModule({
-      code: CAS_SHADER,
-    });
+    // Create shader module (shared/cached per device — immutable)
+    const shaderModule = gpuResourceCache.getShaderModule(this.device, CAS_SHADER, 'cas');
 
     // Create compute pipeline
     this.pipeline = this.device.createComputePipeline({
