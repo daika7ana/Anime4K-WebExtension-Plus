@@ -4,6 +4,7 @@
  * Replaces scattered `chrome.i18n.getMessage(key) || 'fallback'` patterns
  * and repeated `[data-i18n]` DOM application blocks with a single source of truth.
  */
+import type { PerformanceTier } from '@/types';
 
 /**
  * Get a localized message with optional fallback and substitutions.
@@ -51,3 +52,16 @@ export function applyI18n(root: ParentNode = document): void {
     }
   });
 }
+
+/**
+ * Shared tier presentation (emoji + localized name). Kept in one place so the
+ * options tier selector, the benchmark recommendation, and onboarding all show
+ * the same icon and label for a tier. Chrome's i18n messages are synchronous,
+ * so evaluating this at import time is safe.
+ */
+export const TIER_DISPLAY: Record<PerformanceTier, { icon: string; name: string }> = {
+  performance: { icon: '🚀', name: t('tierPerformance', 'Fast') },
+  balanced: { icon: '⚖️', name: t('tierBalanced', 'Balanced') },
+  quality: { icon: '🎨', name: t('tierQuality', 'Quality') },
+  ultra: { icon: '🔬', name: t('tierUltra', 'Ultra') },
+};

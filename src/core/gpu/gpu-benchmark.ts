@@ -8,8 +8,7 @@ import type { BackendRegistry } from 'anime4k-webgpu-async';
 import { resolveEffectChain } from '@utils/effect-chain-templates';
 import { resolveEffectReference, type EffectResolution } from '@utils/effect-registry';
 import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
-import { TexturePool } from './texture-pool';
-import { compileEffectChain } from './effect-chain-compiler';
+import { compileEffectChain, destroyPipelines } from './effect-chain-compiler';
 import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors } from './compile-policy';
 import { selectGatedRestoreOptions } from '@core/effects/gated-restore';
 
@@ -29,7 +28,6 @@ let cachedBenchmarkRegistry: BackendRegistry | null = null;
 
 /** Default target frame rate for the sustainability budget (24fps ≈ 41.67ms/frame). */
 const DEFAULT_BENCHMARK_FPS_TARGET = 24;
-const TARGET_FRAME_TIME_24FPS = 1000 / DEFAULT_BENCHMARK_FPS_TARGET; // ~41.67ms
 
 /**
  * ── Benchmark → performance-tier policy ─────────────────────────────────
@@ -156,41 +154,17 @@ export function recommendTierFromSamples(
 }
 
 /**
- * Check if the GPU device is still valid
- */
-function isDeviceValid(device: GPUDevice): boolean {
-    // Check if the device has been lost
-    // device.lost is a Promise that resolves if the device is lost
-    // We verify by checking basic device operations
-    try {
-        // Try to create a minimal command encoder to verify device state
-        const encoder = device.createCommandEncoder();
-        encoder.finish();
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
- * Safely destroy pipeline array
+ * Wait for the GPU queue to drain, then destroy the pipelines via the shared
+ * helper (the same loop used by the renderer's superseded-build cleanup).
  */
 async function safeDestroyPipelines(device: GPUDevice, pipelines: DestroyablePipeline[]): Promise<void> {
-    // First wait for the GPU queue to complete
     try {
         await device.queue.onSubmittedWorkDone();
     } catch {
         // Ignore error
     }
 
-    // Then destroy pipelines
-    for (const pipeline of pipelines) {
-        try {
-            pipeline.destroy?.();
-        } catch {
-            // Ignore individual pipeline destroy errors
-        }
-    }
+    destroyPipelines(pipelines);
 }
 
 /**
@@ -202,21 +176,10 @@ export async function runGPUBenchmark(
 ): Promise<GPUBenchmarkResult> {
     const tiers = PERFORMANCE_TIER_ORDER;
     const samplesByTier: TierFrameSamples = {};
-    const scores: Record<PerformanceTier, number> = {
-        performance: Infinity,
-        balanced: Infinity,
-        quality: Infinity,
-        ultra: Infinity,
-    };
-    const maxScores: Record<PerformanceTier, number> = {
-        performance: Infinity,
-        balanced: Infinity,
-        quality: Infinity,
-        ultra: Infinity,
-    };
-
-    // Get GPU info
-    const adapterInfo = await getGPUAdapterInfo();
+    const scores = Object.fromEntries(
+        PERFORMANCE_TIER_ORDER.map((tier) => [tier, Infinity] as const),
+    ) as Record<PerformanceTier, number>;
+    const maxScores: Record<PerformanceTier, number> = { ...scores };
 
     // Initialize WebGPU
     if (!navigator.gpu) {
@@ -227,6 +190,9 @@ export async function runGPUBenchmark(
     if (!adapter) {
         throw new Error('No GPU adapter available');
     }
+
+    // Read adapter info from the adapter we already acquired (no second request).
+    const adapterInfo = await getGPUAdapterInfo(adapter);
 
     // Request higher maxBufferSize based on adapter-supported limits for high-resolution testing
     const adapterLimits = adapter.limits;
@@ -247,16 +213,14 @@ export async function runGPUBenchmark(
         deviceLost = true;
     });
 
-    // Per-device texture pool. The benchmark's input texture has an identical
-    // descriptor for every tier, so consecutive tiers recycle the same texture
-    // instead of allocating/destroying one per tier.
-    const texturePool = new TexturePool(device);
-    const inputTextureDescriptor = {
-        width: TEST_WIDTH,
-        height: TEST_HEIGHT,
-        format: 'rgba8unorm' as const,
+    // Single input texture shared by the global warmup and every tier. All
+    // consumers use the identical 1080p rgba8unorm descriptor, so re-uploading
+    // between runs needs no reallocation.
+    const inputTexture = device.createTexture({
+        size: [TEST_WIDTH, TEST_HEIGHT],
+        format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    };
+    });
 
     // Pre-generate test data (reused across all tiers)
     const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
@@ -280,9 +244,8 @@ export async function runGPUBenchmark(
     // Global warmup phase: run multiple frames with performance effect chain to warm up GPU
     console.log('[GPUBenchmark] Global warmup phase...');
     {
-        const warmupTexture = texturePool.acquire(inputTextureDescriptor);
         device.queue.writeTexture(
-            { texture: warmupTexture },
+            { texture: inputTexture },
             testData,
             { bytesPerRow: TEST_WIDTH * 4, rowsPerImage: TEST_HEIGHT },
             [TEST_WIDTH, TEST_HEIGHT]
@@ -290,8 +253,7 @@ export async function runGPUBenchmark(
         await device.queue.onSubmittedWorkDone();
 
         const warmupEffects = resolveEffectChain('A+A', 'performance');
-        await runEffectChainTest(device, warmupTexture, warmupEffects, Anime4K);
-        texturePool.release(warmupTexture);
+        await runEffectChainTest(device, inputTexture, warmupEffects, Anime4K);
         console.log('[GPUBenchmark] Global warmup complete');
     }
 
@@ -299,8 +261,8 @@ export async function runGPUBenchmark(
     for (let i = 0; i < tiers.length; i++) {
         const tier = tiers[i];
 
-        // Check if the device is still valid
-        if (deviceLost || !isDeviceValid(device)) {
+        // Stop early if the device.lost handler already observed a loss
+        if (deviceLost) {
             console.warn(`[GPUBenchmark] Device lost before ${tier} test, stopping benchmark`);
             break;
         }
@@ -311,11 +273,8 @@ export async function runGPUBenchmark(
             completed: false,
         });
 
-        // Acquire the input texture for this tier test from the pool. Every tier
-        // uses the same descriptor, so after the first tier this is a pool hit.
-        let inputTexture: GPUTexture;
+        // Re-upload the shared input texture for this tier.
         try {
-            inputTexture = texturePool.acquire(inputTextureDescriptor);
             device.queue.writeTexture(
                 { texture: inputTexture },
                 testData,
@@ -325,7 +284,7 @@ export async function runGPUBenchmark(
             // Wait for texture write to complete
             await device.queue.onSubmittedWorkDone();
         } catch (error) {
-            console.warn(`[GPUBenchmark] Failed to create texture for ${tier}:`, error);
+            console.warn(`[GPUBenchmark] Failed to upload input texture for ${tier}:`, error);
             break;
         }
 
@@ -350,34 +309,14 @@ export async function runGPUBenchmark(
             samplesByTier[tier] = samples;
             console.log(`[GPUBenchmark] ${tier}: avg=${avgTime.toFixed(2)}ms, max=${maxTime.toFixed(2)}ms per frame`);
 
-            // Return the texture to the pool for reuse by the next tier
-            try {
-                await device.queue.onSubmittedWorkDone();
-                texturePool.release(inputTexture);
-            } catch {
-                // Ignore cleanup error
-            }
-
-            // If current tier is too slow, skip heavier tiers
-            if (avgTime > TARGET_FRAME_TIME_24FPS * 2) {
-                console.log(`[GPUBenchmark] ${tier} too slow (${avgTime.toFixed(2)}ms), skipping heavier tiers`);
-                break;
-            }
-
         } catch (error) {
             console.warn(`[GPUBenchmark] ${tier} failed:`, error);
             await chrome.storage.local.remove('_benchmarkInProgress');
 
-            try {
-                texturePool.release(inputTexture);
-            } catch {
-                // Ignore cleanup error
-            }
-
             // If the first tier (performance) fails, throw immediately
             if (i === 0) {
                 intentionalDestroy = true;
-                texturePool.dispose();
+                inputTexture.destroy();
                 device.destroy();
                 throw error;
             }
@@ -395,7 +334,7 @@ export async function runGPUBenchmark(
     // If no tier succeeded (all scores are Infinity), throw
     if (scores.performance === Infinity) {
         intentionalDestroy = true;
-        texturePool.dispose();
+        inputTexture.destroy();
         device.destroy();
         throw new Error('All benchmark tests failed');
     }
@@ -407,7 +346,7 @@ export async function runGPUBenchmark(
 
     // Cleanup resources
     intentionalDestroy = true;
-    texturePool.dispose();
+    inputTexture.destroy();
     device.destroy();
 
     const result: GPUBenchmarkResult = {
@@ -578,15 +517,10 @@ export async function runEffectChainTest(
 }
 
 /**
- * Get GPU adapter info
+ * Get GPU adapter info from an already-acquired adapter.
  */
-async function getGPUAdapterInfo(): Promise<string> {
-    if (!navigator.gpu) return 'WebGPU not supported';
-
+async function getGPUAdapterInfo(adapter: GPUAdapter): Promise<string> {
     try {
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return 'No adapter';
-
         const gpuAdapter = adapter as unknown as GPUAdapterWithInfo;
         const info = gpuAdapter.requestAdapterInfo
             ? await gpuAdapter.requestAdapterInfo()

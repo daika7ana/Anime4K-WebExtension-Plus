@@ -16,8 +16,6 @@ import {
     isSuppressedIndex,
     INTERMEDIATE_DOWNSCALE_THRESHOLD,
     MIN_DOWNSCALE_HEIGHT,
-    BYTES_PER_PIXEL_RGBA16F,
-    MAX_INTERMEDIATE_BYTES,
     DEFAULT_MAX_INTERMEDIATE_PIXELS,
     type ChainGeometryLimits,
     type RestoreSuppression,
@@ -688,9 +686,7 @@ const previewWithLimits = (
 });
 
 describe('planChainGeometryPreview limits', () => {
-    it('exposes the rgba16float byte/pixel budget constants', () => {
-        expect(BYTES_PER_PIXEL_RGBA16F).toBe(8);
-        expect(MAX_INTERMEDIATE_BYTES).toBe(256 * 1024 * 1024);
+    it('exposes the 256 MB / 8-byte rgba16float intermediate pixel budget', () => {
         expect(DEFAULT_MAX_INTERMEDIATE_PIXELS).toBe(33_554_432);
         // 8K UHD exactly; a 2x from 4K fits, a 2x from 8K does not.
         expect(7680 * 4320).toBeLessThanOrEqual(DEFAULT_MAX_INTERMEDIATE_PIXELS);

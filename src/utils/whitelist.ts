@@ -11,12 +11,8 @@ import type { WhitelistRule } from '../types';
  * @param pattern Wildcard pattern
  */
 export function validateRulePattern(pattern: string): boolean {
-  try {
-    // Simple validation: must not be empty and contain at least one valid character
-    return pattern.trim().length > 0;
-  } catch {
-    return false;
-  }
+  // Simple validation: must not be empty and contain at least one valid character
+  return pattern.trim().length > 0;
 }
 
 /**
@@ -124,14 +120,6 @@ export async function removeWhitelistRules(patterns: string[]): Promise<void> {
 
   // Notify that the whitelist has been updated
   sendMessage({ type: 'WHITELIST_UPDATED' });
-}
-
-/**
- * Remove a whitelist rule
- * @param pattern The rule pattern to remove
- */
-export async function removeWhitelistRule(pattern: string): Promise<void> {
-  await removeWhitelistRules([pattern]);
 }
 
 /**

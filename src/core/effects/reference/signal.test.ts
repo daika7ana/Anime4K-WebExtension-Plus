@@ -164,8 +164,6 @@ describe('makeStepEdge / measureEdgeResponse', () => {
 
     const response = measureEdgeResponse(image, { axis: 'x', low: 32, high: 224, margin: 4 });
 
-    expect(response.maxOvershoot).toBe(16);
-    expect(response.maxUndershoot).toBe(16);
     expect(response.overshootPct).toBeCloseTo((100 * 16) / 192, 6);
     expect(response.undershootPct).toBeCloseTo((100 * 16) / 192, 6);
   });

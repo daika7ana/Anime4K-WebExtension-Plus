@@ -620,46 +620,6 @@ h3 {
   opacity: 0.5;
 }
 
-/* ===== Save Status Message ===== */
-.save-status {
-  color: var(--secondary);
-  text-align: center;
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  animation: fadeInSlide 0.3s ease-out;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.save-status::before {
-  content: '✓';
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  background: var(--secondary);
-  color: var(--surface);
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ===== Subtle entrance animation for card ===== */
 @keyframes cardEnter {
   from {

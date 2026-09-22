@@ -9,6 +9,7 @@ manager is **pnpm** (CI pins pnpm 11.5.3, Node 23/24).
 - `pnpm install` — deps. `pnpm-workspace.yaml` pins `allowBuilds` (esbuild yes, core-js no).
 - `pnpm build` — alias for `pnpm build:chrome`; output goes to `dist-chrome/` (or `dist-firefox/`).
 - `pnpm build:chrome` / `pnpm build:firefox` — production build; `TARGET_BROWSER` selects the manifest shape.
+- `pnpm build:dev` — production Chrome build that keeps `console.log`/`console.warn` (`KEEP_CONSOLE_LOGS=1`).
 - `pnpm dev:chrome` / `pnpm watch:chrome` — both run webpack in **watch** mode (`webpack.config.js` `watch: isDevelopment`). There is no dev server and no one-shot dev build; reload the unpacked `dist-*` dir in the browser.
 - `pnpm lint` (eslint) · `pnpm typecheck` (`tsc --noEmit`) · `pnpm test` (Vitest once).
 - Single unit test: `pnpm exec vitest run src/path/to/file.test.ts`
@@ -39,7 +40,7 @@ All effects run through `anime4k-webgpu-async`'s `BackendRegistry` / `AlgorithmB
 - `src/core/engines/registry.ts` — composition root; lazy singleton merging `createAnime4kBackend()` (library, 15 effects) + `createCoreBackend()` (extension-owned CAS/Debanding/ColorAdjust).
 - `src/core/engines/descriptors.ts` — metadata-only catalog (18 effects) + param schema overlay. It may runtime-import only the dependency-free `anime4k-webgpu-async/engines/anime4k/catalog` subpath, never the package root.
 - `src/core/engines/core-backend.ts` — a core effect needs a `CORE_EFFECTS` entry **and** a descriptor in `coreEffectDescriptors` (descriptors.ts), plus an `AVAILABLE_EFFECT_IDS` entry if user-selectable. Core effects deliberately keep legacy `anime4k/...` ids so storage needs no migration.
-- `paramsSchema` (descriptors) is the source of truth for slider bounds/defaults and validation — do not hardcode ranges in UI or validation code. DoG/BilateralMean schemas live in the extension overlay `ANIME4K_PARAM_SCHEMA_OVERLAY`, not the library catalog; `effects-map.ts` still holds shadowed `LEGACY_DEFAULT_PARAMS`.
+- `paramsSchema` (descriptors) is the source of truth for slider bounds/defaults and validation — do not hardcode ranges in UI or validation code. DoG/BilateralMean schemas live in the extension overlay `ANIME4K_PARAM_SCHEMA_OVERLAY`, not the library catalog; `effects-map.ts` derives defaults from `paramsSchema` via `descriptorToCatalogEffect`.
 - The persistence/UI layer resolves against static descriptors; the GPU layer compiles via the registry. Keep those two layers separate.
 
 ## Rendering pipeline invariants
@@ -56,7 +57,7 @@ All effects run through `anime4k-webgpu-async`'s `BackendRegistry` / `AlgorithmB
 - Adding a setting touches all of: the interface, its `DEFAULT_*`, the normalizer, **and** the `syncKeys`/`localKeys` list in `saveSettings` — only keys in those arrays persist.
 - Built-in mode chains are data: `src/utils/effect-chain-templates.ts` maps `baseMode × tier → className[]` (resolved by `getEffectsForMode`/`resolveEffectChain`); custom modes store explicit effect arrays.
 - Migrations (`src/utils/migration.ts`) are an ordered, idempotent chain keyed on `_configVersion` (`CURRENT_CONFIG_VERSION = 4`). Add a `migrateVxToVy`, bump the constant, extend `ensureLatestConfig`; never mutate existing steps. Legacy `preserveDetail` is also mapped to `restorePolicy` at read time in `normalizeLocalSettings`.
-- `getSettings()` caches for 2s with a revisioned snapshot (`settings-snapshot.ts`) invalidated by `chrome.storage.onChanged`.
+- `getSettings()` caches for 2s (`SETTINGS_CACHE_TTL` inside `settings.ts`) invalidated by a `chrome.storage.onChanged` listener.
 - `src/utils/effect-registry.ts` resolution precedence must hold: exact `id` → `backendId`+`key` → legacy `className` → new-style-but-unresolved = **keep** (`'unresolved'`, cross-device forward compat) → legacy unknown = droppable.
 - `src/utils/effects-map.ts` `AVAILABLE_EFFECT_IDS` is a derived allowlist; ColorAdjust is system-only and intentionally excluded.
 

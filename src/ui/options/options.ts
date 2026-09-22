@@ -6,7 +6,7 @@ import type { Anime4KWebExtSettings, PerformanceTier } from '@/types';
 import { themeManager } from '../theme-manager';
 import { Sidebar } from './Sidebar';
 import { sendMessage, onMessage } from '@utils/messaging';
-import { applyI18n } from '@utils/i18n';
+import { applyI18n, TIER_DISPLAY } from '@utils/i18n';
 import { initModesPanel } from './modes-panel';
 import { initWhitelistPanel } from './whitelist-panel';
 import { initBenchmarkPanel } from './benchmark-panel';
@@ -48,11 +48,6 @@ const ctx: AppContext = {
   getState: () => settingsState,
   getTier: () => currentTier,
   setTier: (tier: PerformanceTier) => { currentTier = tier; },
-  refresh: async () => {
-    settingsState = await getSettings();
-    const localSettings = await getLocalSettings();
-    currentTier = localSettings.performanceTier;
-  },
   notifyUpdate: (modifiedModeId?: string) => {
     sendMessage({ type: 'SETTINGS_UPDATED', modifiedModeId });
   },
@@ -63,16 +58,10 @@ const setupInternationalization = () => {
   applyI18n();
 
   // Add icons to tier select options
-  const tierIcons: Record<string, string> = {
-    performance: '🚀',
-    balanced: '⚖️',
-    quality: '🎨',
-    ultra: '🔬',
-  };
   document.querySelectorAll<HTMLOptionElement>('#tier-select option').forEach(option => {
-    const icon = tierIcons[option.value];
-    if (icon && option.textContent && !option.textContent.startsWith(icon)) {
-      option.textContent = `${icon} ${option.textContent}`;
+    const display = TIER_DISPLAY[option.value as PerformanceTier];
+    if (display && option.textContent && !option.textContent.startsWith(display.icon)) {
+      option.textContent = `${display.icon} ${option.textContent}`;
     }
   });
 };
@@ -84,9 +73,12 @@ const whitelistPanel = initWhitelistPanel(ctx, rulesContainer, addRuleBtn, expor
 // onTierChanged is called when the tier changes (manual select or benchmark apply).
 // It syncs the tier-select display AND re-renders mode chains (which depend on tier).
 const onTierChanged = () => {
-  generalPanel.renderGeneralSettings();
+  // Sync the tier-select display. Fire-and-forget to match the previous
+  // unawaited renderGeneralSettings() ordering (modes re-render runs first).
+  void getLocalSettings().then((localSettings) => {
+    if (tierSelect) tierSelect.value = localSettings.performanceTier;
+  });
   modesPanel.render();
-  // Note: tierSelect.value is updated by renderGeneralSettings()
 };
 initBenchmarkPanel(ctx, runBenchmarkBtn, tierSelect, onTierChanged);
 
@@ -126,9 +118,7 @@ onMessage(async (message) => {
 
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize theme
-  themeManager.getTheme(); // This will automatically apply the saved theme
-
+  themeManager.initTheme();
   setupInternationalization();
 
   // Initialize sidebar

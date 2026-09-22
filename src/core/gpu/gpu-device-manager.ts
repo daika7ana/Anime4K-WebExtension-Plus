@@ -11,19 +11,16 @@
  *
  * Sharing model
  * -------------
- * Devices live in a module-level map keyed by the effective adapter request
- * (`powerPreference`, `forceFallbackAdapter`, `featureLevel`). Required limits
- * and the optional feature set are derived from whichever adapter answers the
- * request and every caller of a key performs the same derivation, so one shared
- * device per key is safe. The extension only ever issues the default request, so
- * in practice there is exactly one shared device. Concurrent acquires for the
- * same key are coalesced so callers share a single request.
+ * The extension only ever issues the default adapter request, so a single
+ * module-level shared device serves every renderer. It is ref-counted: it lives
+ * while at least one lease holds it and is destroyed when the last lease is
+ * released. Concurrent acquires are coalesced so callers share one request.
  *
  * Loss observation
  * ----------------
  * Exactly ONE `device.lost` listener is attached per shared device. It marks the
- * record lost, removes it from the cache (so the next acquire requests a fresh
- * device), and notifies every subscriber registered through
+ * record lost, clears the module-level reference (so the next acquire requests a
+ * fresh device), and notifies every subscriber registered through
  * {@link GpuDeviceLease.onLost}. The manager never calls `destroy()` on loss
  * because the device is already gone. Consumers observe loss through
  * `GpuDeviceLease.onLost()`; the raw `device.lost` promise is an implementation
@@ -32,9 +29,9 @@
  * Lifecycle
  * ---------
  * `release()` decrements the lease count. When the count reaches zero the device
- * is destroyed and dropped from the cache — there is intentionally no idle
- * retention after the last release. A device created by {@link preWarmGPU} sits
- * at refCount 0 and is destroyed after 30 s if no lease claims it.
+ * is destroyed — there is intentionally no idle retention after the last
+ * release. A device created by {@link preWarmGPU} sits at refCount 0 and is
+ * destroyed after 30 s if no lease claims it.
  */
 import { PipelinePreWarmer } from './pipeline-prewarmer';
 
@@ -62,12 +59,10 @@ export interface GpuDeviceLease {
   onLost(callback: (info: GPUDeviceLostInfo) => void): () => void;
 }
 
-/** One shared device and its outstanding-lease bookkeeping. */
+/** The single shared device and its outstanding-lease bookkeeping. */
 interface SharedDevice {
   device: GPUDevice;
   adapter: GPUAdapter;
-  /** Registry key this record is stored under (for cache eviction). */
-  key: string;
   /** Number of outstanding leases. */
   refCount: number;
   lost: boolean;
@@ -80,10 +75,10 @@ interface SharedDevice {
 // --- Static GPU pre-warm state (shared across all Renderer instances) ---
 let prewarmPromise: Promise<void> | null = null;
 
-// --- Shared device registry (keyed by effective adapter request) ---
-const sharedDevices = new Map<string, SharedDevice>();
-/** Coalesces concurrent requests for one key so callers share a device. */
-const pendingAcquisitions = new Map<string, Promise<SharedDevice>>();
+// --- The single shared device, or null when none is live ---
+let sharedDevice: SharedDevice | null = null;
+/** Coalesces concurrent acquires so callers share one request. */
+let pendingAcquisition: Promise<SharedDevice> | null = null;
 
 /**
  * Maximum number of fresh devices requested when a newly created device is
@@ -100,22 +95,12 @@ const preWarmer = new PipelinePreWarmer();
  * power preference. Setting `powerPreference` on Windows produces a driver
  * warning, so it is only applied on other platforms.
  */
-function resolveAdapterOptions(options?: GPURequestAdapterOptions): GPURequestAdapterOptions {
-  const resolved: GPURequestAdapterOptions = { ...options };
-  if (resolved.powerPreference === undefined && !navigator.platform.startsWith('Win')) {
+function resolveAdapterOptions(): GPURequestAdapterOptions {
+  const resolved: GPURequestAdapterOptions = {};
+  if (!navigator.platform.startsWith('Win')) {
     resolved.powerPreference = 'high-performance';
   }
   return resolved;
-}
-
-/** Stable cache key for a shared device: the effective adapter request. */
-function deviceKey(options?: GPURequestAdapterOptions): string {
-  const resolved = resolveAdapterOptions(options);
-  return JSON.stringify({
-    powerPreference: resolved.powerPreference ?? null,
-    forceFallbackAdapter: resolved.forceFallbackAdapter ?? false,
-    featureLevel: resolved.featureLevel ?? null,
-  });
 }
 
 /**
@@ -123,13 +108,11 @@ function deviceKey(options?: GPURequestAdapterOptions): string {
  * Feature detection is adapter-level: unsupported adapters pass an empty
  * feature array and pay nothing for optional profiling.
  */
-async function requestDeviceFor(
-  options?: GPURequestAdapterOptions,
-): Promise<{ device: GPUDevice; adapter: GPUAdapter }> {
+async function requestDeviceFor(): Promise<{ device: GPUDevice; adapter: GPUAdapter }> {
   if (!navigator.gpu) {
     throw new Error('WebGPU not supported: No adapter found.');
   }
-  const adapter = await navigator.gpu.requestAdapter(resolveAdapterOptions(options));
+  const adapter = await navigator.gpu.requestAdapter(resolveAdapterOptions());
   if (!adapter) {
     throw new Error('WebGPU not supported: No adapter found.');
   }
@@ -147,11 +130,10 @@ async function requestDeviceFor(
 }
 
 /** Create an unregistered shared-device record at refCount 0. */
-function createSharedRecord(device: GPUDevice, adapter: GPUAdapter, key: string): SharedDevice {
+function createSharedRecord(device: GPUDevice, adapter: GPUAdapter): SharedDevice {
   return {
     device,
     adapter,
-    key,
     refCount: 0,
     lost: false,
     lostInfo: null,
@@ -161,9 +143,10 @@ function createSharedRecord(device: GPUDevice, adapter: GPUAdapter, key: string)
 }
 
 /**
- * Attach the single `device.lost` listener for a shared device. On loss the
- * record is marked lost, evicted from the cache, and all subscribers are
- * notified. The device is never destroyed here because it is already gone.
+ * Attach the single `device.lost` listener for the shared device. On loss the
+ * record is marked lost, cleared from the module-level reference, and all
+ * subscribers are notified. The device is never destroyed here because it is
+ * already gone.
  */
 function attachLostListener(shared: SharedDevice): void {
   shared.device.lost.then((info) => {
@@ -173,8 +156,8 @@ function attachLostListener(shared: SharedDevice): void {
       clearTimeout(shared.idleTimer);
       shared.idleTimer = null;
     }
-    if (sharedDevices.get(shared.key) === shared) {
-      sharedDevices.delete(shared.key);
+    if (sharedDevice === shared) {
+      sharedDevice = null;
     }
     const callbacks = Array.from(shared.lostCallbacks);
     shared.lostCallbacks.clear();
@@ -215,10 +198,10 @@ function createLease(shared: SharedDevice): GpuDeviceLease {
       if (shared.refCount > 0) shared.refCount -= 1;
       if (shared.refCount > 0) return;
 
-      // Last lease released: no idle retention — evict and destroy.
+      // Last lease released: no idle retention — clear and destroy.
       cancelIdleTimer(shared);
-      if (sharedDevices.get(shared.key) === shared) {
-        sharedDevices.delete(shared.key);
+      if (sharedDevice === shared) {
+        sharedDevice = null;
       }
       if (!shared.lost) {
         try {
@@ -242,50 +225,44 @@ function createLease(shared: SharedDevice): GpuDeviceLease {
 }
 
 /**
- * Start (or join) a coalesced request for a shared device under `key`. The
- * returned record is registered in {@link sharedDevices}; the caller owns the
- * refCount increment.
+ * Start (or join) a coalesced request for the shared device. The returned record
+ * is stored as {@link sharedDevice}; the caller owns the refCount increment.
  */
-function requestSharedDevice(key: string, options?: GPURequestAdapterOptions): Promise<SharedDevice> {
-  const pending = pendingAcquisitions.get(key);
-  if (pending) return pending;
+function requestSharedDevice(): Promise<SharedDevice> {
+  if (pendingAcquisition) return pendingAcquisition;
 
   const request = (async () => {
-    const { device, adapter } = await requestDeviceFor(options);
-    const shared = createSharedRecord(device, adapter, key);
-    sharedDevices.set(key, shared);
+    const { device, adapter } = await requestDeviceFor();
+    const shared = createSharedRecord(device, adapter);
+    sharedDevice = shared;
     attachLostListener(shared);
     return shared;
   })();
 
-  pendingAcquisitions.set(key, request);
+  pendingAcquisition = request;
   const cleanup = (): void => {
-    if (pendingAcquisitions.get(key) === request) pendingAcquisitions.delete(key);
+    if (pendingAcquisition === request) pendingAcquisition = null;
   };
   // Settle-time cleanup that swallows rejections (callers still observe them).
   request.then(cleanup, cleanup);
   return request;
 }
 
-/** Acquire a live shared device or create one, incrementing the refCount. */
-async function getOrCreateSharedDevice(
-  key: string,
-  options?: GPURequestAdapterOptions,
-): Promise<SharedDevice> {
-  const shared = sharedDevices.get(key);
-  if (shared && !shared.lost) {
-    shared.refCount += 1;
-    cancelIdleTimer(shared);
-    return shared;
+/** Acquire the live shared device or create one, incrementing the refCount. */
+async function getOrCreateSharedDevice(): Promise<SharedDevice> {
+  if (sharedDevice && !sharedDevice.lost) {
+    sharedDevice.refCount += 1;
+    cancelIdleTimer(sharedDevice);
+    return sharedDevice;
   }
 
   for (let attempt = 0; attempt < MAX_DEVICE_ACQUIRE_ATTEMPTS; attempt += 1) {
-    const candidate = await requestSharedDevice(key, options);
+    const candidate = await requestSharedDevice();
     if (!candidate.lost) {
       candidate.refCount += 1;
       return candidate;
     }
-    // Lost between creation and hand-off: try a fresh device for this key.
+    // Lost between creation and hand-off: try a fresh device.
   }
 
   throw new Error(
@@ -295,7 +272,7 @@ async function getOrCreateSharedDevice(
 
 /**
  * Pre-request GPU adapter and device so they're ready when the user clicks Enhance.
- * The device is stored as a shared device at refCount 0 and destroyed after 30 s
+ * The device is stored as the shared device at refCount 0 and destroyed after 30 s
  * if no lease claims it. Safe to call multiple times — only the first call does work.
  */
 export function preWarmGPU(): void {
@@ -303,13 +280,11 @@ export function preWarmGPU(): void {
   prewarmPromise = (async () => {
     try {
       if (!navigator.gpu) return;
-      const key = deviceKey();
       const { device, adapter } = await requestDeviceFor();
 
-      // Another consumer may have acquired a device for this key while the pre-warm
-      // was in flight; prefer the existing shared device.
-      const existing = sharedDevices.get(key);
-      if (existing && !existing.lost) {
+      // Another consumer may have acquired a device while the pre-warm was in
+      // flight; prefer the existing shared device.
+      if (sharedDevice && !sharedDevice.lost) {
         try {
           device.destroy();
         } catch {
@@ -318,16 +293,16 @@ export function preWarmGPU(): void {
         return;
       }
 
-      const shared = createSharedRecord(device, adapter, key);
-      sharedDevices.set(key, shared);
+      const shared = createSharedRecord(device, adapter);
+      sharedDevice = shared;
       attachLostListener(shared);
 
       // Auto-destroy a prewarmed device that is never leased within 30 seconds.
       shared.idleTimer = setTimeout(() => {
         shared.idleTimer = null;
-        if (shared.refCount === 0 && !shared.lost && sharedDevices.get(key) === shared) {
+        if (shared.refCount === 0 && !shared.lost && sharedDevice === shared) {
           console.log('[Anime4KWebExt] Prewarmed GPU device unclaimed after 30s, releasing.');
-          sharedDevices.delete(key);
+          sharedDevice = null;
           try {
             shared.device.destroy();
           } catch {
@@ -342,39 +317,37 @@ export function preWarmGPU(): void {
 }
 
 /**
- * Acquire a lease on a shared GPUDevice for the given request options (defaults
- * applied). A pre-warmed device at refCount 0 is claimed and its idle timer
- * cancelled; otherwise a fresh adapter/device is requested. Concurrent calls for
- * the same request share one device.
+ * Acquire a lease on the shared GPUDevice. A pre-warmed device at refCount 0 is
+ * claimed and its idle timer cancelled; otherwise a fresh adapter/device is
+ * requested. Concurrent calls share one device.
  */
-export async function acquireGPUDevice(options?: GPURequestAdapterOptions): Promise<GpuDeviceLease> {
+export async function acquireGPUDevice(): Promise<GpuDeviceLease> {
   // If a pre-warm is in flight, await it so we can share its device instead of
   // racing a duplicate request.
   if (prewarmPromise) await prewarmPromise;
 
-  const shared = await getOrCreateSharedDevice(deviceKey(options), options);
+  const shared = await getOrCreateSharedDevice();
   return createLease(shared);
 }
 
 /**
  * Invalidate the shader pre-warm cache and the pre-warm promise.
- * Shared devices with outstanding leases are left untouched. An unleased
+ * A shared device with outstanding leases is left untouched. An unleased
  * (refCount 0) prewarmed device is destroyed to avoid leaking it.
  */
 export function invalidatePreWarm(): void {
   preWarmer.invalidate();
   prewarmPromise = null;
 
-  for (const [key, shared] of sharedDevices) {
-    if (shared.refCount > 0) continue;
-    cancelIdleTimer(shared);
-    sharedDevices.delete(key);
-    if (!shared.lost) {
-      try {
-        shared.device.destroy();
-      } catch {
-        /* already destroyed */
-      }
+  const shared = sharedDevice;
+  if (!shared || shared.refCount > 0) return;
+  cancelIdleTimer(shared);
+  sharedDevice = null;
+  if (!shared.lost) {
+    try {
+      shared.device.destroy();
+    } catch {
+      /* already destroyed */
     }
   }
 }

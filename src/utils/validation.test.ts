@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  EFFECT_PARAM_BOUNDS,
-  MODES_IMPORT_VERSION,
   formatValidationIssues,
   isPerformanceTier,
   isValidResolutionSetting,
@@ -63,7 +61,7 @@ describe('validateModesImport', () => {
   });
 
   it('accepts a versioned { version, modes } envelope', () => {
-    const result = validateModesImport({ version: MODES_IMPORT_VERSION, modes: [validMode()] });
+    const result = validateModesImport({ version: 1, modes: [validMode()] });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(1);
@@ -91,7 +89,7 @@ describe('validateModesImport', () => {
   });
 
   it('rejects an envelope missing the modes array', () => {
-    const result = validateModesImport({ version: MODES_IMPORT_VERSION });
+    const result = validateModesImport({ version: 1 });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues.some(i => i.path === 'modes')).toBe(true);
@@ -245,8 +243,8 @@ describe('formatValidationIssues', () => {
       { path: 'modes[2].id', message: 'unknown' },
       { path: 'modes[3].id', message: 'unknown' },
     ];
-    const text = formatValidationIssues(issues, 2);
-    expect(text).toBe('modes[0].name: required; modes[1].id: unknown (+2 more)');
+    const text = formatValidationIssues(issues);
+    expect(text).toBe('modes[0].name: required; modes[1].id: unknown; modes[2].id: unknown (+1 more)');
   });
 
   it('handles an empty issue list defensively', () => {
@@ -254,48 +252,45 @@ describe('formatValidationIssues', () => {
   });
 });
 
-describe('EFFECT_PARAM_BOUNDS', () => {
-  it('matches the catalog default for every bounded parameter', () => {
-    for (const [className, params] of Object.entries(EFFECT_PARAM_BOUNDS)) {
-      const catalog = AVAILABLE_EFFECTS.find(e => e.className === className);
-      expect(catalog, `catalog effect ${className}`).toBeDefined();
-      for (const [key, bound] of Object.entries(params)) {
-        expect(catalog?.params?.[key], `${className}.${key}`).toBe(bound.defaultValue);
-      }
-    }
-  });
+describe('effect param bounds', () => {
+  function accepts(effectId: string, params: Record<string, number>): boolean {
+    return validateModesImport([validMode({ effects: [{ id: effectId, params }] })]).ok;
+  }
 
-  it('covers every parameter exposed by the catalog', () => {
+  it('accepts the catalog default for every parameter exposed by the catalog', () => {
+    // Bounds are read from the same `paramsSchema` that produces the catalog
+    // defaults, so every catalog default must validate in range.
     for (const effect of AVAILABLE_EFFECTS) {
       if (!effect.params) continue;
-      const bounds = EFFECT_PARAM_BOUNDS[effect.className];
-      expect(bounds, `bounds for ${effect.className}`).toBeDefined();
-      for (const key of Object.keys(effect.params)) {
-        expect(bounds?.[key], `${effect.className}.${key}`).toBeDefined();
+      for (const [key, value] of Object.entries(effect.params)) {
+        expect(accepts(effect.id, { [key]: value }), `${effect.className}.${key}=${value}`).toBe(
+          true,
+        );
       }
     }
   });
 
-  it('derives schema-backed bounds for the core CAS / Debanding effects', () => {
-    expect(EFFECT_PARAM_BOUNDS.CAS).toEqual({
-      sharpness: { min: 0, max: 1, defaultValue: 0.5 },
-    });
-    expect(EFFECT_PARAM_BOUNDS.Debanding).toEqual({
-      strength: { min: 0, max: 1, defaultValue: 0.5 },
-      bandThreshold: { min: 0, max: 1, defaultValue: 0.08 },
-    });
+  it('enforces inclusive core CAS / Debanding bounds', () => {
+    expect(accepts(CAS.id, { sharpness: 0 })).toBe(true);
+    expect(accepts(CAS.id, { sharpness: 1 })).toBe(true);
+    expect(accepts(CAS.id, { sharpness: 1.01 })).toBe(false);
+    expect(accepts(DEBANDING.id, { strength: 0, bandThreshold: 1 })).toBe(true);
+    expect(accepts(DEBANDING.id, { strength: 1.01 })).toBe(false);
+    expect(accepts(DEBANDING.id, { bandThreshold: -0.01 })).toBe(false);
   });
 
-  it('derives exact schema-backed bounds for the library DoG / BilateralMean effects', () => {
-    // The extension overlays paramsSchema onto the library descriptors, so
-    // validation derives these bounds from the same metadata as the sliders.
-    expect(EFFECT_PARAM_BOUNDS.DoG).toEqual({
-      strength: { min: 1, max: 10, defaultValue: 4 },
-    });
-    expect(EFFECT_PARAM_BOUNDS.BilateralMean).toEqual({
-      strength: { min: 0, max: 1, defaultValue: 0.2 },
-      strength2: { min: 0.5, max: 5, defaultValue: 2 },
-    });
+  it('enforces inclusive library DoG / BilateralMean bounds', () => {
+    expect(accepts(DOG.id, { strength: 1 })).toBe(true);
+    expect(accepts(DOG.id, { strength: 10 })).toBe(true);
+    expect(accepts(DOG.id, { strength: 0.99 })).toBe(false);
+    expect(accepts(BILATERAL.id, { strength: 0, strength2: 5 })).toBe(true);
+    expect(accepts(BILATERAL.id, { strength2: 0.4 })).toBe(false);
+  });
+
+  it('rejects params on hidden/system effects (ColorAdjust)', () => {
+    const colorAdjustId = 'anime4k/ColorGrading/ColorAdjust';
+    expect(accepts(colorAdjustId, {})).toBe(true);
+    expect(accepts(colorAdjustId, { brightness: 0.5 })).toBe(false);
   });
 });
 

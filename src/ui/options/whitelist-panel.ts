@@ -5,7 +5,7 @@
  * and provides add/import/export actions.
  */
 import { getSettings, saveSettings } from '@utils/settings';
-import { validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
+import { validateRulePattern, removeWhitelistRules, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
 import type { WhitelistRule } from '@/types';
 import { downloadJSON, openFile } from './import-export';
 import { t } from '@utils/i18n';
@@ -73,7 +73,7 @@ export function initWhitelistPanel(
       deleteBtn.textContent = t('delete', 'Delete');
       deleteBtn.className = 'action-btn';
       deleteBtn.addEventListener('click', async () => {
-        await removeWhitelistRule(rule.pattern);
+        await removeWhitelistRules([rule.pattern]);
         state.whitelist = state.whitelist.filter(r => r.pattern !== rule.pattern);
         render();
       });

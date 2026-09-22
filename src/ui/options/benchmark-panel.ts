@@ -7,7 +7,7 @@
 import { runGPUBenchmark } from '@core/gpu/gpu-benchmark';
 import { saveLocalSettings } from '@utils/settings';
 import type { PerformanceTier } from '@/types';
-import { t } from '@utils/i18n';
+import { t, TIER_DISPLAY } from '@utils/i18n';
 import { showToast } from '../common/toast';
 
 import type { AppContext } from './modes-panel';
@@ -54,13 +54,9 @@ export function initBenchmarkPanel(
       });
 
       // Ask user whether to apply the recommended tier
-      const tierNames: Record<PerformanceTier, string> = {
-        performance: `🚀 ${t('tierPerformance', 'Fast')}`,
-        balanced: `⚖️ ${t('tierBalanced', 'Balanced')}`,
-        quality: `🎨 ${t('tierQuality', 'Quality')}`,
-        ultra: `🔬 ${t('tierUltra', 'Ultra')}`,
-      };
-      const confirmMessage = t('confirmApplyTier', `Test complete! Recommended tier: ${tierNames[result.tier]}\n\nApply this tier?`, [tierNames[result.tier]]);
+      const recommended = TIER_DISPLAY[result.tier];
+      const tierLabel = `${recommended.icon} ${recommended.name}`;
+      const confirmMessage = t('confirmApplyTier', `Test complete! Recommended tier: ${tierLabel}\n\nApply this tier?`, [tierLabel]);
 
       if (confirm(confirmMessage)) {
         await saveLocalSettings({

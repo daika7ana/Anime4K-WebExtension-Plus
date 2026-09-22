@@ -73,10 +73,6 @@ export interface EdgeResponse {
   overshootPct: number;
   /** Peak excursion below the low plateau, as a percentage of the step. */
   undershootPct: number;
-  /** Peak above-high excursion in 8-bit levels (0 when none). */
-  maxOvershoot: number;
-  /** Peak below-low excursion in 8-bit levels (0 when none). */
-  maxUndershoot: number;
 }
 
 function clampByte(value: number): number {
@@ -300,7 +296,5 @@ export function measureEdgeResponse(
   return {
     overshootPct: (100 * maxOvershoot) / step,
     undershootPct: (100 * maxUndershoot) / step,
-    maxOvershoot,
-    maxUndershoot,
   };
 }

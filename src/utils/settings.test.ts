@@ -14,12 +14,6 @@ import {
 const capturedOnChanged = (
   chrome.storage.onChanged.addListener as unknown as { mock: { calls: unknown[][] } }
 ).mock.calls[0]?.[0] as (() => void) | undefined;
-import {
-  getSnapshot,
-  invalidate,
-  isStale,
-  setSnapshot,
-} from './settings-snapshot';
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { resolveEffectChain } from './effect-chain-templates';
 import type { CustomMode, BuiltInMode, EnhancementEffect, PerformanceTier } from '../types';
@@ -490,7 +484,7 @@ describe('getSettings storage read path', () => {
   });
 });
 
-describe('settings snapshot store', () => {
+describe('getSettings cache', () => {
   beforeEach(() => {
     // Deterministic storage reads that resolve through the callback API used by
     // getSettings, regardless of implementations left behind by other tests.
@@ -502,78 +496,23 @@ describe('settings snapshot store', () => {
     vi.restoreAllMocks();
   });
 
-  /** Invoke every registered chrome.storage.onChanged listener for an area. */
-  function fireStorageChanged(areaName: string): void {
-    const calls = (
-      chrome.storage.onChanged.addListener as unknown as { mock: { calls: unknown[][] } }
-    ).mock.calls;
-    for (const [listener] of calls) {
-      (listener as (changes: unknown, area: string) => void)({}, areaName);
-    }
-  }
-
-  it('publishes a snapshot with an increasing revision on each read', async () => {
-    await getSettings();
-    const first = getSnapshot();
-    expect(first).not.toBeNull();
-    expect(first!.revision).toBeGreaterThan(0);
-
-    invalidate();
-    await getSettings();
-    const second = getSnapshot();
-    expect(second!.revision).toBeGreaterThan(first!.revision);
-  });
-
-  it('invalidates on a sync/local storage change and re-reads immediately', async () => {
+  it('serves the cached value within the TTL and re-reads after a storage change', async () => {
     let storedMode = 'builtin-mode-a';
     (chrome.storage.sync.get as any).mockImplementation((_keys: any, cb: any) =>
       cb?.({ selectedModeId: storedMode }),
     );
 
-    await getSettings();
-    const first = getSnapshot()!;
-    expect(first.value.selectedModeId).toBe('builtin-mode-a');
-    expect(isStale()).toBe(false);
+    // Clear any cache left behind by earlier tests.
+    capturedOnChanged?.();
+    expect((await getSettings()).selectedModeId).toBe('builtin-mode-a');
 
-    // Within the TTL the cached value is still returned (fallback behavior).
+    // Within the TTL the cached value is still returned.
     storedMode = 'builtin-mode-c';
     expect((await getSettings()).selectedModeId).toBe('builtin-mode-a');
 
-    // A storage change invalidates the snapshot -> the next read re-fetches.
-    fireStorageChanged('sync');
-    expect(isStale()).toBe(true);
-
-    const refreshed = await getSettings();
-    expect(refreshed.selectedModeId).toBe('builtin-mode-c');
-    const second = getSnapshot()!;
-    expect(second.revision).toBeGreaterThan(first.revision);
-    expect(isStale()).toBe(false);
-  });
-
-  it('ignores onChanged events for unrelated storage areas', async () => {
-    await getSettings();
-    expect(isStale()).toBe(false);
-
-    // Only exercise the snapshot store's own listener; settings.ts keeps a
-    // legacy unguarded cache-clearing listener that is not under test here.
-    const calls = (
-      chrome.storage.onChanged.addListener as unknown as { mock: { calls: unknown[][] } }
-    ).mock.calls;
-    for (const [listener] of calls) {
-      if (listener === capturedOnChanged) continue;
-      (listener as (changes: unknown, area: string) => void)({}, 'managed');
-    }
-
-    expect(isStale()).toBe(false);
-  });
-
-  it('never throws when chrome.storage.onChanged is unavailable', () => {
-    const original = (chrome.storage as any).onChanged;
-    try {
-      delete (chrome.storage as any).onChanged;
-      expect(() => setSnapshot({} as any)).not.toThrow();
-    } finally {
-      (chrome.storage as any).onChanged = original;
-    }
+    // A storage change clears the cache -> the next read re-fetches.
+    capturedOnChanged?.();
+    expect((await getSettings()).selectedModeId).toBe('builtin-mode-c');
   });
 });
+

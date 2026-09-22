@@ -27,14 +27,10 @@
 //   1  an input artifact was missing or malformed
 
 import { execFileSync } from 'node:child_process';
-import { Buffer } from 'node:buffer';
 import {
-  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
-  readSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -42,6 +38,8 @@ import {
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+
+import { boxBlur, computeLuma, decodeRgba, fmt, readPngSize } from './lib/png-metrics.mjs';
 
 const rootDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -155,35 +153,6 @@ function listPassFiles(dirAbs) {
     .sort((a, b) => passNumber(a) - passNumber(b));
 }
 
-/** Read PNG pixel dimensions from the IHDR chunk (bytes 16..24, big-endian). */
-function readPngSize(pngPath) {
-  const header = Buffer.alloc(24);
-  const fd = openSync(pngPath, 'r');
-  try {
-    if (readSync(fd, header, 0, 24, 0) < 24) throw new Error(`PNG too small: ${pngPath}`);
-  } finally {
-    closeSync(fd);
-  }
-  if (header.subarray(0, 8).toString('latin1') !== '\x89PNG\r\n\x1a\n') {
-    throw new Error(`Not a PNG: ${pngPath}`);
-  }
-  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
-}
-
-/** Decode an 8-bit RGBA PNG to a tightly-packed RGBA byte buffer. */
-function decodeRgba(pngPath, width, height) {
-  const raw = execFileSync('convert', [pngPath, '-depth', '8', 'rgba:-'], {
-    maxBuffer: MAX_BUFFER,
-  });
-  const expected = width * height * 4;
-  if (raw.length !== expected) {
-    throw new Error(
-      `Decoded ${pngPath} to ${raw.length} bytes, expected ${expected} (${width}x${height}x4).`,
-    );
-  }
-  return raw;
-}
-
 // --- ROI mapping -----------------------------------------------------------
 
 /** Map the reference-frame ROI into a `passWidth`-wide pass, clamped in bounds. */
@@ -214,60 +183,6 @@ function sliceRoi(rgba, passWidth, roi) {
 }
 
 // --- Luma + metrics --------------------------------------------------------
-
-/** Normalized Rec.709 luma in [0, 1] over a compact RGBA buffer. */
-function computeLuma(rgba, pixelCount) {
-  const y = new Float32Array(pixelCount);
-  for (let i = 0, j = 0; i < pixelCount; i += 1, j += 4) {
-    y[i] = (0.2126 * rgba[j] + 0.7152 * rgba[j + 1] + 0.0722 * rgba[j + 2]) / 255;
-  }
-  return y;
-}
-
-/**
- * Separable O(N) box blur with clamped (replicated) edges. Returns a radius-r
- * mean field; horizontal then vertical sliding windows.
- */
-function boxBlur(src, width, height, radius) {
-  const tmp = new Float32Array(width * height);
-  const dst = new Float32Array(width * height);
-  const prefix = new Float64Array(Math.max(width, height) + 1);
-
-  for (let y = 0; y < height; y += 1) {
-    const row = y * width;
-    let sum = 0;
-    prefix[0] = 0;
-    for (let x = 0; x < width; x += 1) {
-      sum += src[row + x];
-      prefix[x + 1] = sum;
-    }
-    for (let x = 0; x < width; x += 1) {
-      let lo = x - radius;
-      if (lo < 0) lo = 0;
-      let hi = x + radius;
-      if (hi > width - 1) hi = width - 1;
-      tmp[row + x] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
-    }
-  }
-
-  for (let x = 0; x < width; x += 1) {
-    let sum = 0;
-    prefix[0] = 0;
-    for (let y = 0; y < height; y += 1) {
-      sum += tmp[y * width + x];
-      prefix[y + 1] = sum;
-    }
-    for (let y = 0; y < height; y += 1) {
-      let lo = y - radius;
-      if (lo < 0) lo = 0;
-      let hi = y + radius;
-      if (hi > height - 1) hi = height - 1;
-      dst[y * width + x] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
-    }
-  }
-
-  return dst;
-}
 
 function median(values) {
   const sorted = Float32Array.from(values);
@@ -332,7 +247,7 @@ function computeRoiMetrics(luma, width, height) {
  * decoded full-frame RGBA so no extra ImageMagick decode is needed.
  */
 function computeWholeFrameHpRMS(rgba, width, height) {
-  const luma = computeLuma(rgba, width * height);
+  const luma = computeLuma(rgba, width, height);
   const box3 = boxBlur(luma, width, height, 1);
   let sum = 0;
   let count = 0;
@@ -360,7 +275,7 @@ function analyzeChain(chainDirAbs, spaceWidth) {
     const roi = mapRoi(width, height, spaceWidth);
     const rgba = decodeRgba(pngPath, width, height);
     const roiRgba = sliceRoi(rgba, width, roi);
-    const luma = computeLuma(roiRgba, roi.width * roi.height);
+    const luma = computeLuma(roiRgba, roi.width, roi.height);
     const metrics = computeRoiMetrics(luma, roi.width, roi.height);
     const wholeFrameHpRMS = computeWholeFrameHpRMS(rgba, width, height);
     return {
@@ -450,12 +365,6 @@ function buildFilmstrip(chainDirAbs, chainName, passes, outDirAbs) {
 }
 
 // --- Console formatting ----------------------------------------------------
-
-function fmt(value, digits = 6) {
-  if (value === null || value === undefined) return 'n/a';
-  if (!Number.isFinite(value)) return String(value);
-  return value.toFixed(digits);
-}
 
 function printTable(title, passes) {
   console.log(`\n${title}`);

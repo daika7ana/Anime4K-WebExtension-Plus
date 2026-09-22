@@ -4,8 +4,42 @@ import { getSettings } from '@utils/settings';
 import { t } from '@utils/i18n';
 import { waitForMediaEvent } from '@core/utils/media-events';
 import { stashEnhancer, findAndUnstashEnhancer, clearAllStash } from './enhancer-stash';
-import * as EnhancerMap from './enhancer-map';
 
+/**
+ * Enhancer instances keyed by their video element. Lives here since
+ * video-manager is the only producer and consumer of the store.
+ */
+const enhancerMap = new Map<HTMLVideoElement, VideoEnhancer>();
+
+/** Associate an enhancer instance with a video element. */
+export function associateEnhancer(video: HTMLVideoElement, enhancer: VideoEnhancer): void {
+  enhancerMap.set(video, enhancer);
+}
+
+/** Get the enhancer instance associated with a video element. */
+export function getEnhancer(video: HTMLVideoElement): VideoEnhancer | undefined {
+  return enhancerMap.get(video);
+}
+
+/** Check if a video element has an associated enhancer. */
+export function hasEnhancer(video: HTMLVideoElement): boolean {
+  return enhancerMap.has(video);
+}
+
+/** Dissociate a video element from its enhancer instance. */
+export function dissociateEnhancer(video: HTMLVideoElement): void {
+  enhancerMap.delete(video);
+}
+
+/** Get all managed video elements. */
+export function getAllManagedVideos(): HTMLVideoElement[] {
+  return Array.from(enhancerMap.keys());
+}
+
+/** Clear all enhancer associations (bulk cleanup for deinitialization). */
+export function clearAll(): void {
+  enhancerMap.clear();
+}
 
 // Use a Set to track processed documents or ShadowRoots so listeners can be removed
 const processedDocs = new Set<Document | ShadowRoot>();
@@ -29,14 +63,14 @@ const autoEnabledEnhancers = new WeakSet<VideoEnhancer>();
  * @param video The video element
  */
 function cleanupVideoEnhancer(video: HTMLVideoElement): void {
-  const enhancer = EnhancerMap.getEnhancer(video);
+  const enhancer = getEnhancer(video);
   if (enhancer) {
     if (video.hasAttribute(ANIME4K_APPLIED_ATTR)) {
       stashEnhancer(enhancer);
     } else {
       enhancer.destroy();
     }
-    EnhancerMap.dissociateEnhancer(video);
+    dissociateEnhancer(video);
     console.log('[Anime4KWebExt] Cleaned up or stashed enhancer for video:', video);
   }
 }
@@ -49,7 +83,7 @@ function cleanupVideoEnhancer(video: HTMLVideoElement): void {
 export function processVideoElement(videoEl: HTMLVideoElement, source: string): void {
   console.log(`[Anime4KWebExt] processVideoElement called from: ${source}`);
   // 1. State check (critical for preventing race conditions)
-  if (EnhancerMap.hasEnhancer(videoEl)) {
+  if (hasEnhancer(videoEl)) {
     console.log(`[Anime4KWebExt] Enhancer already exists for this video. Skipping. Source: ${source}`);
     return;
   }
@@ -64,10 +98,10 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
   const stashedEnhancer = findAndUnstashEnhancer(videoEl);
   if (stashedEnhancer) {
     console.log('[Anime4KWebExt] Re-attaching stashed enhancer.');
-    EnhancerMap.associateEnhancer(videoEl, stashedEnhancer);
+    associateEnhancer(videoEl, stashedEnhancer);
     stashedEnhancer.reattach(videoEl).catch(err => {
       console.error('[Anime4KWebExt] Failed to re-attach stashed enhancer:', err);
-      EnhancerMap.dissociateEnhancer(videoEl);
+      dissociateEnhancer(videoEl);
       stashedEnhancer.destroy();
     });
     return;
@@ -78,7 +112,7 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
   try {
     const enhancer = VideoEnhancer.create(videoEl);
     // Register in the Map immediately to establish a "lock"
-    EnhancerMap.associateEnhancer(videoEl, enhancer);
+    associateEnhancer(videoEl, enhancer);
     console.log('[Anime4KWebExt] Associated new enhancer to video:', videoEl);
 
     // Auto-enable enhancement if the setting is on and the site is whitelisted
@@ -92,7 +126,7 @@ export function processVideoElement(videoEl: HTMLVideoElement, source: string): 
  * Whether a video is a suitable target for auto-enable. Keeps auto-enable from
  * touching previews, ad frames, and hidden/zero-size videos.
  */
-export function isEligibleForAutoEnable(video: HTMLVideoElement): boolean {
+function isEligibleForAutoEnable(video: HTMLVideoElement): boolean {
   if (!video.isConnected || !video.parentElement) return false;
   const rect = video.getBoundingClientRect();
   if (!(rect.width > 0 && rect.height > 0)) return false;
@@ -109,8 +143,8 @@ export function isEligibleForAutoEnable(video: HTMLVideoElement): boolean {
  */
 export function disableAllAutoEnabled(): number {
   let count = 0;
-  for (const video of EnhancerMap.getAllManagedVideos()) {
-    const enhancer = EnhancerMap.getEnhancer(video);
+  for (const video of getAllManagedVideos()) {
+    const enhancer = getEnhancer(video);
     if (
       enhancer
       && autoEnabledEnhancers.has(enhancer)
@@ -122,12 +156,6 @@ export function disableAllAutoEnabled(): number {
   }
   return count;
 }
-
-/** Resolve after `ms` milliseconds. */
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 /**
  * Fire-and-forget auto-enable: triggers enhancement automatically when
  * autoEnableOnWhitelist is true, whitelist mode is active, and the
@@ -139,7 +167,7 @@ async function maybeAutoEnable(videoEl: HTMLVideoElement, enhancer: VideoEnhance
     if (!settings.autoEnableOnWhitelist) return;
     if (!settings.whitelistEnabled) return;
     // The enhancer may have been destroyed/dissociated while awaiting settings.
-    if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
+    if (getEnhancer(videoEl) !== enhancer) return;
     // Only auto-enable if the video isn't already enhanced
     if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return;
 
@@ -149,13 +177,13 @@ async function maybeAutoEnable(videoEl: HTMLVideoElement, enhancer: VideoEnhance
 
     // Let transient elements (previews, ads) disappear and a not-yet-laid-out
     // main player acquire its size before committing to auto-enable. A configured
-    // value of 0 skips the wait entirely (no delay(0) call).
+    // value of 0 skips the wait entirely.
     if (settleMs > 0) {
-      await delay(settleMs);
+      await new Promise(resolve => setTimeout(resolve, settleMs));
 
       // Re-validate after the settle window: cancel silently if the enhancer was
       // destroyed/dissociated or the video got enhanced in the meantime.
-      if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
+      if (getEnhancer(videoEl) !== enhancer) return;
       if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return;
     }
 
@@ -176,7 +204,7 @@ async function maybeAutoEnable(videoEl: HTMLVideoElement, enhancer: VideoEnhance
       } catch {
         return; // never loaded, or errored: give up silently (no modal)
       }
-      if (EnhancerMap.getEnhancer(videoEl) !== enhancer) return;
+      if (getEnhancer(videoEl) !== enhancer) return;
       if (videoEl.hasAttribute(ANIME4K_APPLIED_ATTR)) return; // user enabled manually meanwhile
       if (!isEligibleForAutoEnable(videoEl)) return;          // collapsed/hidden during the wait
       const latest = await getSettings();
@@ -233,21 +261,17 @@ export function initializeOnPage(): void {
   processDoc(document);
   
   // 2. Initial scan of existing videos
-  const existingVideos = document.querySelectorAll('video');
-  existingVideos.forEach(video => processVideoElement(video, 'initial-scan'));
+  document.querySelectorAll('video').forEach(video => processVideoElement(video, 'initial-scan'));
 
-  // 3. Set up DOM observer — use full observer if videos exist, lightweight detection otherwise
-  if (existingVideos.length > 0 || document.querySelector('video')) {
-    domObserver = setupDOMObserver();
-  } else {
-    domObserver = setupLightweightVideoDetection();
-  }
+  // 3. Set up the DOM observer. It handles pages both with and without an
+  // existing video: additions are picked up on the same mutation trigger.
+  domObserver = setupDOMObserver();
 }
 
 /**
  * Set up DOM observer to watch for newly added video elements and Shadow DOM creation
  */
-export function setupDOMObserver(): MutationObserver {
+function setupDOMObserver(): MutationObserver {
   let pendingAddedNodes: Node[] = [];
   let mutationDebounceTimer: number | null = null;
 
@@ -314,57 +338,7 @@ export function setupDOMObserver(): MutationObserver {
   };
 
   const observer = new MutationObserver(handleMutations);
-  observer.observe(document.body, { childList: true, subtree: true });
-  
-  // Add global cleanup on page unload to prevent memory leaks
-  window.addEventListener('beforeunload', () => {
-    document.querySelectorAll('video').forEach(cleanupVideoEnhancer);
-  });
-  
-  return observer;
-}
-
-/**
- * Lightweight observer for pages without video. Watches for video elements
- * to appear, then promotes to the full DOM observer.
- */
-function setupLightweightVideoDetection(): MutationObserver {
-  let debounceTimer: number | null = null;
-  let pendingNodes: Node[] = [];
-
-  const checkForVideo = () => {
-    const nodes = pendingNodes;
-    pendingNodes = [];
-    debounceTimer = null;
-
-    for (const node of nodes) {
-      if (node.nodeType !== Node.ELEMENT_NODE) continue;
-      const el = node as Element;
-      if (el.tagName === 'VIDEO' || el.querySelector('video')) {
-        // Video found! Promote to full observer
-        console.log('[Anime4KWebExt] Video detected on page, activating full observer.');
-        observer.disconnect();
-        // Process any videos that now exist
-        document.querySelectorAll('video').forEach(v => processVideoElement(v, 'lazy-detection'));
-        domObserver = setupDOMObserver();
-        return;
-      }
-    }
-  };
-
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          pendingNodes.push(node);
-        }
-      });
-    }
-    if (debounceTimer !== null) clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(checkForVideo, 100);
-  });
-
-  // Use a try-catch in case document.body doesn't exist yet
+  // Guard in case document.body doesn't exist yet.
   if (document.body) {
     observer.observe(document.body, { childList: true, subtree: true });
   }
@@ -384,14 +358,14 @@ export async function handleSettingsUpdate(
   console.log('Received settings update, modifiedModeId:', modifiedModeId);
 
   const newSettings = await getSettings();
-  const videos = EnhancerMap.getAllManagedVideos();
+  const videos = getAllManagedVideos();
 
   // Update all video settings in parallel instead of waiting one by one
   let updatedCount = 0;
   const updatePromises: Promise<void>[] = [];
 
   for (const videoElement of videos) {
-    const enhancer = EnhancerMap.getEnhancer(videoElement);
+    const enhancer = getEnhancer(videoElement);
     if (enhancer && videoElement.getAttribute(ANIME4K_APPLIED_ATTR) === 'true') {
       if (modifiedModeId) {
         // Options page edit: only update videos using the modified mode (hot-swap)
@@ -439,17 +413,17 @@ export function deinitializeOnPage(): void {
   console.log('[Anime4KWebExt] All media event listeners removed.');
 
   // 3. Destroy all enhancer instances
-  const videos = EnhancerMap.getAllManagedVideos();
+  const videos = getAllManagedVideos();
   console.log(`[Anime4KWebExt] De-initializing and cleaning up ${videos.length} videos.`);
   videos.forEach(video => {
-    const enhancer = EnhancerMap.getEnhancer(video);
+    const enhancer = getEnhancer(video);
     if (enhancer) {
       enhancer.destroy();
-      EnhancerMap.dissociateEnhancer(video);
+      dissociateEnhancer(video);
     }
   });
 
   // Bulk cleanup module-level singletons to prevent stale references
-  EnhancerMap.clearAll();
+  clearAll();
   clearAllStash();
 }

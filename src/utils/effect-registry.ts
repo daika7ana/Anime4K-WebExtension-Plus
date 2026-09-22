@@ -10,7 +10,7 @@
  * Resolution precedence (design §4.1):
  *  1. descriptor by exact `id`;
  *  2. `backendId` + `key` pair (`key` defaults to `className`);
- *  3. `className` → Anime4K backend key, then the core alias table;
+ *  3. `className` → Anime4K backend key, then the core alias set;
  *  4. a well-formed new-style reference (`backendId` present) that resolves to
  *     nothing → `unresolved` (callers MUST preserve it, never drop it);
  *  5. a legacy entry with unknown id AND unknown className → `unknown`.
@@ -30,15 +30,11 @@ export type EffectResolution =
   | { status: 'unknown' }; // legacy entry with unknown id/className
 
 /**
- * Backend-local keys of the extension-owned core effects, keyed by legacy
- * className. A `Map` (not a plain object) so untrusted classNames such as
- * `'__proto__'`/`'constructor'` cannot consult `Object.prototype`.
+ * Backend-local keys of the extension-owned core effects, matched against a
+ * legacy className. A `Set` (not a plain object) so untrusted classNames such
+ * as `'__proto__'`/`'constructor'` cannot consult `Object.prototype`.
  */
-const CORE_CLASS_ALIASES = new Map<string, string>([
-  ['CAS', 'CAS'],
-  ['Debanding', 'Debanding'],
-  ['ColorAdjust', 'ColorAdjust'],
-]);
+const CORE_CLASS_ALIASES = new Set<string>(['CAS', 'Debanding', 'ColorAdjust']);
 
 const ANIME4K_BACKEND_ID = 'anime4k';
 const CORE_BACKEND_ID = 'core';
@@ -74,31 +70,14 @@ export function isKnownBackendId(backendId: string): boolean {
 }
 
 function buildReference(
-  effect: EnhancementEffect,
-  descriptor: EffectDescriptor,
-): EffectReference {
-  const reference: EffectReference = {
-    id: descriptor.id,
-    backendId: descriptor.backendId,
-    key: descriptor.key,
-  };
-  if (effect.params) {
-    reference.params = { ...effect.params };
-  }
-  return reference;
-}
-
-function buildUnresolvedReference(
-  effect: EnhancementEffect,
+  id: string,
   backendId: string,
+  key: string,
+  params: EnhancementEffect['params'],
 ): EffectReference {
-  const reference: EffectReference = {
-    id: effect.id,
-    backendId,
-    key: effect.key ?? effect.className,
-  };
-  if (effect.params) {
-    reference.params = { ...effect.params };
+  const reference: EffectReference = { id, backendId, key };
+  if (params) {
+    reference.params = { ...params };
   }
   return reference;
 }
@@ -111,7 +90,12 @@ function resolved(
     status: 'resolved',
     effect: {
       descriptor,
-      reference: buildReference(effect, descriptor),
+      reference: buildReference(
+        descriptor.id,
+        descriptor.backendId,
+        descriptor.key,
+        effect.params,
+      ),
     },
   };
 }
@@ -129,13 +113,12 @@ export function resolveEffectReference(effect: EnhancementEffect): EffectResolut
     if (byPair) return resolved(byPair, effect);
   }
 
-  // 3. Legacy className → Anime4K key, then the core alias table.
+  // 3. Legacy className → Anime4K key, then the core alias set.
   const byAnime4k = DESCRIPTORS_BY_BACKEND_KEY.get(`${ANIME4K_BACKEND_ID}:${effect.className}`);
   if (byAnime4k) return resolved(byAnime4k, effect);
 
-  const coreKey = CORE_CLASS_ALIASES.get(effect.className);
-  if (coreKey) {
-    const byCore = DESCRIPTORS_BY_BACKEND_KEY.get(`${CORE_BACKEND_ID}:${coreKey}`);
+  if (CORE_CLASS_ALIASES.has(effect.className)) {
+    const byCore = DESCRIPTORS_BY_BACKEND_KEY.get(`${CORE_BACKEND_ID}:${effect.className}`);
     if (byCore) return resolved(byCore, effect);
   }
 
@@ -143,7 +126,12 @@ export function resolveEffectReference(effect: EnhancementEffect): EffectResolut
   if (effect.backendId) {
     return {
       status: 'unresolved',
-      reference: buildUnresolvedReference(effect, effect.backendId),
+      reference: buildReference(
+        effect.id,
+        effect.backendId,
+        effect.key ?? effect.className,
+        effect.params,
+      ),
     };
   }
 

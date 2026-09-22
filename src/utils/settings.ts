@@ -18,7 +18,6 @@ import type {
 import { descriptorToCatalogEffect } from './effects-map';
 import { resolveEffectReference } from './effect-registry';
 import { resolveEffectChain } from './effect-chain-templates';
-import { getSnapshot, invalidate, isStale, setSnapshot } from './settings-snapshot';
 import {
   DEFAULT_COLOR_GRADING,
   isPerformanceTier,
@@ -37,9 +36,6 @@ const SETTINGS_CACHE_TTL = 2000; // 2-second TTL
 // Automatically invalidate cache when storage changes
 chrome.storage.onChanged.addListener(() => {
   cachedSettings = null;
-  // Also mark the revisioned snapshot stale so getSettings bypasses the TTL
-  // immediately rather than waiting for it to expire.
-  invalidate();
 });
 
 // ===== Built-in Mode Definitions =====
@@ -123,55 +119,28 @@ function warnInvalidSetting(key: string, value: unknown): void {
   );
 }
 
-function coerceBoolean(key: string, value: unknown, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-  if (typeof value === 'boolean') return value;
-  warnInvalidSetting(key, value);
-  return fallback;
-}
+/** Field guards passed to {@link coerce}; each accepts exactly its field's valid type. */
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean';
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '';
+const isDiagnosticsDetail = (value: unknown): value is DiagnosticsDetailMode =>
+  value === 'auto' || value === 'compact' || value === 'expanded';
+const isRestorePolicy = (value: unknown): value is RestorePolicy =>
+  value === 'off' || value === 'gate' || value === 'trailing' || value === 'leading';
 
-function coerceNonEmptyString(key: string, value: unknown, fallback: string): string {
-  if (value === undefined) return fallback;
-  if (typeof value === 'string' && value.trim() !== '') return value;
-  warnInvalidSetting(key, value);
-  return fallback;
-}
-
-function coerceResolutionSetting(value: unknown, fallback: string): string {
-  if (value === undefined) return fallback;
-  if (isValidResolutionSetting(value)) return value;
-  warnInvalidSetting('targetResolutionSetting', value);
-  return fallback;
-}
-
-function coercePerformanceTier(value: unknown, fallback: PerformanceTier): PerformanceTier {
-  if (value === undefined) return fallback;
-  if (isPerformanceTier(value)) return value;
-  warnInvalidSetting('performanceTier', value);
-  return fallback;
-}
-
-function coerceDiagnosticsDetail(
+/**
+ * Shared normalizer: a missing value falls back silently, an invalid value
+ * warns and falls back, a valid value passes through.
+ */
+function coerce<T>(
+  key: string,
   value: unknown,
-  fallback: DiagnosticsDetailMode,
-): DiagnosticsDetailMode {
+  fallback: T,
+  guard: (candidate: unknown) => candidate is T,
+): T {
   if (value === undefined) return fallback;
-  if (value === 'auto' || value === 'compact' || value === 'expanded') return value;
-  warnInvalidSetting('diagnosticsDetail', value);
-  return fallback;
-}
-
-function coerceRestorePolicy(value: unknown, fallback: RestorePolicy): RestorePolicy {
-  if (value === undefined) return fallback;
-  if (
-    value === 'off'
-    || value === 'gate'
-    || value === 'trailing'
-    || value === 'leading'
-  ) {
-    return value;
-  }
-  warnInvalidSetting('restorePolicy', value);
+  if (guard(value)) return value;
+  warnInvalidSetting(key, value);
   return fallback;
 }
 
@@ -200,40 +169,47 @@ function coerceAutoEnableSettleMs(value: unknown, fallback: number): number {
  */
 export function normalizeSyncedSettings(data: Record<string, unknown>): SyncedSettings {
   return {
-    selectedModeId: coerceNonEmptyString(
+    selectedModeId: coerce(
       'selectedModeId',
       data.selectedModeId,
       DEFAULT_SYNCED_SETTINGS.selectedModeId,
+      isNonEmptyString,
     ),
-    targetResolutionSetting: coerceResolutionSetting(
+    targetResolutionSetting: coerce(
+      'targetResolutionSetting',
       data.targetResolutionSetting,
       DEFAULT_SYNCED_SETTINGS.targetResolutionSetting,
+      isValidResolutionSetting,
     ),
-    whitelistEnabled: coerceBoolean(
+    whitelistEnabled: coerce(
       'whitelistEnabled',
       data.whitelistEnabled,
       DEFAULT_SYNCED_SETTINGS.whitelistEnabled,
+      isBoolean,
     ),
     whitelist: sanitizeWhitelist(data.whitelist),
     customModes: sanitizeCustomModes(data.customModes),
-    enableCrossOriginFix: coerceBoolean(
+    enableCrossOriginFix: coerce(
       'enableCrossOriginFix',
       data.enableCrossOriginFix,
       DEFAULT_SYNCED_SETTINGS.enableCrossOriginFix,
+      isBoolean,
     ),
-    autoEnableOnWhitelist: coerceBoolean(
+    autoEnableOnWhitelist: coerce(
       'autoEnableOnWhitelist',
       data.autoEnableOnWhitelist,
       DEFAULT_SYNCED_SETTINGS.autoEnableOnWhitelist,
+      isBoolean,
     ),
     autoEnableSettleMs: coerceAutoEnableSettleMs(
       data.autoEnableSettleMs,
       DEFAULT_SYNCED_SETTINGS.autoEnableSettleMs,
     ),
-    enableHotkey: coerceBoolean(
+    enableHotkey: coerce(
       'enableHotkey',
       data.enableHotkey,
       DEFAULT_SYNCED_SETTINGS.enableHotkey,
+      isBoolean,
     ),
     colorGrading: sanitizeColorGrading(data.colorGrading),
   };
@@ -253,35 +229,42 @@ export function normalizeLocalSettings(data: Record<string, unknown>): LocalSett
     console.warn('[Settings] Ignoring invalid stored gpuBenchmarkResult; using default.');
   }
   return {
-    performanceTier: coercePerformanceTier(
+    performanceTier: coerce(
+      'performanceTier',
       data.performanceTier,
       DEFAULT_LOCAL_SETTINGS.performanceTier,
+      isPerformanceTier,
     ),
     gpuBenchmarkResult: benchmark.ok
       ? benchmark.value
       : DEFAULT_LOCAL_SETTINGS.gpuBenchmarkResult,
-    hasCompletedOnboarding: coerceBoolean(
+    hasCompletedOnboarding: coerce(
       'hasCompletedOnboarding',
       data.hasCompletedOnboarding,
       DEFAULT_LOCAL_SETTINGS.hasCompletedOnboarding,
+      isBoolean,
     ),
-    showDiagnostics: coerceBoolean(
+    showDiagnostics: coerce(
       'showDiagnostics',
       data.showDiagnostics,
       DEFAULT_LOCAL_SETTINGS.showDiagnostics,
+      isBoolean,
     ),
-    diagnosticsDetail: coerceDiagnosticsDetail(
+    diagnosticsDetail: coerce(
+      'diagnosticsDetail',
       data.diagnosticsDetail,
-      DEFAULT_LOCAL_SETTINGS.diagnosticsDetail ?? 'auto',
+      DEFAULT_LOCAL_SETTINGS.diagnosticsDetail,
+      isDiagnosticsDetail,
     ),
     // A stale legacy `maxDetail` key is deliberately not read (ignored/dropped).
     // `restorePolicy` is authoritative; a legacy `preserveDetail` boolean is
     // mapped only when the new key is absent (true → 'trailing', false → 'off').
-    restorePolicy: coerceRestorePolicy(
+    restorePolicy: coerce(
+      'restorePolicy',
       data.restorePolicy,
       legacyRestorePolicyFromPreserveDetail(data.preserveDetail)
-        ?? DEFAULT_LOCAL_SETTINGS.restorePolicy
-        ?? 'gate',
+        ?? DEFAULT_LOCAL_SETTINGS.restorePolicy,
+      isRestorePolicy,
     ),
   };
 }
@@ -316,7 +299,6 @@ export async function getLocalSettings(): Promise<LocalSettings> {
     chrome.storage.local.get([
       'performanceTier',
       'gpuBenchmarkResult',
-      'gpuAdapterInfo',
       'hasCompletedOnboarding',
       'showDiagnostics',
       'diagnosticsDetail',
@@ -334,14 +316,7 @@ export async function getLocalSettings(): Promise<LocalSettings> {
  * Uses a TTL cache to avoid redundant chrome.storage IPC calls
  */
 export async function getSettings(): Promise<Anime4KWebExtSettings> {
-  // The snapshot becomes stale as soon as a relevant storage area changes
-  // (see settings-snapshot.ts), which bypasses the TTL so changes are observed
-  // immediately. When nothing has changed we keep the existing TTL behavior as a
-  // fallback to avoid redundant chrome.storage IPC calls.
-  const snapshot = getSnapshot();
-  const snapshotUsable = snapshot !== null && !isStale();
-
-  if (cachedSettings && snapshotUsable && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
+  if (cachedSettings && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
     return cachedSettings;
   }
 
@@ -368,7 +343,6 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
 
   cachedSettings = result;
   cacheTimestamp = Date.now();
-  setSnapshot(result);
   return result;
 }
 

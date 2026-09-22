@@ -64,7 +64,6 @@ function buildSliderConfig(
 export function renderParamSliders(
   effect: EnhancementEffect,
   modeId: string,
-  effectItem: HTMLElement,
   wrapper: HTMLElement,
   saveCallback: (modeId: string) => Promise<void>,
 ): void {
@@ -117,17 +116,6 @@ export function renderParamSliders(
       params[cfg.paramKey] = newValue;
       await saveCallback(modeId);
     });
-
-    // Prevent slider interactions from triggering drag on the parent effect item.
-    // setPointerCapture ensures pointerup still fires on the slider even if the cursor
-    // leaves it (e.g. drags outside) — without it, pointerleave would re-enable drag
-    // mid-interaction and the browser could initiate a drag on the effect card.
-    slider.addEventListener('pointerdown', (e) => {
-      effectItem.draggable = false;
-      slider.setPointerCapture(e.pointerId);
-    });
-    slider.addEventListener('pointerup', () => { effectItem.draggable = true; });
-    slider.addEventListener('lostpointercapture', () => { effectItem.draggable = true; });
 
     paramContainer.appendChild(label);
     paramContainer.appendChild(slider);

@@ -17,13 +17,11 @@ import { showToast } from '../common/toast';
 // --- Drag and Drop State (module-local — no other panel touches it) ---
 let draggedElement: HTMLElement | null = null;
 let draggedModeId: string | null = null;
-let draggedEffectIndex: number | null = null;
 
 export interface AppContext {
   getState(): import('@/types').Anime4KWebExtSettings;
   getTier(): PerformanceTier;
   setTier(tier: PerformanceTier): void;
-  refresh(): Promise<void>;
   notifyUpdate(modifiedModeId?: string): void;
   /**
    * Set by {@link initModesPanel}. Other panels (notably the General panel's
@@ -103,6 +101,15 @@ export function initModesPanel(
       });
   }
 
+  // Persist custom modes; re-reads state at call time (post-render mutations make snapshots stale).
+  function persistCustomModes(extra?: Partial<import('@/types').Anime4KWebExtSettings>): Promise<void> {
+    const state = ctx.getState();
+    return saveSettings({
+      customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
+      ...extra,
+    });
+  }
+
   // -----------------------------------------------------------------------
   //  Main render function
   // -----------------------------------------------------------------------
@@ -175,7 +182,7 @@ export function initModesPanel(
           settingsState.enhancementModes.splice(toIndex, 0, movedMode);
 
           render(); // Re-render from state
-          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] }); // Persist changes
+          await persistCustomModes(); // Persist changes
           ctx.notifyUpdate();
         }
       });
@@ -221,7 +228,7 @@ export function initModesPanel(
         if (targetMode && newName && newName !== targetMode.name) {
           targetMode.name = newName;
           mode.name = newName; // Update local object for consistency
-          await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+          await persistCustomModes();
           ctx.notifyUpdate(mode.id);
         } else {
           (e.target as HTMLElement).textContent = mode.name;
@@ -240,10 +247,7 @@ export function initModesPanel(
             settingsState.selectedModeId = 'builtin-mode-a'; // Fall back to default mode
           }
           render();
-          await saveSettings({
-            customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
-            selectedModeId: settingsState.selectedModeId,
-          });
+          await persistCustomModes({ selectedModeId: settingsState.selectedModeId });
           ctx.notifyUpdate(deletedModeId);
         }
       };
@@ -263,7 +267,7 @@ export function initModesPanel(
         };
         settingsState.enhancementModes.unshift(clonedMode);
         render();
-        await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+        await persistCustomModes();
         ctx.notifyUpdate(clonedMode.id);
       };
 
@@ -339,8 +343,8 @@ export function initModesPanel(
         if (effect.params && !mode.isBuiltIn) {
           const paramsWrapper = document.createElement('div');
           paramsWrapper.className = 'effect-params-wrapper';
-          renderParamSliders(effect, mode.id, effectItem, paramsWrapper, async (modeId) => {
-            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+          renderParamSliders(effect, mode.id, paramsWrapper, async (modeId) => {
+            await persistCustomModes();
             ctx.notifyUpdate(modeId);
           });
           effectContent.appendChild(paramsWrapper);
@@ -349,58 +353,8 @@ export function initModesPanel(
         effectItem.appendChild(effectContent);
 
         if (!mode.isBuiltIn) {
-          effectItem.draggable = true;
-
-          // --- Drag and drop for effect reordering ---
-          effectItem.addEventListener('dragstart', (e) => {
-            e.stopPropagation();
-            draggedElement = effectItem;
-            draggedModeId = mode.id;
-            draggedEffectIndex = index;
-            if (e.dataTransfer) {
-              e.dataTransfer.effectAllowed = 'move';
-            }
-            setTimeout(() => effectItem.classList.add('dragging'), 0);
-          });
-
-          effectItem.addEventListener('dragend', (e) => {
-            e.stopPropagation();
-            effectItem.classList.remove('dragging');
-            draggedElement = null;
-            draggedModeId = null;
-            draggedEffectIndex = null;
-          });
-
-          effectItem.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (draggedModeId === mode.id) {
-              effectItem.classList.add('drag-over');
-            }
-          });
-
-          effectItem.addEventListener('dragleave', (e) => {
-            e.stopPropagation();
-            effectItem.classList.remove('drag-over');
-          });
-
-          effectItem.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            effectItem.classList.remove('drag-over');
-            if (draggedModeId !== mode.id || draggedEffectIndex === null || draggedEffectIndex === index) return;
-
-            const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
-            if (targetMode && !targetMode.isBuiltIn) {
-              const [movedEffect] = targetMode.effects.splice(draggedEffectIndex, 1);
-              targetMode.effects.splice(index, 0, movedEffect);
-              render();
-              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
-              ctx.notifyUpdate(mode.id);
-            }
-          });
-
-          // --- Effect Action Buttons ---
+          // Reordering is button-only (keyboard/AT accessible). Mode cards keep
+          // their own drag-and-drop, but effect rows do not.
           const effectActions = document.createElement('div');
           effectActions.className = 'effect-actions';
 
@@ -423,7 +377,9 @@ export function initModesPanel(
 
             btn.appendChild(arrowSvg);
             btn.className = 'btn-move-effect';
-            btn.title = t(dir === 'up' ? 'moveUp' : 'moveDown', dir === 'up' ? 'Move Up' : 'Move Down');
+            const label = t(dir === 'up' ? 'moveUp' : 'moveDown', dir === 'up' ? 'Move Up' : 'Move Down');
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
             btn.disabled = (dir === 'up' && index === 0) || (dir === 'down' && index === mode.effects.length - 1);
             btn.onclick = async () => {
               const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
@@ -432,7 +388,7 @@ export function initModesPanel(
                 const [movedEffect] = targetMode.effects.splice(index, 1);
                 targetMode.effects.splice(newIndex, 0, movedEffect);
                 render();
-                await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+                await persistCustomModes();
                 ctx.notifyUpdate(mode.id);
               }
             };
@@ -442,13 +398,15 @@ export function initModesPanel(
           const removeEffectBtn = document.createElement('button');
           removeEffectBtn.textContent = '×';
           removeEffectBtn.className = 'btn-remove-effect';
-          removeEffectBtn.title = t('removeEffect', 'Remove effect');
+          const removeLabel = t('removeEffect', 'Remove effect');
+          removeEffectBtn.title = removeLabel;
+          removeEffectBtn.setAttribute('aria-label', removeLabel);
           removeEffectBtn.onclick = async () => {
             const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
             if (targetMode && !targetMode.isBuiltIn) {
               targetMode.effects.splice(index, 1);
               render();
-              await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+              await persistCustomModes();
               ctx.notifyUpdate(mode.id);
             }
           };
@@ -488,7 +446,7 @@ export function initModesPanel(
           if (targetMode && !targetMode.isBuiltIn && effectToAdd) {
             targetMode.effects.push(effectToAdd);
             render();
-            await saveSettings({ customModes: settingsState.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+            await persistCustomModes();
             ctx.notifyUpdate(mode.id);
           }
           (e.target as HTMLSelectElement).value = defaultOption.value; // Reset dropdown
@@ -543,7 +501,7 @@ export function initModesPanel(
     };
     state.enhancementModes.unshift(newMode);
     render();
-    await saveSettings({ customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[] });
+    await persistCustomModes();
   });
 
   // -----------------------------------------------------------------------

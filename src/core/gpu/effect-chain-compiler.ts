@@ -124,17 +124,6 @@ export function destroyPipelines(pipelines: readonly DestroyablePipeline[]): voi
 }
 
 /**
- * `Downscale`'s descriptor accepts only `{ device, inputTexture, targetDimensions }`,
- * while {@link PipelineCtor} also lists `nativeDimensions`. Construct through this
- * narrower alias so the descriptor `Downscale` expects (no `nativeDimensions`) is passed.
- */
-type DownscaleCtor = new (descriptor: {
-  device: GPUDevice;
-  inputTexture: GPUTexture;
-  targetDimensions: Dimensions;
-}) => DestroyablePipeline;
-
-/**
  * Build the ordered pipeline list for an effect chain.
  *
  * Reproduces the renderer pipeline builder's Phase 1 loop: geometry pre-pass,
@@ -179,10 +168,6 @@ export async function compileEffectChain(
   });
   const suppressActive = geometryPreview.suppressFromIndex !== null;
 
-  // Narrow once: `Downscale` ignores `nativeDimensions`, so the descriptor it
-  // expects is constructed without it.
-  const ctor = downscaleCtor as unknown as DownscaleCtor | null;
-
   const pipelines: DestroyablePipeline[] = [];
   const labels: string[] = [];
   let currentTexture = inputTexture;
@@ -220,9 +205,9 @@ export async function compileEffectChain(
       if (
         geometryPreview.finalDownscale
         && geometryPreview.finalDownscaleAfterIndex === i
-        && ctor
+        && downscaleCtor
       ) {
-        const finalDownscale = new ctor({
+        const finalDownscale = new downscaleCtor({
           device,
           inputTexture: currentTexture,
           targetDimensions: geometryPreview.finalDownscale,
@@ -275,7 +260,7 @@ export async function compileEffectChain(
       currentTexture = stepPipeline.getOutputTexture();
 
       let postDimensions = step.postDimensions;
-      if (step.scaleApplied && ctor && !suppressActive) {
+      if (step.scaleApplied && downscaleCtor && !suppressActive) {
         const intermediate = planIntermediateDownscale({
           curWidth: postDimensions.width,
           curHeight: postDimensions.height,
@@ -283,7 +268,7 @@ export async function compileEffectChain(
           remainingFactor: remainingUpscaleFactors[i],
         });
         if (intermediate) {
-          const intermediateDownscale = new ctor({
+          const intermediateDownscale = new downscaleCtor({
             device,
             inputTexture: currentTexture,
             targetDimensions: intermediate,
@@ -306,9 +291,9 @@ export async function compileEffectChain(
     if (
       geometryPreview.finalDownscale
       && geometryPreview.finalDownscaleAfterIndex === i
-      && ctor
+      && downscaleCtor
     ) {
-      const finalDownscale = new ctor({
+      const finalDownscale = new downscaleCtor({
         device,
         inputTexture: currentTexture,
         targetDimensions: geometryPreview.finalDownscale,

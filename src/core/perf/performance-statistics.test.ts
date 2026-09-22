@@ -37,24 +37,18 @@ describe('RollingStats', () => {
     it('summarizes an empty window as all zeros', () => {
         expect(new RollingStats().summary()).toEqual({
             count: 0,
-            min: 0,
-            max: 0,
-            mean: 0,
             p50: 0,
             p95: 0,
             p99: 0,
         });
     });
 
-    it('computes count/min/max/mean and percentiles', () => {
+    it('computes count and percentiles', () => {
         const stats = new RollingStats();
         for (const value of [1, 2, 3, 4]) stats.push(value);
 
         const summary = stats.summary();
         expect(summary.count).toBe(4);
-        expect(summary.min).toBe(1);
-        expect(summary.max).toBe(4);
-        expect(summary.mean).toBeCloseTo(2.5, 10);
         expect(summary.p50).toBeCloseTo(2.5, 10);
         expect(summary.p95).toBeCloseTo(3.85, 10);
         expect(summary.p99).toBeCloseTo(3.97, 10);
@@ -66,9 +60,7 @@ describe('RollingStats', () => {
 
         const summary = stats.summary();
         expect(summary.count).toBe(3);
-        expect(summary.min).toBe(20);
-        expect(summary.max).toBe(40);
-        expect(summary.mean).toBe(30);
+        expect(summary.p50).toBe(30);
     });
 
     it('clear() empties the window and leaves it reusable', () => {
@@ -81,7 +73,7 @@ describe('RollingStats', () => {
         stats.push(5);
         const summary = stats.summary();
         expect(summary.count).toBe(1);
-        expect(summary.mean).toBe(5);
+        expect(summary.p50).toBe(5);
     });
 
     it('defaults to a 120-sample window (~2s at 60fps)', () => {
@@ -91,7 +83,6 @@ describe('RollingStats', () => {
 
         const summary = stats.summary();
         expect(summary.count).toBe(120);
-        expect(summary.min).toBe(10);
-        expect(summary.max).toBe(129);
+        expect(summary.p50).toBeCloseTo(69.5, 10);
     });
 });

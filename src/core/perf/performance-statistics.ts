@@ -27,14 +27,11 @@
 export const DEFAULT_ROLLING_CAPACITY = 120;
 
 /** Default percentile ranks (in percent) requested by {@link computePercentiles}. */
-export const DEFAULT_PERCENTILE_POINTS: readonly number[] = [50, 95, 99];
+const DEFAULT_PERCENTILE_POINTS: readonly number[] = [50, 95, 99];
 
 /** Summary of a sample window. All fields are zero when `count === 0`. */
 export interface PercentileSummary {
     count: number;
-    min: number;
-    max: number;
-    mean: number;
     p50: number;
     p95: number;
     p99: number;
@@ -99,29 +96,12 @@ export class RollingStats {
      */
     summary(): PercentileSummary {
         if (this.size === 0) {
-            return { count: 0, min: 0, max: 0, mean: 0, p50: 0, p95: 0, p99: 0 };
+            return { count: 0, p50: 0, p95: 0, p99: 0 };
         }
 
         const samples = this.snapshot();
-        let min = Infinity;
-        let max = -Infinity;
-        let sum = 0;
-        for (const value of samples) {
-            if (value < min) min = value;
-            if (value > max) max = value;
-            sum += value;
-        }
-
         const [p50 = 0, p95 = 0, p99 = 0] = computePercentiles(samples);
-        return {
-            count: samples.length,
-            min,
-            max,
-            mean: sum / samples.length,
-            p50,
-            p95,
-            p99,
-        };
+        return { count: samples.length, p50, p95, p99 };
     }
 
     /** Drop every sample, leaving the window empty and reusable. */
@@ -132,10 +112,6 @@ export class RollingStats {
 
     /** Copy the live window (insertion order; not sorted). */
     private snapshot(): number[] {
-        const out: number[] = new Array<number>(this.size);
-        for (let i = 0; i < this.size; i++) {
-            out[i] = this.buffer[i] as number;
-        }
-        return out;
+        return this.buffer.slice(0, this.size);
     }
 }

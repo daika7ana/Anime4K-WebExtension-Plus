@@ -217,7 +217,7 @@ describe('AVAILABLE_EFFECTS parity with the engine seam', () => {
     }
   });
 
-  it('derives params from descriptor schema or the legacy fallback', () => {
+  it('derives params from descriptor schema', () => {
     const paramsById = new Map(AVAILABLE_EFFECTS.map(e => [e.id, e.params]));
 
     // Schema-backed core descriptors.
@@ -226,7 +226,7 @@ describe('AVAILABLE_EFFECTS parity with the engine seam', () => {
       strength: 0.5,
       bandThreshold: 0.08,
     });
-    // No-schema library descriptors keep their legacy defaults.
+    // Library descriptors get their defaults from the overlay schema.
     expect(paramsById.get('anime4k/Deblur/DoG')).toEqual({ strength: 4 });
     expect(paramsById.get('anime4k/Denoise/BilateralMean')).toEqual({
       strength: 0.2,

@@ -22,7 +22,7 @@ export function initGeneralPanel(
   diagnosticsToggle: HTMLInputElement,
   restorePolicySelect: HTMLSelectElement,
   diagnosticsDetailSelect: HTMLSelectElement | null,
-): { render(): Promise<void>; renderGeneralSettings(): Promise<void> } {
+): { render(): Promise<void> } {
 
   async function render() {
     const state = ctx.getState();
@@ -47,16 +47,6 @@ export function initGeneralPanel(
     }
 
     renderColorGradingUI();
-  }
-
-  async function renderGeneralSettings() {
-    // Minimal update for tier/benchmark changes — syncs tierSelect value only.
-    // The full render (crossOriginFix, theme, about, colorGrading) is handled
-    // by the initial render() call in DOMContentLoaded.
-    const localSettings = await getLocalSettings();
-    if (tierSelect) {
-      tierSelect.value = localSettings.performanceTier;
-    }
   }
 
   function renderColorGradingUI() {
@@ -148,5 +138,5 @@ export function initGeneralPanel(
     ctx.notifyUpdate();
   });
 
-  return { render, renderGeneralSettings };
+  return { render };
 }

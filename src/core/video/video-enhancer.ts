@@ -12,6 +12,21 @@ import { waitForMediaEvent } from '@core/utils/media-events';
 /** Debounce delay before reacting to monitor size / DPR changes. */
 const DISPLAY_RESIZE_DEBOUNCE_MS = 200;
 
+/** Upscale multipliers for the `x2`/`x4`/`x8` resolution settings. */
+const RESOLUTION_MULTIPLIERS: Record<string, number> = { 'x2': 2, 'x4': 4, 'x8': 8 };
+
+/** Fixed output sizes for the named resolution settings. */
+const FIXED_RESOLUTIONS: Record<string, Dimensions> = {
+  '720p': { width: 1280, height: 720 },
+  '1080p': { width: 1920, height: 1080 },
+  '2k': { width: 2560, height: 1440 },
+  '4k': { width: 3840, height: 2160 },
+};
+
+/** Hard cap to keep render textures from growing large enough to OOM. */
+const MAX_WIDTH = 7680;
+const MAX_HEIGHT = 4320;
+
 /** Built-in modes are Anime4K presets; custom modes report simply as "Custom". */
 function getDiagnosticsModeLabel(mode: EnhancementMode): string {
   return mode.isBuiltIn ? mode.name : t('diagnosticsCustomMode', 'Custom');
@@ -479,14 +494,6 @@ export class VideoEnhancer {
    * Calculates the target rendering dimensions (capped at 8K to prevent OOM)
    */
   private calculateTargetDimensions(videoWidth: number, videoHeight: number, resolutionSetting: string): Dimensions {
-    const multipliers: Record<string, number> = { 'x2': 2, 'x4': 4, 'x8': 8 };
-    const fixedResolutions: Record<string, Dimensions> = {
-      '720p': { width: 1280, height: 720 },
-      '1080p': { width: 1920, height: 1080 },
-      '2k': { width: 2560, height: 1440 },
-      '4k': { width: 3840, height: 2160 },
-    };
-
     if (resolutionSetting === 'display') {
       return this.calculateDisplayDimensions(videoWidth, videoHeight);
     }
@@ -494,11 +501,11 @@ export class VideoEnhancer {
     let width: number;
     let height: number;
 
-    if (multipliers[resolutionSetting]) {
-      width = videoWidth * multipliers[resolutionSetting];
-      height = videoHeight * multipliers[resolutionSetting];
-    } else if (fixedResolutions[resolutionSetting]) {
-      return fixedResolutions[resolutionSetting];
+    if (RESOLUTION_MULTIPLIERS[resolutionSetting]) {
+      width = videoWidth * RESOLUTION_MULTIPLIERS[resolutionSetting];
+      height = videoHeight * RESOLUTION_MULTIPLIERS[resolutionSetting];
+    } else if (FIXED_RESOLUTIONS[resolutionSetting]) {
+      return FIXED_RESOLUTIONS[resolutionSetting];
     } else {
       return { width: videoWidth, height: videoHeight };
     }
@@ -567,9 +574,6 @@ export class VideoEnhancer {
    * causing OOM, preserving the aspect ratio.
    */
   private clampToMaxResolution(width: number, height: number): Dimensions {
-    const MAX_WIDTH = 7680;
-    const MAX_HEIGHT = 4320;
-
     if (width > MAX_WIDTH || height > MAX_HEIGHT) {
       const scale = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
       width = Math.floor(width * scale);

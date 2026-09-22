@@ -98,22 +98,9 @@ async function migrateV1ToV2(): Promise<void> {
         }
     }
 
-    // Determine the selected mode ID
-    let selectedModeId = syncData.selectedModeId || 'builtin-mode-a';
-
-    // If the selected mode is an old built-in mode, map to the new ID
-    const builtInModeMap: Record<string, string> = {
-        'builtin-mode-a': 'builtin-mode-a',
-        'builtin-mode-b': 'builtin-mode-b',
-        'builtin-mode-c': 'builtin-mode-c',
-        'builtin-mode-aa': 'builtin-mode-aa',
-        'builtin-mode-bb': 'builtin-mode-bb',
-        'builtin-mode-ca': 'builtin-mode-ca',
-    };
-
-    if (builtInModeMap[selectedModeId]) {
-        selectedModeId = builtInModeMap[selectedModeId];
-    }
+    // Determine the selected mode ID. Legacy built-in ids are already the
+    // current ids, so no remapping is required.
+    const selectedModeId = syncData.selectedModeId || 'builtin-mode-a';
 
     // Save migrated data. This step only produces a v2 config; the v2 → v3
     // backfill is applied afterwards by the migration chain.

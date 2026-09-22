@@ -72,15 +72,11 @@ export const INTERMEDIATE_DOWNSCALE_THRESHOLD = 1.1;
  */
 export const MIN_DOWNSCALE_HEIGHT = 720;
 
-/** Bytes per pixel of an `rgba16float` intermediate texture. */
-export const BYTES_PER_PIXEL_RGBA16F = 8;
-
-/** Byte budget for a single intermediate texture; parity with texture-pool's default. */
-export const MAX_INTERMEDIATE_BYTES = 256 * 1024 * 1024;
-
-/** Pixel-count budget for a single intermediate texture (~33.55 MP, ~8K UHD). */
-export const DEFAULT_MAX_INTERMEDIATE_PIXELS =
-    Math.floor(MAX_INTERMEDIATE_BYTES / BYTES_PER_PIXEL_RGBA16F);
+/**
+ * Pixel-count budget for a single intermediate texture (~33.55 MP, ~8K UHD):
+ * a 256 MB byte budget divided by 8 bytes per `rgba16float` pixel.
+ */
+export const DEFAULT_MAX_INTERMEDIATE_PIXELS = 33_554_432;
 
 /**
  * Device-derived ceilings the chain-geometry planner must never exceed when
@@ -100,7 +96,7 @@ export interface ChainGeometryLimits {
 export type PipelineCtor = new (descriptor: {
     device: GPUDevice;
     inputTexture: GPUTexture;
-    nativeDimensions: Dimensions;
+    nativeDimensions?: Dimensions;
     targetDimensions: Dimensions;
 }) => DestroyablePipeline;
 

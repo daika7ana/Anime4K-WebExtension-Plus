@@ -55,16 +55,6 @@ export const AVAILABLE_EFFECT_IDS = [
   'anime4k/Upscale/GANx4UUL',
 ] as const;
 
-/**
- * Catalog default params for descriptors that do not (yet) declare a
- * `paramsSchema` — currently the library-provided Anime4K catalog. Values
- * mirror the pre-seam literal catalog exactly.
- */
-const LEGACY_DEFAULT_PARAMS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  'anime4k/Deblur/DoG': { strength: 4 },
-  'anime4k/Denoise/BilateralMean': { strength: 0.2, strength2: 2 },
-};
-
 /** Numeric defaults declared by a descriptor's `paramsSchema`, if any. */
 function schemaDefaultParams(
   descriptor: EffectDescriptor,
@@ -77,24 +67,14 @@ function schemaDefaultParams(
   return Object.keys(params).length > 0 ? params : undefined;
 }
 
-/** Default params for a descriptor: schema first, legacy literal fallback second. */
-function descriptorDefaultParams(
-  descriptor: EffectDescriptor,
-): Record<string, number> | undefined {
-  const fromSchema = schemaDefaultParams(descriptor);
-  if (fromSchema) return fromSchema;
-  const fallback = LEGACY_DEFAULT_PARAMS[descriptor.id];
-  return fallback ? { ...fallback } : undefined;
-}
-
 /**
  * Convert a backend descriptor into the legacy catalog shape used throughout
- * persistence, validation and the renderer, enriching it with the catalog
- * default params (descriptor `paramsSchema` first, legacy fallback second).
+ * persistence, validation and the renderer, enriching it with the descriptor's
+ * `paramsSchema` defaults.
  */
 export function descriptorToCatalogEffect(descriptor: EffectDescriptor): EnhancementEffect {
   const effect = descriptorToLegacyEffect(descriptor);
-  const params = descriptorDefaultParams(descriptor);
+  const params = schemaDefaultParams(descriptor);
   if (params) effect.params = params;
   return effect;
 }

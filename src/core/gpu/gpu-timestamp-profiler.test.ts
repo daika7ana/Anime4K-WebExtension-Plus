@@ -497,22 +497,6 @@ describe('GpuTimestampProfiler', () => {
         expect(device.querySets[1].descriptor.count).toBe(30);
     });
 
-    // ── sampleEvery ──
-
-    it('sampleEvery skips all but every nth frame', () => {
-        const device = new FakeDevice();
-        const profiler = createProfiler(device, { ringSize: 3, sampleEvery: 2 });
-        const encoder = new FakeEncoder();
-
-        const emitted = profiler.beginFrame(encoder.asEncoder())!;
-        expect(emitted).not.toBeNull();
-        profiler.endFrame(encoder.asEncoder());
-        profiler.afterSubmit();
-
-        expect(profiler.beginFrame(encoder.asEncoder())).toBeNull();
-        expect(profiler.beginFrame(encoder.asEncoder())).not.toBeNull();
-    });
-
     // ── CPU timings ──
 
     it('recordCpu works without a recorder and surfaces in the snapshot', () => {

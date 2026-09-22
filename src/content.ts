@@ -2,8 +2,7 @@
  * Content script main entry point
  * Responsible for adding enhancement buttons to page video elements and managing enhancer instances
  */
-import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate, disableAllAutoEnabled } from '@core/video/video-manager';
-import { getAllManagedVideos, getEnhancer } from '@core/video/enhancer-map';
+import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate, disableAllAutoEnabled, getAllManagedVideos, getEnhancer } from '@core/video/video-manager';
 import { isUrlWhitelisted, getWhitelistRules } from '@utils/whitelist';
 import { onMessage } from '@utils/messaging';
 

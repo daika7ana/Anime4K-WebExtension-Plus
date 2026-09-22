@@ -19,16 +19,13 @@ vi.mock('@core/video/video-manager', () => ({
   deinitializeOnPage: mockDeinitializeOnPage,
   handleSettingsUpdate: mockHandleSettingsUpdate,
   disableAllAutoEnabled: mockDisableAllAutoEnabled,
+  getAllManagedVideos: mockGetAllManagedVideos,
+  getEnhancer: mockGetEnhancer,
 }));
 
 vi.mock('@utils/whitelist', () => ({
   isUrlWhitelisted: mockIsUrlWhitelisted,
   getWhitelistRules: mockGetWhitelistRules,
-}));
-
-vi.mock('@core/video/enhancer-map', () => ({
-  getAllManagedVideos: mockGetAllManagedVideos,
-  getEnhancer: mockGetEnhancer,
 }));
 
 describe('content.ts', () => {

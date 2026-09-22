@@ -102,7 +102,6 @@ export interface ProfilerSnapshot {
 export interface GpuTimestampProfilerOptions {
     ringSize?: number;
     windowSize?: number;
-    sampleEvery?: number;
 }
 
 /** Timestamp writes returned by {@link GpuFrameRecorder.writesFor}. */
@@ -122,7 +121,6 @@ export function isPositiveFinite(ms: number): boolean {
 
 const DEFAULT_RING_SIZE = 3;
 const DEFAULT_WINDOW_SIZE = 120;
-const DEFAULT_SAMPLE_EVERY = 1;
 /** Typical Anime4K top-level effect count used to pre-size the query set. */
 const DEFAULT_PIPELINE_COUNT = 12;
 /** Queries needed by one frame with ~{@link DEFAULT_PIPELINE_COUNT} pipelines. */
@@ -174,33 +172,21 @@ interface FrameRecording {
  * methods become safe no-ops. It never throws, even after the profiler is
  * destroyed.
  */
-class GpuFrameRecorder {
-    constructor(
-        private readonly onMark: (label: string) => void,
-        private readonly onRecordCpu: (label: string, ms: number) => void,
-        private readonly onWritesFor: (label: string) => TimestampWrites | undefined,
-    ) {}
-
+export interface GpuFrameRecorder {
     /**
      * Emit one empty 1x1 marker render pass and record its timestamp pair.
      * No-op when the profiler is inactive or the frame already overflowed.
      */
-    mark(label: string): void {
-        this.onMark(label);
-    }
+    mark(label: string): void;
 
     /** Convenience passthrough for CPU-side timing (works without a GPU sample). */
-    recordCpu(label: string, ms: number): void {
-        this.onRecordCpu(label, ms);
-    }
+    recordCpu(label: string, ms: number): void;
 
     /**
      * Timestamp writes to attach to the caller's own pass (typically the final
      * blit), or `undefined` when the profiler is not actively recording.
      */
-    writesFor(label: string): TimestampWrites | undefined {
-        return this.onWritesFor(label);
-    }
+    writesFor(label: string): TimestampWrites | undefined;
 }
 
 /**
@@ -215,7 +201,6 @@ export class GpuTimestampProfiler {
     private readonly device: GPUDevice;
     private readonly ringSize: number;
     private readonly windowSize: number;
-    private readonly sampleEvery: number;
 
     private state: ProfilerStatus = 'active';
 
@@ -233,7 +218,6 @@ export class GpuTimestampProfiler {
     private currentFrame: FrameRecording | null = null;
     private submittedFrame: FrameRecording | null = null;
 
-    private frameCounter = 0;
     private framesSampled = 0;
     private consecutiveFailures = 0;
 
@@ -248,7 +232,6 @@ export class GpuTimestampProfiler {
         this.device = device;
         this.ringSize = Math.max(1, Math.floor(opts.ringSize ?? DEFAULT_RING_SIZE));
         this.windowSize = Math.max(1, Math.floor(opts.windowSize ?? DEFAULT_WINDOW_SIZE));
-        this.sampleEvery = Math.max(1, Math.floor(opts.sampleEvery ?? DEFAULT_SAMPLE_EVERY));
         this.totalStats = new RollingStats(this.windowSize);
     }
 
@@ -359,22 +342,16 @@ export class GpuTimestampProfiler {
     }
 
     /**
-     * Begin recording a frame. Returns `null` when the profiler is inactive,
-     * this frame is skipped by `sampleEvery`, or no readback slot is free; in
-     * all of those cases the render path is otherwise unchanged. Emits the
-     * baseline marker immediately so `marks[0]` anchors the frame.
+     * Begin recording a frame. Returns `null` when the profiler is inactive or
+     * no readback slot is free; in both cases the render path is otherwise
+     * unchanged. Emits the baseline marker immediately so `marks[0]` anchors the
+     * frame.
      */
     beginFrame(encoder: GPUCommandEncoder): GpuFrameRecorder | null {
         if (this.state !== 'active') return null;
 
         // Defensively reclaim the slot of a frame that was never ended/aborted.
         if (this.currentFrame) this.abortFrame();
-
-        if (this.sampleEvery > 1 && this.frameCounter % this.sampleEvery !== 0) {
-            this.frameCounter++;
-            return null;
-        }
-        this.frameCounter++;
 
         this.maybeGrow();
 
@@ -400,11 +377,11 @@ export class GpuTimestampProfiler {
         // not registered, so it never appears as a HUD pass row.
         this.markFrame(frame, encoder, BASELINE_LABEL, false);
 
-        return new GpuFrameRecorder(
-            (label) => this.markFrame(frame, encoder, label),
-            (label, ms) => this.recordCpu(label, ms),
-            (label) => this.writesForFrame(frame, label),
-        );
+        return {
+            mark: (label) => this.markFrame(frame, encoder, label),
+            recordCpu: (label, ms) => this.recordCpu(label, ms),
+            writesFor: (label) => this.writesForFrame(frame, label),
+        };
     }
 
     /**

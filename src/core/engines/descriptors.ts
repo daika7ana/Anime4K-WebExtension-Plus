@@ -51,7 +51,7 @@ function numberParam(
  *
  * `paramsSchema` is the single source of truth for slider bounds/defaults
  * (`src/ui/options/param-sliders.ts`) and validation bounds
- * (`src/utils/validation.ts`, `EFFECT_PARAM_BOUNDS`). Defined here (metadata
+ * (`src/utils/validation.ts`). Defined here (metadata
  * only) so the persistence/validation path never pulls the GPU pipeline
  * builder; `./core-backend` imports this for compilation.
  */

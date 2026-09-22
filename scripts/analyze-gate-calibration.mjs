@@ -35,16 +35,15 @@
 //   0  calibration completed
 //   1  decode/input error
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { computeLuma, decodeRgba, fmt, readPngSize } from './lib/png-metrics.mjs';
+
 const rootDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const INPUT_PATH = path.resolve(process.env.GATE_INPUT ?? path.join(rootDir, 'e2e', 'testdata', 'videoframe_497385.png'));
 const ANALYSIS_DIR = path.join(rootDir, 'videoframe_497385_analysis');
-
-const MAX_BUFFER = 80 * 1024 * 1024;
 
 // Source-frame ROIs (x0,y0)-(x1,y1), half-open on x1/y1.
 const ROIS = {
@@ -66,42 +65,6 @@ const GATE_LOWS = [0.002, 0.004, 0.006, 0.008, 0.010, 0.014, 0.018, 0.024];
 const GATE_HIGH_MAX = 0.06;
 const GATE_HIGH_STEP = 0.004;
 const RESTORE_TARGET = 0.9;
-
-/** Read PNG pixel dimensions from the IHDR chunk (bytes 16..24, big-endian). */
-function readPngSize(pngPath) {
-  const raw = execFileSync('convert', [pngPath, '-format', '%w %h', 'info:'], {
-    maxBuffer: MAX_BUFFER,
-  }).toString('utf8').trim();
-  const [width, height] = raw.split(/\s+/).map(Number);
-  if (!Number.isFinite(width) || !Number.isFinite(height)) {
-    throw new Error(`could not read PNG dimensions from ${pngPath}`);
-  }
-  return { width, height };
-}
-
-/** Decode an 8-bit RGBA PNG to a tightly-packed RGBA byte buffer. */
-function decodeRgba(pngPath, width, height) {
-  const rgba = execFileSync('convert', [pngPath, '-depth', '8', 'rgba:-'], {
-    maxBuffer: MAX_BUFFER,
-  });
-  const expected = width * height * 4;
-  if (rgba.length !== expected) {
-    throw new Error(
-      `decoded ${pngPath} to ${rgba.length} bytes, expected ${expected} (${width}x${height}x4)`,
-    );
-  }
-  return rgba;
-}
-
-/** Normalized Rec.709 luma in [0,1] per pixel. */
-function computeLuma(rgba, width, height) {
-  const n = width * height;
-  const luma = new Float32Array(n);
-  for (let i = 0, j = 0; i < n; i += 1, j += 4) {
-    luma[i] = (0.2126 * rgba[j] + 0.7152 * rgba[j + 1] + 0.0722 * rgba[j + 2]) / 255;
-  }
-  return luma;
-}
 
 /** Per-pixel `amp = max9 - min9` of luma over a clamped 3x3 neighbourhood. */
 function computeAmp(luma, width, height) {
@@ -165,7 +128,6 @@ function roiAmps(amp, width, roi) {
   return out;
 }
 
-const fmt = (v, digits = 6) => (Number.isFinite(v) ? v.toFixed(digits) : String(v));
 const fmtSteps = (v) => `${(v * 255).toFixed(3)} steps`;
 
 function printDistribution(label, values, extra = '') {

@@ -50,7 +50,7 @@ import {
   disableAllAutoEnabled,
   DEFAULT_AUTO_ENABLE_SETTLE_MS,
 } from './video-manager';
-import * as EnhancerMap from './enhancer-map';
+import * as EnhancerMap from './video-manager';
 import { getSettings } from '@utils/settings';
 import { MEDIA_READY_TIMEOUT_MS } from '@core/utils/media-events';
 

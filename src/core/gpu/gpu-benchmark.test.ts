@@ -268,6 +268,25 @@ describe('runGPUBenchmark', () => {
 
     expect(mock.device.destroy).toHaveBeenCalled();
   });
+
+  it('allocates a single shared input texture and destroys it after the benchmark', async () => {
+    const createTexture = mock.device.createTexture as unknown as ReturnType<typeof vi.fn>;
+
+    await runGPUBenchmark();
+
+    // Warmup and every tier reuse one 1080p rgba8unorm input texture (an
+    // array-form `size`; effect-owned textures use object-form descriptors).
+    const inputIndices = createTexture.mock.calls
+      .map((call, index) => ({ size: (call[0] as { size?: unknown })?.size, index }))
+      .filter(({ size }) => Array.isArray(size) && size[0] === 1920 && size[1] === 1080)
+      .map(({ index }) => index);
+
+    expect(inputIndices).toHaveLength(1);
+    const texture = createTexture.mock.results[inputIndices[0]].value as {
+      destroy: ReturnType<typeof vi.fn>;
+    };
+    expect(texture.destroy).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -444,34 +444,6 @@ h1 {
   white-space: nowrap;
 }
 
-.effect-item[draggable="true"] {
-  cursor: grab;
-}
-
-.effect-item[draggable="true"]:active {
-  cursor: grabbing;
-}
-
-.effect-item.dragging {
-  opacity: 0.5;
-  box-shadow: var(--shadow-2);
-}
-
-.effect-item.drag-over {
-  border-top: 2px solid var(--secondary);
-  position: relative;
-}
-
-.effect-item.drag-over::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--secondary), transparent);
-}
-
 /* Effect parameter controls (e.g. CAS sharpness slider) */
 .effect-params-wrapper {
   display: flex;

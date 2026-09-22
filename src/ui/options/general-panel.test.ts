@@ -57,7 +57,6 @@ function createContext(overrides: Partial<AppContext> = {}): AppContext {
     getState: () => ({ colorGrading: { enabled: true } }) as unknown as ReturnType<AppContext['getState']>,
     getTier: () => 'balanced',
     setTier: vi.fn(),
-    refresh: vi.fn().mockResolvedValue(undefined),
     notifyUpdate: vi.fn(),
     ...overrides,
   };

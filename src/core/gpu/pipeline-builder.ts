@@ -15,7 +15,7 @@ import { gpuResourceCache } from '@core/gpu/gpu-resource-cache';
 import { resolveEffectReference, type EffectResolution } from '@utils/effect-registry';
 import { PipelinePreWarmer } from './pipeline-prewarmer';
 import type { PreWarmEffectRef, PreWarmTarget } from './pipeline-prewarmer';
-import { computeRemainingUpscaleFactors, planChainGeometryPreview, isSuppressedIndex, DEFAULT_MAX_INTERMEDIATE_PIXELS, type ChainGeometryLimits, type RestoreSuppression } from './effect-chain';
+import { planChainGeometryPreview, isSuppressedIndex, DEFAULT_MAX_INTERMEDIATE_PIXELS, type ChainGeometryLimits, type RestoreSuppression } from './effect-chain';
 import { compileEffectChain, destroyPipelines } from './effect-chain-compiler';
 import { createEffectCompiler, derivePostEpilogueFlags, deriveRestoreFlags, deriveUpscaleFactors, wrapGatedRestore } from './compile-policy';
 import { selectGatedRestoreOptions } from '@core/effects/gated-restore';
@@ -154,9 +154,6 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   const gating = restorePolicy === 'gate'
     ? selectGatedRestoreOptions(targetDimensions)
     : null;
-  const remainingUpscaleFactors = computeRemainingUpscaleFactors(
-    upscaleFactors.map((upscaleFactor) => ({ upscaleFactor })),
-  );
   // Device-derived intermediate-texture ceilings. The render target is already
   // clamped upstream; this keeps the *intermediates* from exceeding the
   // adapter's per-axis texture limit or the per-texture memory budget.
@@ -172,7 +169,6 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
     restoreFlags,
     restoreSuppression,
   });
-  const suppressActive = geometryPreview.suppressFromIndex !== null;
 
   /** Pre-warm targets: engine identity + descriptor capabilities (resolved only). */
   const buildPrewarmTargets = (): PreWarmTarget[] =>
@@ -265,16 +261,6 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   }
   if (isStale()) return []; // Superseded
 
-  // If needed, get the Downscale class. In non-suppressed mode this is the
-  // per-step intermediate rule; when suppression is active the only possible
-  // Downscale is the single final one.
-  const needsDownscaling = suppressActive
-    ? geometryPreview.finalDownscale !== null
-    : upscaleFactors.some(
-      (factor, i) => factor > 1 && remainingUpscaleFactors[i] > 1,
-    );
-  const DownscaleClass = needsDownscaling ? anime4kModule.Downscale : null;
-
   // --- Phase 1: Create all pipeline instances (no GPU submission) ---
   // The shared compiler owns the ordered chain walk (safe-geometry suppression,
   // intermediate/final Downscales, deferred epilogue materialization, per-step
@@ -286,7 +272,10 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
     targetDimensions,
     effects,
     upscaleFactors,
-    downscaleCtor: DownscaleClass,
+    // The compiler's geometry preview owns whether any Downscale is actually
+    // emitted (intermediate rule or single final one), so the class is always
+    // supplied; it is inert when the preview requests none.
+    downscaleCtor: anime4kModule.Downscale,
     limits,
     restoreFlags,
     postEpilogueFlags,

@@ -729,11 +729,6 @@ export class DiagnosticsOverlay {
     this.applyEffectiveMode();
   }
 
-  /** The currently selected detail mode (not the effective auto-resolved one). */
-  public getDetailMode(): DiagnosticsDetailMode {
-    return this.detailMode;
-  }
-
   private frameLabelText(compact: boolean): string {
     const label = t('diagnosticsFrameLabel', 'Frame');
     return compact ? label : `${label} \u00b7 ${this.frameBudgetMs.toFixed(1)} ms`;
@@ -1161,28 +1156,6 @@ export class DiagnosticsOverlay {
       this.host = null;
       this.shadowRoot = null;
     }
-    this.containerEl = null;
-    this.fpsEl = null;
-    this.frameLabelEl = null;
-    this.frameRowEl = null;
-    this.budgetFillEl = null;
-    this.frameTimeEl = null;
-    this.avgFrameTimeEl = null;
-    this.cpuEl = null;
-    this.pipelineCountEl = null;
-    this.adapterInfoEl = null;
-    this.gpuShareEl = null;
-    this.timingSectionEl = null;
-    this.timingTitleEl = null;
-    this.timingStatusEl = null;
-    this.timingGridEl = null;
-    this.timingNoteEl = null;
-    this.timingFramesEl = null;
-    this.modeEl = null;
-    this.tierEl = null;
-    this.inputResolutionEl = null;
-    this.targetResolutionEl = null;
-    this.restorePolicyEl = null;
     this.timingVisible = false;
     this.lastTimingRenderTime = Number.NEGATIVE_INFINITY;
     this.lastSnapshot = null;

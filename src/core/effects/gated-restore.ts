@@ -61,7 +61,7 @@ export const GATED_RESTORE_4K_DEFAULTS: GatedRestoreOptions = Object.freeze({
 });
 
 /** Target height (px) at/above which the ≥4K gate profile is selected. */
-export const GATED_RESTORE_4K_HEIGHT_THRESHOLD = 2160;
+const GATED_RESTORE_4K_HEIGHT_THRESHOLD = 2160;
 
 /**
  * Select the `gate` profile for a render target.

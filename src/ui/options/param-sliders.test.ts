@@ -14,13 +14,12 @@ function makeEffect(className: string, params?: Record<string, number>): Enhance
 }
 
 function render(effect: EnhancementEffect, saveCallback = vi.fn().mockResolvedValue(undefined)) {
-  const effectItem = document.createElement('div');
   const wrapper = document.createElement('div');
   document.body.appendChild(wrapper);
-  renderParamSliders(effect, 'mode-1', effectItem, wrapper, saveCallback);
+  renderParamSliders(effect, 'mode-1', wrapper, saveCallback);
   const sliders = Array.from(wrapper.querySelectorAll<HTMLInputElement>('input.effect-param-slider'));
   const values = Array.from(wrapper.querySelectorAll<HTMLElement>('.effect-param-value'));
-  return { effect, effectItem, wrapper, sliders, values, saveCallback };
+  return { effect, wrapper, sliders, values, saveCallback };
 }
 
 describe('renderParamSliders', () => {
@@ -158,21 +157,6 @@ describe('renderParamSliders', () => {
     it('renders nothing when the effect has no params object', () => {
       const { sliders } = render(makeEffect('CAS', undefined));
       expect(sliders).toHaveLength(0);
-    });
-  });
-
-  describe('drag interaction guards', () => {
-    it('disables dragging on the parent item while the slider is captured', () => {
-      const { sliders, effectItem } = render(makeEffect('CAS', { sharpness: 0.5 }));
-      const slider = sliders[0];
-      // jsdom does not implement pointer capture; stub it to observe the handler.
-      (slider as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture = vi.fn();
-
-      slider.dispatchEvent(new Event('pointerdown'));
-      expect(effectItem.draggable).toBe(false);
-
-      slider.dispatchEvent(new Event('pointerup'));
-      expect(effectItem.draggable).toBe(true);
     });
   });
 });

@@ -20,10 +20,11 @@
 //   1  an input artifact was missing or malformed
 
 import { execFileSync } from 'node:child_process';
-import { Buffer } from 'node:buffer';
-import { existsSync, mkdirSync, openSync, readSync, closeSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+
+import { boxBlur, computeLuma, decodeRgba, fmt, readPngSize } from './lib/png-metrics.mjs';
 
 const rootDir = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -63,95 +64,6 @@ const FULL_FINAL = { file: '08-ClampHighlightsApply-3840x2160.png', label: 'Clam
 const FAST_FINAL = { file: '05-ClampHighlightsApply-3840x2160.png', label: 'ClampHighlightsApply' };
 
 // --- Image I/O -------------------------------------------------------------
-
-// The PNG IHDR always stores width/height as big-endian uint32 at offsets
-// 16 and 20, which lets us learn dimensions without another subprocess.
-function readPngSize(pngPath) {
-  const header = Buffer.alloc(24);
-  const fd = openSync(pngPath, 'r');
-  try {
-    const read = readSync(fd, header, 0, 24, 0);
-    if (read < 24) throw new Error(`PNG too small: ${pngPath}`);
-  } finally {
-    closeSync(fd);
-  }
-  const signature = header.subarray(0, 8).toString('latin1');
-  if (signature !== '\x89PNG\r\n\x1a\n') throw new Error(`Not a PNG: ${pngPath}`);
-  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
-}
-
-// Decodes an 8-bit RGBA PNG to a tightly-packed RGBA byte buffer.
-function decodeRgba(pngPath, width, height) {
-  const raw = execFileSync('convert', [pngPath, '-depth', '8', 'rgba:-'], {
-    maxBuffer: 80 * 1024 * 1024,
-  });
-  const expected = width * height * 4;
-  if (raw.length !== expected) {
-    throw new Error(
-      `Decoded ${pngPath} to ${raw.length} bytes, expected ${expected} (${width}x${height}x4).`,
-    );
-  }
-  return raw;
-}
-
-// Normalized Rec.709 luma in [0, 1].
-function computeLuma(rgba, width, height) {
-  const n = width * height;
-  const y = new Float32Array(n);
-  for (let i = 0, j = 0; i < n; i += 1, j += 4) {
-    y[i] = (0.2126 * rgba[j] + 0.7152 * rgba[j + 1] + 0.0722 * rgba[j + 2]) / 255;
-  }
-  return y;
-}
-
-// --- Separable O(N) box blur (clamped edges) -------------------------------
-
-// Radius-r 3x3/9x9 mean implemented as two sliding-window passes (horizontal
-// then vertical). A naive per-pixel kernel over 4K is far too slow; this runs
-// in O(width*height) per image regardless of radius. Edge samples clamp to the
-// nearest valid pixel (replicate border).
-function boxBlur(src, width, height, radius) {
-  const tmp = new Float32Array(width * height);
-  const dst = new Float32Array(width * height);
-  const prefix = new Float64Array(Math.max(width, height) + 1);
-
-  // Horizontal pass: src -> tmp.
-  for (let y = 0; y < height; y += 1) {
-    const row = y * width;
-    let sum = 0;
-    prefix[0] = 0;
-    for (let x = 0; x < width; x += 1) {
-      sum += src[row + x];
-      prefix[x + 1] = sum;
-    }
-    for (let x = 0; x < width; x += 1) {
-      let lo = x - radius;
-      if (lo < 0) lo = 0;
-      let hi = x + radius;
-      if (hi > width - 1) hi = width - 1;
-      tmp[row + x] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
-    }
-  }
-
-  // Vertical pass: tmp -> dst.
-  for (let x = 0; x < width; x += 1) {
-    let sum = 0;
-    prefix[0] = 0;
-    for (let y = 0; y < height; y += 1) {
-      sum += tmp[y * width + x];
-      prefix[y + 1] = sum;
-    }
-    for (let y = 0; y < height; y += 1) {
-      let lo = y - radius;
-      if (lo < 0) lo = 0;
-      let hi = y + radius;
-      if (hi > height - 1) hi = height - 1;
-      dst[y * width + x] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
-    }
-  }
-
-  return dst;
-}
 
 // --- Per-image metrics -----------------------------------------------------
 
@@ -328,12 +240,6 @@ function rankTiles(full, fast, width, height) {
 }
 
 // --- Console formatting ----------------------------------------------------
-
-function fmt(value, digits = 6) {
-  if (value === null || value === undefined) return 'n/a';
-  if (!Number.isFinite(value)) return String(value);
-  return value.toFixed(digits);
-}
 
 function printTable(title, rows) {
   console.log(`\n${title}`);

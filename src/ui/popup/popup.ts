@@ -18,8 +18,7 @@ import { initWhitelistActions } from './whitelist-actions';
 let currentTier: PerformanceTier = 'balanced';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize theme
-  themeManager.getTheme(); // This will automatically apply the saved theme
+  themeManager.initTheme();
 
   // Set document language
   document.documentElement.setAttribute('lang', t('@@ui_locale', 'en'));
@@ -190,25 +189,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       console.log('Settings saved:', { ...updatedSettings, performanceTier: currentTier });
 
-      // Remove existing status message (to avoid stacking)
-      const existingStatus = document.querySelector('.save-status');
-      if (existingStatus) {
-        existingStatus.remove();
-      }
-
-      // Update status badge
+      // Update status badge + toast feedback
       updateStatusBadge('Applied', true);
+      showToast(t('settingsSaved', 'Settings saved!'), 'success');
 
       // Update initial values so dirty tracking reflects the new baseline
       initialModeId = selectedModeId;
       initialResolution = selectedResolution;
       initialTier = currentTier;
-
-      // Show save success status message
-      const status = document.createElement('div');
-      status.className = 'save-status';
-      status.textContent = t('settingsSaved', 'Settings saved!');
-      saveButton.parentElement?.appendChild(status);
 
       // Notify content script in the active tab that settings have been updated
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {

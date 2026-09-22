@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { showToast, dismissToast, dismissAllToasts } from './toast';
+import { showToast, removeToast, dismissAllToasts } from './toast';
 
 describe('showToast', () => {
   beforeEach(() => {
@@ -159,7 +159,7 @@ describe('showToast', () => {
   });
 });
 
-describe('dismissToast', () => {
+describe('removeToast', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     document.body.innerHTML = '';
@@ -175,7 +175,7 @@ describe('dismissToast', () => {
 
     expect(document.body.contains(toast)).toBe(true);
 
-    dismissToast(toast);
+    removeToast(toast);
     vi.advanceTimersByTime(200);
 
     expect(document.body.contains(toast)).toBe(false);
@@ -185,7 +185,7 @@ describe('dismissToast', () => {
     const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
     const toast = showToast('Early dismiss', 'info', 5000);
 
-    dismissToast(toast);
+    removeToast(toast);
     vi.advanceTimersByTime(200);
 
     expect(clearTimeoutSpy).toHaveBeenCalled();
@@ -199,17 +199,17 @@ describe('dismissToast', () => {
     toast.remove();
 
     // Should not throw
-    expect(() => dismissToast(toast)).not.toThrow();
+    expect(() => removeToast(toast)).not.toThrow();
   });
 
-  it('no-op if dismissToast is called twice', () => {
+  it('no-op if removeToast is called twice', () => {
     const toast = showToast('Double dismiss');
 
-    dismissToast(toast);
+    removeToast(toast);
     vi.advanceTimersByTime(200);
 
     // Second call on already-removed toast should not throw
-    expect(() => dismissToast(toast)).not.toThrow();
+    expect(() => removeToast(toast)).not.toThrow();
   });
 });
 

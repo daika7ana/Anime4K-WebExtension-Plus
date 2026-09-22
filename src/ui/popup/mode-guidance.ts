@@ -14,7 +14,7 @@ import { BUILTIN_MODES } from '@utils/settings';
 import { t } from '@utils/i18n';
 
 /** Concise, source-oriented copy for each built-in mode. */
-export const MODE_DESCRIPTIONS: Record<BaseMode, { key: string; fallback: string }> = {
+const MODE_DESCRIPTIONS: Record<BaseMode, { key: string; fallback: string }> = {
   'A': {
     key: 'modeDescA',
     fallback: 'For most 1080p anime, older 720p, and blurry or heavily compressed SD.',

@@ -5,15 +5,6 @@ import { showToast } from '../common/toast';
 import { t } from '@utils/i18n';
 import type { WhitelistRule } from '../../types';
 
-export interface WhitelistActions {
-  /**
-   * Swap between the three add buttons and the single remove button based on
-   * whether the given URL is covered by the given rules.
-   * @returns true when the remove button is shown (URL is whitelisted).
-   */
-  renderWhitelistControls: (url: string, rules: WhitelistRule[] | null | undefined) => boolean;
-}
-
 export function initWhitelistActions(opts: {
   whitelistToggle: HTMLInputElement;
   addCurrentPageBtn: HTMLButtonElement;
@@ -21,7 +12,7 @@ export function initWhitelistActions(opts: {
   addParentPathBtn: HTMLButtonElement;
   removeFromWhitelistBtn: HTMLButtonElement;
   whitelistButtons: HTMLElement;
-}): WhitelistActions {
+}) {
   const {
     whitelistToggle,
     addCurrentPageBtn,
@@ -32,18 +23,10 @@ export function initWhitelistActions(opts: {
   } = opts;
 
   // Show the remove button and hide the add buttons when the URL is whitelisted.
-  const renderWhitelistControls: WhitelistActions['renderWhitelistControls'] = (url, rules) => {
+  const renderWhitelistControls = (url: string, rules: WhitelistRule[] | null | undefined): void => {
     const isWhitelisted = getMatchingWhitelistRules(url, rules).length > 0;
     whitelistButtons.hidden = isWhitelisted;
     removeFromWhitelistBtn.hidden = !isWhitelisted;
-    return isWhitelisted;
-  };
-
-  // After a successful add, re-evaluate from the rule we just persisted rather
-  // than re-reading settings: getSettings() has a short TTL cache and the
-  // storage.onChanged invalidation may not have fired yet in the same tick.
-  const refreshAfterAdd = (url: string, pattern: string): void => {
-    renderWhitelistControls(url, [{ pattern, enabled: true }]);
   };
 
   // Whitelist enable/disable toggle change handler
@@ -56,7 +39,10 @@ export function initWhitelistActions(opts: {
     }
   });
 
-  // "Add to whitelist" button event handlers
+  // "Add to whitelist" button event handlers. Each re-evaluates from the rule
+  // just persisted rather than re-reading settings: getSettings() has a short
+  // TTL cache and the storage.onChanged invalidation may not have fired yet in
+  // the same tick.
   addCurrentPageBtn.addEventListener('click', async () => {
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -66,7 +52,7 @@ export function initWhitelistActions(opts: {
         const cleanUrl = url.hostname + url.pathname;
         await addWhitelistRule(cleanUrl);
         showToast(t('pageAdded', 'URL added to whitelist'), 'success');
-        refreshAfterAdd(tabUrl, cleanUrl);
+        renderWhitelistControls(tabUrl, [{ pattern: cleanUrl, enabled: true }]);
       }
     } catch (error) {
       console.error('Error adding current URL:', error);
@@ -83,7 +69,7 @@ export function initWhitelistActions(opts: {
         const pattern = `${url.hostname}/*`;
         await addWhitelistRule(pattern);
         showToast(t('domainAdded', 'Domain added to whitelist'), 'success');
-        refreshAfterAdd(tabUrl, pattern);
+        renderWhitelistControls(tabUrl, [{ pattern, enabled: true }]);
       }
     } catch (error) {
       console.error('Error adding current domain:', error);
@@ -102,7 +88,7 @@ export function initWhitelistActions(opts: {
         const pattern = `${url.hostname}/${parentPath}/*`;
         await addWhitelistRule(pattern);
         showToast(t('parentPathAdded', 'Parent path added to whitelist'), 'success');
-        refreshAfterAdd(tabUrl, pattern);
+        renderWhitelistControls(tabUrl, [{ pattern, enabled: true }]);
       }
     } catch (error) {
       console.error('Error adding parent path:', error);

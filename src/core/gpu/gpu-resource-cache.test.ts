@@ -2,9 +2,8 @@
  * Tests for the per-device GPU resource cache.
  *
  * The shared WebGPU mock (src/test/webgpu-mock.ts) is used for the shader-module
- * identity paths. The async creation helper and the error-scope paths use a
- * minimal local fake device defined here. The shared mock is intentionally not
- * modified.
+ * identity paths. The synchronous creation-failure path uses a minimal local
+ * fake device defined here. The shared mock is intentionally not modified.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installGPUMock, removeGPUMock } from '@/test/webgpu-mock';
@@ -29,30 +28,6 @@ function createFakeDevice(overrides: Record<string, unknown> = {}): FakeDevice {
 
 function asDevice(device: FakeDevice | object): GPUDevice {
   return device as unknown as GPUDevice;
-}
-
-/**
- * The cache's async creation helper is an internal seam retained for callers
- * that add async resources later. It is exercised directly here (there is no
- * public async resource API) so its error-scope handling stays covered.
- */
-interface CreateAsyncInvoker {
-  createAsync<T>(
-    device: GPUDevice,
-    kind: string,
-    key: string,
-    create: () => Promise<T>,
-  ): Promise<T>;
-}
-
-function runCreateAsync<T>(
-  cache: GpuResourceCache,
-  device: GPUDevice,
-  kind: string,
-  key: string,
-  create: () => Promise<T>,
-): Promise<T> {
-  return (cache as unknown as CreateAsyncInvoker).createAsync(device, kind, key, create);
 }
 
 describe('GpuResourceCache (shared WebGPU mock, shader modules)', () => {
@@ -166,78 +141,5 @@ describe('GpuResourceCache (local fake device, creation errors + release)', () =
 
     // Still usable after a repeated release.
     expect(cache.getShaderModule(asDevice(device), 'code')).toBeDefined();
-  });
-});
-
-describe('GpuResourceCache createAsync (validation scopes + async failures)', () => {
-  it('pushes and pops the validation scope synchronously around concurrent in-flight creations', async () => {
-    const cache = new GpuResourceCache();
-    let depth = 0;
-    let maxDepth = 0;
-    const resolvers: Array<() => void> = [];
-    const device = createFakeDevice({
-      pushErrorScope: vi.fn(() => {
-        depth++;
-        maxDepth = Math.max(maxDepth, depth);
-      }),
-      popErrorScope: vi.fn(async () => {
-        depth--;
-        return null;
-      }),
-    });
-
-    const a = runCreateAsync(cache, asDevice(device), 'shader module', 'key-a', () =>
-      new Promise<string>(resolve => {
-        resolvers.push(() => resolve('a'));
-      }),
-    );
-    const b = runCreateAsync(cache, asDevice(device), 'shader module', 'key-b', () =>
-      new Promise<string>(resolve => {
-        resolvers.push(() => resolve('b'));
-      }),
-    );
-
-    // Both creations are in flight, yet no scope is held across the await:
-    // each push was matched by a synchronous pop.
-    expect(depth).toBe(0);
-    expect(maxDepth).toBe(1);
-    expect(device.pushErrorScope).toHaveBeenCalledTimes(2);
-    expect(device.popErrorScope).toHaveBeenCalledTimes(2);
-
-    for (const resolve of resolvers) resolve();
-    await expect(Promise.all([a, b])).resolves.toEqual(['a', 'b']);
-
-    expect(depth).toBe(0);
-  });
-
-  it('throws when popErrorScope reports a validation error', async () => {
-    const cache = new GpuResourceCache();
-    const device = createFakeDevice({
-      popErrorScope: vi.fn().mockResolvedValue({ message: 'invalid shader module' }),
-    });
-
-    await expect(
-      runCreateAsync(cache, asDevice(device), 'shader module', 'invalid-key', async () => ({ __kind: 'shader' })),
-    ).rejects.toThrow(/invalid shader module/);
-  });
-
-  it('wraps a rejected creator with the key and does not swallow it', async () => {
-    const cache = new GpuResourceCache();
-    const device = createFakeDevice();
-
-    await expect(
-      runCreateAsync(cache, asDevice(device), 'shader module', 'bad-key', async () => {
-        throw new Error('boom');
-      }),
-    ).rejects.toThrow(/bad-key/);
-  });
-
-  it('works without error-scope support (feature-detected)', async () => {
-    const cache = new GpuResourceCache();
-    const noScopeDevice = {};
-
-    await expect(
-      runCreateAsync(cache, asDevice(noScopeDevice), 'shader module', 'key', async () => 'created'),
-    ).resolves.toBe('created');
   });
 });

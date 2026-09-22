@@ -3,27 +3,28 @@
  * description per built-in mode, with the 2× guidance folded into the doubled
  * modes' own copy.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { BaseMode } from '@/types';
-import {
-  MODE_DESCRIPTIONS,
-  getModeDescription,
-  initModeGuidance,
-} from './mode-guidance';
+import { getModeDescription, initModeGuidance } from './mode-guidance';
 
 const ALL_MODES: BaseMode[] = ['A', 'B', 'C', 'A+A', 'B+B', 'C+A'];
 const SINGLE_MODES: BaseMode[] = ['A', 'B', 'C'];
 const DOUBLED_MODES: BaseMode[] = ['A+A', 'B+B', 'C+A'];
 
 describe('mode descriptions', () => {
-  it('has a non-empty fallback and key for every built-in mode', () => {
-    for (const mode of ALL_MODES) {
-      expect(MODE_DESCRIPTIONS[mode].fallback.length).toBeGreaterThan(0);
-      expect(MODE_DESCRIPTIONS[mode].key.length).toBeGreaterThan(0);
-    }
+  // Force `t()` to fall back to the canonical source copy so assertions read
+  // the fallback text rather than the key returned by the chrome.i18n stub.
+  const originalGetMessage = chrome.i18n.getMessage;
+
+  beforeEach(() => {
+    chrome.i18n.getMessage = vi.fn(() => '');
   });
 
-  it('resolves a description for every built-in mode', () => {
+  afterEach(() => {
+    chrome.i18n.getMessage = originalGetMessage;
+  });
+
+  it('has a non-empty fallback for every built-in mode', () => {
     for (const mode of ALL_MODES) {
       expect(getModeDescription(mode).length).toBeGreaterThan(0);
     }
@@ -31,16 +32,16 @@ describe('mode descriptions', () => {
 
   it('folds the 2× guidance into the doubled modes only', () => {
     for (const mode of DOUBLED_MODES) {
-      expect(MODE_DESCRIPTIONS[mode].fallback).toContain('2×');
+      expect(getModeDescription(mode)).toContain('2×');
     }
     for (const mode of SINGLE_MODES) {
-      expect(MODE_DESCRIPTIONS[mode].fallback).not.toContain('2×');
+      expect(getModeDescription(mode)).not.toContain('2×');
     }
   });
 
   it('keeps single-mode copy free of the doubled-mode message', () => {
     for (const mode of SINGLE_MODES) {
-      expect(MODE_DESCRIPTIONS[mode].fallback).not.toContain('Doubled modes');
+      expect(getModeDescription(mode)).not.toContain('Doubled modes');
     }
   });
 });

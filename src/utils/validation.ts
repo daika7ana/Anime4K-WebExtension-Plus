@@ -11,7 +11,7 @@
  * with a structured list of problems. Callers must not apply a failed result.
  */
 
-import type { EffectDescriptor } from 'anime4k-webgpu-async';
+import type { EffectDescriptor, EffectParamSchema } from 'anime4k-webgpu-async';
 import type {
   ColorGradingSettings,
   CustomMode,
@@ -21,7 +21,12 @@ import type {
   WhitelistRule,
 } from '../types';
 import { descriptorToCatalogEffect } from './effects-map';
-import { isKnownBackendId, listEffectDescriptors, resolveEffectReference } from './effect-registry';
+import {
+  getEffectDescriptorById,
+  isKnownBackendId,
+  listEffectDescriptors,
+  resolveEffectReference,
+} from './effect-registry';
 
 // ===== Result types =====
 
@@ -38,26 +43,15 @@ export type ValidationResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly issues: readonly ValidationIssue[] };
 
-// ===== Schema version =====
-
-/**
- * Current version of the exported custom-modes payload.
- *
- * A bare array (the historical export format) is treated as version 1 for
- * backward compatibility; the versioned envelope `{ version, modes }` is the
- * forward-compatible format.
- */
-export const MODES_IMPORT_VERSION = 1;
-
 // ===== Effect parameter metadata =====
 
 /**
  * Bounds for a single effect parameter.
  *
- * The ranges are derived from each descriptor's `paramsSchema` (the same
- * metadata that drives `src/ui/options/param-sliders.ts`). Values outside these
- * bounds cannot be produced by the UI and must therefore be rejected when they
- * arrive through an import.
+ * The ranges are read from each descriptor's `paramsSchema` (the same metadata
+ * that drives `src/ui/options/param-sliders.ts`). Values outside these bounds
+ * cannot be produced by the UI and must therefore be rejected when they arrive
+ * through an import.
  */
 export interface EffectParamBound {
   readonly min: number;
@@ -65,52 +59,32 @@ export interface EffectParamBound {
   readonly defaultValue: number;
 }
 
-/** Extract numeric param bounds from a descriptor's declared `paramsSchema`. */
-function schemaParamBounds(
-  schema: NonNullable<EffectDescriptor['paramsSchema']>,
-): Record<string, EffectParamBound> {
-  const bounds: Record<string, EffectParamBound> = {};
-  for (const [key, param] of Object.entries(schema)) {
-    if (
-      param.type !== 'number' ||
-      typeof param.min !== 'number' ||
-      typeof param.max !== 'number' ||
-      typeof param.defaultValue !== 'number'
-    ) {
-      continue;
-    }
-    bounds[key] = { min: param.min, max: param.max, defaultValue: param.defaultValue };
+/** Extract numeric bounds from one schema entry; undefined when it is not numeric. */
+function numericParamBound(param: EffectParamSchema | undefined): EffectParamBound | undefined {
+  if (
+    !param ||
+    param.type !== 'number' ||
+    typeof param.min !== 'number' ||
+    typeof param.max !== 'number' ||
+    typeof param.defaultValue !== 'number'
+  ) {
+    return undefined;
   }
-  return bounds;
+  return { min: param.min, max: param.max, defaultValue: param.defaultValue };
 }
 
 /**
- * Derive bounds from every user-visible descriptor that declares a schema.
- * Hidden/system effects (ColorAdjust) are excluded: they are not part of the
- * selectable catalog and their bounds are not validated here.
- */
-function deriveEffectParamBounds(): Record<
-  string,
-  Readonly<Record<string, EffectParamBound>>
-> {
-  const derived: Record<string, Readonly<Record<string, EffectParamBound>>> = {};
-  for (const descriptor of listEffectDescriptors()) {
-    if (!descriptor.paramsSchema) continue;
-    const bounds = schemaParamBounds(descriptor.paramsSchema);
-    if (Object.keys(bounds).length > 0) derived[descriptor.key] = bounds;
-  }
-  return derived;
-}
-
-/**
- * Allowed numeric parameters per effect class name, with inclusive bounds.
+ * Numeric bound for one effect param, or undefined when absent.
  *
- * Derived from each descriptor's `paramsSchema`. Effects that declare no schema
- * expose no user-tunable params and must not carry a `params` object on import.
+ * Hidden/system descriptors (ColorAdjust) are excluded: they are not part of the
+ * selectable catalog and their params are not validated on import.
  */
-export const EFFECT_PARAM_BOUNDS: Readonly<
-  Record<string, Readonly<Record<string, EffectParamBound>>>
-> = deriveEffectParamBounds();
+function effectParamBound(
+  descriptor: EffectDescriptor,
+  key: string,
+): EffectParamBound | undefined {
+  return descriptor.hidden ? undefined : numericParamBound(descriptor.paramsSchema?.[key]);
+}
 
 // ===== Color grading metadata =====
 
@@ -125,16 +99,24 @@ export const DEFAULT_COLOR_GRADING: ColorGradingSettings = {
   exposure: 0,
 };
 
-const COLOR_GRADING_BOUNDS: Readonly<
-  Record<'brightness' | 'gamma' | 'contrast' | 'saturation' | 'vibrance' | 'exposure', EffectParamBound>
-> = {
-  brightness: { min: -1, max: 1, defaultValue: 0 },
-  gamma: { min: 0.1, max: 4, defaultValue: 1 },
-  contrast: { min: 0, max: 2, defaultValue: 1 },
-  saturation: { min: 0, max: 2, defaultValue: 1 },
-  vibrance: { min: -1, max: 1, defaultValue: 0 },
-  exposure: { min: -3, max: 3, defaultValue: 0 },
-};
+/**
+ * Numeric color-grading keys, and the schema they are bounded by.
+ *
+ * `paramsSchema` is the documented source of truth, so the bounds are read from
+ * the metadata-only ColorAdjust descriptor rather than duplicated here.
+ */
+const COLOR_GRADING_KEYS = [
+  'brightness',
+  'gamma',
+  'contrast',
+  'saturation',
+  'vibrance',
+  'exposure',
+] as const;
+
+const COLOR_GRADING_SCHEMA = getEffectDescriptorById(
+  'anime4k/ColorGrading/ColorAdjust',
+)?.paramsSchema;
 
 // ===== Shared primitives =====
 
@@ -151,11 +133,8 @@ function isFiniteNumber(value: unknown): value is number {
  * keyed by id. Derived from the composed engine registry so validation accepts
  * exactly what the engine seam can resolve.
  */
-const EFFECTS_BY_ID = new Map<string, EnhancementEffect>(
-  listEffectDescriptors({ includeHidden: true }).map((descriptor) => [
-    descriptor.id,
-    descriptorToCatalogEffect(descriptor),
-  ]),
+const DESCRIPTORS_BY_ID = new Map<string, EffectDescriptor>(
+  listEffectDescriptors({ includeHidden: true }).map((descriptor) => [descriptor.id, descriptor]),
 );
 
 function describeType(value: unknown): string {
@@ -169,15 +148,6 @@ function warn(message: string): void {
 }
 
 // ===== Custom mode validation (strict / atomic) =====
-
-function isSupportedVersion(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 1 &&
-    value <= MODES_IMPORT_VERSION
-  );
-}
 
 function collectEffectIssues(
   value: unknown,
@@ -195,8 +165,8 @@ function collectEffectIssues(
     return;
   }
 
-  const catalog = EFFECTS_BY_ID.get(id);
-  if (!catalog) {
+  const descriptor = DESCRIPTORS_BY_ID.get(id);
+  if (!descriptor) {
     issues.push({ path: `${path}.id`, message: `Unknown effect id: ${id}` });
     return;
   }
@@ -222,7 +192,6 @@ function collectEffectIssues(
     return;
   }
 
-  const bounds = EFFECT_PARAM_BOUNDS[catalog.className];
   for (const [key, raw] of Object.entries(params)) {
     if (!isFiniteNumber(raw)) {
       issues.push({
@@ -231,11 +200,11 @@ function collectEffectIssues(
       });
       continue;
     }
-    const bound = bounds?.[key];
+    const bound = effectParamBound(descriptor, key);
     if (!bound) {
       issues.push({
         path: `${path}.params.${key}`,
-        message: `Unknown parameter "${key}" for effect ${catalog.className}`,
+        message: `Unknown parameter "${key}" for effect ${descriptor.key}`,
       });
       continue;
     }
@@ -288,22 +257,17 @@ function buildCatalogEffect(
   return { ...catalog, params };
 }
 
-let importedModeCounter = 0;
-
 function createImportedModeId(): string {
-  importedModeCounter += 1;
-  return `custom-${Date.now()}-${importedModeCounter.toString(36)}-${Math.random()
-    .toString(36)
-    .substring(2, 9)}`;
+  return `custom-${crypto.randomUUID()}`;
 }
 
 function toImportedMode(mode: Record<string, unknown>): CustomMode {
   const rawEffects = (mode.effects as unknown[]) ?? [];
   const effects = rawEffects.reduce<EnhancementEffect[]>((acc, rawEffect) => {
     if (!isRecord(rawEffect) || typeof rawEffect.id !== 'string') return acc;
-    const catalog = EFFECTS_BY_ID.get(rawEffect.id);
-    if (!catalog) return acc;
-    acc.push(buildCatalogEffect(catalog, rawEffect.params));
+    const descriptor = DESCRIPTORS_BY_ID.get(rawEffect.id);
+    if (!descriptor) return acc;
+    acc.push(buildCatalogEffect(descriptorToCatalogEffect(descriptor), rawEffect.params));
     return acc;
   }, []);
 
@@ -336,10 +300,10 @@ export function validateModesImport(input: unknown): ValidationResult<CustomMode
   } else if (isRecord(input)) {
     if (!('version' in input)) {
       issues.push({ path: 'version', message: 'Missing schema version' });
-    } else if (!isSupportedVersion(input.version)) {
+    } else if (input.version !== 1) {
       issues.push({
         path: 'version',
-        message: `Unsupported version: ${String(input.version)} (expected ${MODES_IMPORT_VERSION})`,
+        message: `Unsupported version: ${String(input.version)} (expected 1)`,
       });
     }
     if (!('modes' in input)) {
@@ -388,13 +352,10 @@ export function parseAndValidateModesImport(json: string): ValidationResult<Cust
 /**
  * Render validation issues into a concise single-line message for toasts/logs.
  */
-export function formatValidationIssues(
-  issues: readonly ValidationIssue[],
-  max = 3,
-): string {
+export function formatValidationIssues(issues: readonly ValidationIssue[]): string {
   if (issues.length === 0) return 'Unknown validation error';
   const shown = issues
-    .slice(0, max)
+    .slice(0, 3)
     .map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message));
   const remaining = issues.length - shown.length;
   return remaining > 0 ? `${shown.join('; ')} (+${remaining} more)` : shown.join('; ');
@@ -403,9 +364,10 @@ export function formatValidationIssues(
 // ===== Custom mode normalization (lenient / storage read) =====
 
 function sanitizeParams(
-  catalog: EnhancementEffect,
+  descriptor: EffectDescriptor,
   rawParams: unknown,
 ): Record<string, number> | undefined {
+  const catalog = descriptorToCatalogEffect(descriptor);
   if (!catalog.params) {
     if (rawParams !== undefined && rawParams !== null) {
       warn(`Ignoring params for effect ${catalog.className} which exposes no parameters.`);
@@ -420,13 +382,12 @@ function sanitizeParams(
     return params;
   }
 
-  const bounds = EFFECT_PARAM_BOUNDS[catalog.className];
   for (const [key, value] of Object.entries(rawParams)) {
     if (!isFiniteNumber(value)) {
       warn(`Ignoring non-numeric param ${catalog.className}.${key}.`);
       continue;
     }
-    const bound = bounds?.[key];
+    const bound = effectParamBound(descriptor, key);
     if (!bound) {
       warn(`Ignoring unknown param ${catalog.className}.${key}.`);
       continue;
@@ -495,8 +456,9 @@ export function sanitizeCustomModes(input: unknown): CustomMode[] {
         return;
       }
 
-      const catalog = descriptorToCatalogEffect(resolution.effect.descriptor);
-      const params = sanitizeParams(catalog, rawEffect.params);
+      const descriptor = resolution.effect.descriptor;
+      const catalog = descriptorToCatalogEffect(descriptor);
+      const params = sanitizeParams(descriptor, rawEffect.params);
       effects.push(params ? { ...catalog, params } : { ...catalog });
     });
 
@@ -556,12 +518,11 @@ export function sanitizeColorGrading(input: unknown): ColorGradingSettings {
     warn('Ignoring non-boolean colorGrading.enabled; using default.');
   }
 
-  for (const key of Object.keys(COLOR_GRADING_BOUNDS) as Array<
-    keyof typeof COLOR_GRADING_BOUNDS
-  >) {
+  for (const key of COLOR_GRADING_KEYS) {
     const raw = input[key];
     if (raw === undefined || raw === null) continue;
-    const bound = COLOR_GRADING_BOUNDS[key];
+    const bound = numericParamBound(COLOR_GRADING_SCHEMA?.[key]);
+    if (!bound) continue;
     if (isFiniteNumber(raw) && raw >= bound.min && raw <= bound.max) {
       result[key] = raw;
     } else {

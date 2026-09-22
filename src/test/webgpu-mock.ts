@@ -16,7 +16,7 @@ import { vi } from 'vitest';
 
 // ─── TypeScript interfaces for mock objects (exported for downstream test annotations) ───
 
-export interface MockGPUAdapter {
+interface MockGPUAdapter {
   limits: { maxBufferSize: number; maxStorageBufferBindingSize: number };
   /** Adapter-supported optional features. Mutable so tests can toggle e.g. 'timestamp-query'. */
   features: Set<string>;
@@ -51,7 +51,7 @@ export interface MockGPUDevice {
   popErrorScope: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUQueue {
+interface MockGPUQueue {
   submit: ReturnType<typeof vi.fn>;
   onSubmittedWorkDone: ReturnType<typeof vi.fn>;
   writeBuffer: ReturnType<typeof vi.fn>;
@@ -59,7 +59,7 @@ export interface MockGPUQueue {
   copyExternalImageToTexture: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUCanvasContext {
+interface MockGPUCanvasContext {
   configure: ReturnType<typeof vi.fn>;
   getCurrentTexture: ReturnType<typeof vi.fn>;
   unconfigure: ReturnType<typeof vi.fn>;
@@ -74,7 +74,7 @@ export interface MockGPUTexture {
   destroy: ReturnType<typeof vi.fn>;
 }
 
-export interface MockGPUBuffer {
+interface MockGPUBuffer {
   size: number;
   usage: number;
   /**
@@ -233,10 +233,6 @@ function parseTextureSize(size: unknown): { width: number; height: number } {
 
 interface InternalMockOptions {
   adapterNull: boolean;
-  deviceLostImmediately: boolean;
-  deviceLostReason: string;
-  adapterFeatures: string[];
-  deviceFeatures: string[];
 }
 
 function buildMockObjects(options: InternalMockOptions): {
@@ -252,10 +248,6 @@ function buildMockObjects(options: InternalMockOptions): {
     deviceLostResolve = resolve;
   });
 
-  if (options.deviceLostImmediately) {
-    deviceLostResolve({ reason: options.deviceLostReason, message: `Device ${options.deviceLostReason}` });
-  }
-
   const deviceLostDeferred = { resolve: deviceLostResolve };
 
   // ── Mock GPUQueue ──
@@ -269,7 +261,7 @@ function buildMockObjects(options: InternalMockOptions): {
 
   // ── Mock GPUDevice ──
   const mockDevice: MockGPUDevice = {
-    features: new Set<string>(options.deviceFeatures),
+    features: new Set<string>(),
     limits: {
       maxTextureDimension2D: 8192,
       maxBufferSize: 268435456,
@@ -342,7 +334,7 @@ function buildMockObjects(options: InternalMockOptions): {
       maxBufferSize: 268435456,
       maxStorageBufferBindingSize: 134217728,
     },
-    features: new Set<string>(options.adapterFeatures),
+    features: new Set<string>(),
     requestDevice: vi.fn().mockResolvedValue(mockDevice),
     requestAdapterInfo: vi.fn().mockResolvedValue({
       vendor: 'mock-vendor',
@@ -374,23 +366,9 @@ function buildMockObjects(options: InternalMockOptions): {
 
 // ─── Main install function ───
 
-export function installGPUMock(
-  opts?: {
-    adapterNull?: boolean;
-    deviceLostImmediately?: boolean;
-    deviceLostReason?: string;
-    /** Seed adapter.features; defaults to an empty set (tests may toggle at any time). */
-    adapterFeatures?: string[];
-    /** Seed device.features; defaults to an empty set (tests may toggle at any time). */
-    deviceFeatures?: string[];
-  }
-): MockGPUObjects {
+export function installGPUMock(opts?: { adapterNull?: boolean }): MockGPUObjects {
   const options: InternalMockOptions = {
     adapterNull: opts?.adapterNull ?? false,
-    deviceLostImmediately: opts?.deviceLostImmediately ?? false,
-    deviceLostReason: opts?.deviceLostReason ?? 'destroyed',
-    adapterFeatures: opts?.adapterFeatures ?? [],
-    deviceFeatures: opts?.deviceFeatures ?? [],
   };
 
   // Save originals
