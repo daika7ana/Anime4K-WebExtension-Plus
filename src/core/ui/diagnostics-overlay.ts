@@ -1156,6 +1156,7 @@ export class DiagnosticsOverlay {
       this.host = null;
       this.shadowRoot = null;
     }
+    this.restorePolicyEl = null;
     this.timingVisible = false;
     this.lastTimingRenderTime = Number.NEGATIVE_INFINITY;
     this.lastSnapshot = null;

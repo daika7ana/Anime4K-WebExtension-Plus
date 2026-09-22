@@ -2,7 +2,7 @@
 
 Manifest V3 browser extension (Chrome + Firefox) that real-time super-resolves
 video via WebGPU, built with TypeScript + webpack + esbuild-loader. Package
-manager is **pnpm** (CI pins pnpm 11.5.3, Node 23/24).
+manager is **pnpm** (CI pins pnpm 12.4.1, Node 24).
 
 ## Commands
 
