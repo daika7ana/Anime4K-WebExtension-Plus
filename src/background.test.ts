@@ -56,7 +56,7 @@ chromeAny.declarativeNetRequest = {
 
 // Import for side effects (listener registration). Must happen after the
 // chrome augmentation above; vi.mock factories remain hoisted. The specifier is
-// stored in a variable so TypeScript's node16 resolver does not demand a `.js`
+// stored in a variable so TypeScript's nodenext resolver does not demand a `.js`
 // extension on the dynamic import.
 const backgroundModuleSpecifier = './background';
 

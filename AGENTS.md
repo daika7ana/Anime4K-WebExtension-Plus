@@ -71,7 +71,7 @@ All effects run through `anime4k-webgpu-async`'s `BackendRegistry` / `AlgorithmB
 
 - Global types are ambient in `src/types.d.ts` (not `types.ts`) and available without imports; it also declares `*.css`.
 - Path aliases (`@`, `@core`, `@core/video|gpu|effects|ui|utils`, `@utils`, `@shaders`) are duplicated in `tsconfig.json` `paths`, `webpack.config.js` `resolve.alias`, and `vitest.config.mts` `resolve.alias` — update all three.
-- `module`/`moduleResolution` are `node20`/`node16`, so dynamic imports of local TS use an explicit `.js` specifier (e.g. `import('@core/engines/registry.js')`); webpack maps it back via `resolve.extensionAlias`. Tests mock that exact `.js` specifier.
+- `module`/`moduleResolution` are `nodenext`, so dynamic imports of local TS use an explicit `.js` specifier (e.g. `import('@core/engines/registry.js')`); webpack maps it back via `resolve.extensionAlias`. Tests mock that exact `.js` specifier.
 - Production builds strip `console.log`/`console.warn` (keep `console.error`), inject `package.json` version into the emitted manifest, and transform the manifest per target (Firefox swaps `background.service_worker` for `background.scripts`).
 
 ## Tests

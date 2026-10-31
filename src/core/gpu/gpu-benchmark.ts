@@ -390,7 +390,7 @@ export async function runEffectChainTest(
     );
 
     if (!cachedBenchmarkRegistry) {
-        // Explicit `.js` specifier (TS node16 dynamic-import resolution); webpack's
+        // Explicit `.js` specifier (TS nodenext dynamic-import resolution); webpack's
         // extensionAlias maps it to the `.ts`. Must stay dynamic so the library
         // is not inlined into the benchmark's module graph.
         const { getBackendRegistry } = await import('@core/engines/registry.js');

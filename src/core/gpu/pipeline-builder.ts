@@ -125,7 +125,7 @@ export async function buildEffectPipelines(params: BuildPipelinesParams): Promis
   // Load the composed backend registry lazily: a static import would inline the
   // monolithic `anime4k-webgpu-async` into the content chunk.
   if (!cachedBackendRegistry) {
-    // Explicit `.js` specifier: TypeScript's node16 dynamic-import resolution
+    // Explicit `.js` specifier: TypeScript's nodenext dynamic-import resolution
     // requires an extension; webpack's extensionAlias maps it to the `.ts`.
     const { getBackendRegistry } = await import('@core/engines/registry.js');
     cachedBackendRegistry = getBackendRegistry();
