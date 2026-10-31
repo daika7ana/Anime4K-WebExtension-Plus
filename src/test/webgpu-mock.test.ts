@@ -140,6 +140,31 @@ describe('WebGPU Mock (smoke tests)', () => {
       expect(range).toBeInstanceOf(ArrayBuffer);
     });
 
+    it('accepts MAP_READ combined only with COPY_DST', async () => {
+      const device = await getDevice();
+      const usage = (globalThis as any).GPUBufferUsage;
+      const buf = device.createBuffer({ size: 16, usage: usage.MAP_READ | usage.COPY_DST });
+      expect(buf.invalid).toBe(false);
+      // A valid buffer's mapAsync stays pending until settled; it must not reject.
+      expect(buf.mapAsync(1)).toBeInstanceOf(Promise);
+    });
+
+    it('models MAP_READ + forbidden flag as an invalid, asynchronously-failing buffer', async () => {
+      const device = await getDevice();
+      const usage = (globalThis as any).GPUBufferUsage;
+      const buf = device.createBuffer({ size: 16, usage: usage.MAP_READ | usage.COPY_SRC });
+      expect(buf.invalid).toBe(true);
+      await expect(buf.mapAsync(1)).rejects.toThrow(/invalid buffer/);
+    });
+
+    it('models MAP_READ + QUERY_RESOLVE as invalid without throwing at createBuffer', async () => {
+      const device = await getDevice();
+      const usage = (globalThis as any).GPUBufferUsage;
+      const buf = device.createBuffer({ size: 16, usage: usage.MAP_READ | usage.QUERY_RESOLVE });
+      expect(buf.invalid).toBe(true);
+      await expect(buf.mapAsync(1)).rejects.toThrow(/invalid buffer/);
+    });
+
     it('createShaderModule returns opaque shader object', async () => {
       const device = await getDevice();
       const mod = device.createShaderModule({ code: 'fn main() {}', label: 'test-shader' });
@@ -262,11 +287,12 @@ describe('WebGPU Mock (smoke tests)', () => {
       expect(typeof pass.setScissorRect).toBe('function');
     });
 
-    it('has copyTextureToTexture / copyBufferToTexture', async () => {
+    it('has copyTextureToTexture / copyBufferToTexture / copyBufferToBuffer', async () => {
       const device = await getDevice();
       const encoder = device.createCommandEncoder();
       expect(typeof encoder.copyTextureToTexture).toBe('function');
       expect(typeof encoder.copyBufferToTexture).toBe('function');
+      expect(typeof encoder.copyBufferToBuffer).toBe('function');
     });
   });
 

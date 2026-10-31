@@ -5,11 +5,11 @@ export class Sidebar {
   private menu: HTMLElement;
   private contentSections: NodeListOf<HTMLElement>;
 
-  constructor(sidebarId = 'sidebar', toggleButtonId = 'sidebar-toggle', overlayId = 'sidebar-overlay', menuId = 'sidebar-menu') {
-    this.sidebar = document.getElementById(sidebarId) as HTMLElement;
-    this.toggleButton = document.getElementById(toggleButtonId) as HTMLButtonElement;
-    this.overlay = document.getElementById(overlayId) as HTMLElement;
-    this.menu = document.getElementById(menuId) as HTMLElement;
+  constructor() {
+    this.sidebar = document.getElementById('sidebar') as HTMLElement;
+    this.toggleButton = document.getElementById('sidebar-toggle') as HTMLButtonElement;
+    this.overlay = document.getElementById('sidebar-overlay') as HTMLElement;
+    this.menu = document.getElementById('sidebar-menu') as HTMLElement;
     this.contentSections = document.querySelectorAll('.content-section');
 
     if (!this.sidebar || !this.toggleButton || !this.overlay || !this.menu) {
@@ -26,11 +26,6 @@ export class Sidebar {
   public toggle(): void {
     this.sidebar.classList.toggle('open');
     this.overlay.classList.toggle('active');
-  }
-
-  public open(): void {
-    this.sidebar.classList.add('open');
-    this.overlay.classList.add('active');
   }
 
   public close(): void {

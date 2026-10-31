@@ -105,6 +105,35 @@ describe('CAS', () => {
     });
   });
 
+  describe('shader param propagation', () => {
+    it('binds the same params buffer that receives the sharpness uniform write', () => {
+      new CAS({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      const entries = mockDevice.createBindGroup.mock.calls[0]?.[0]?.entries as any[];
+      const paramsEntry = entries.find((e) => e.binding === 2);
+
+      expect(paramsEntry).toBeDefined();
+      expect(paramsEntry.resource.buffer).toBe(paramsBuffer);
+    });
+
+    it('routes an updated sharpness value to the shader-bound params buffer', () => {
+      const cas = new CAS({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      vi.clearAllMocks();
+
+      cas.updateParam('sharpness', 0.9);
+
+      expect(mockDevice.queue.writeBuffer).toHaveBeenCalledWith(
+        paramsBuffer,
+        0,
+        expect.any(Float32Array),
+      );
+      const writtenData = mockDevice.queue.writeBuffer.mock.calls[0]?.[2] as Float32Array;
+      expect(writtenData[0]).toBeCloseTo(0.9, 5);
+    });
+  });
+
   describe('updateParam', () => {
     it('updates sharpness within range [0, 1]', () => {
       const cas = new CAS({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });

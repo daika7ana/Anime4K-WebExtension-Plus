@@ -5,7 +5,7 @@
  * and provides add/import/export actions.
  */
 import { getSettings, saveSettings } from '@utils/settings';
-import { validateRulePattern, removeWhitelistRule, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
+import { normalizeRulePattern, validateRulePattern, removeWhitelistRules, updateWhitelistRule, addWhitelistRule } from '@utils/whitelist';
 import type { WhitelistRule } from '@/types';
 import { downloadJSON, openFile } from './import-export';
 import { t } from '@utils/i18n';
@@ -20,11 +20,15 @@ export function initWhitelistPanel(
   exportBtn: HTMLButtonElement,
   importBtn: HTMLButtonElement,
   autoEnableToggle: HTMLInputElement,
+  autoEnableSettleInput: HTMLInputElement,
+  whitelistEnabledToggle: HTMLInputElement,
 ): { render(): void } {
 
   function render() {
     const state = ctx.getState();
+    whitelistEnabledToggle.checked = state.whitelistEnabled;
     autoEnableToggle.checked = state.autoEnableOnWhitelist;
+    autoEnableSettleInput.value = String(state.autoEnableSettleMs);
     rulesContainer.textContent = ''; // Clear existing rules
     state.whitelist.forEach((rule) => {
       const row = document.createElement('tr');
@@ -35,10 +39,11 @@ export function initWhitelistPanel(
       patternInput.value = rule.pattern;
       patternInput.className = 'pattern-input';
       patternInput.addEventListener('change', async (e) => {
-        const newPattern = (e.target as HTMLInputElement).value;
+        const newPattern = normalizeRulePattern((e.target as HTMLInputElement).value);
         if (validateRulePattern(newPattern)) {
           await updateWhitelistRule(rule.pattern, newPattern);
           rule.pattern = newPattern; // Update state
+          (e.target as HTMLInputElement).value = newPattern;
         } else {
           showToast(t('invalidPattern', 'Invalid pattern format'), 'error');
           (e.target as HTMLInputElement).value = rule.pattern;
@@ -69,7 +74,7 @@ export function initWhitelistPanel(
       deleteBtn.textContent = t('delete', 'Delete');
       deleteBtn.className = 'action-btn';
       deleteBtn.addEventListener('click', async () => {
-        await removeWhitelistRule(rule.pattern);
+        await removeWhitelistRules([rule.pattern]);
         state.whitelist = state.whitelist.filter(r => r.pattern !== rule.pattern);
         render();
       });
@@ -82,12 +87,31 @@ export function initWhitelistPanel(
     });
   }
 
+  // --- Enable Whitelist Mode Toggle ---
+  whitelistEnabledToggle.addEventListener('change', async (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    ctx.getState().whitelistEnabled = enabled;
+    await saveSettings({ whitelistEnabled: enabled });
+    ctx.notifyUpdate();
+  });
+
   // --- Auto-enable on Whitelist Toggle ---
   autoEnableToggle.addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;
     ctx.getState().autoEnableOnWhitelist = enabled;
     await saveSettings({ autoEnableOnWhitelist: enabled });
     ctx.notifyUpdate();
+  });
+
+  // --- Auto-enable Delay (ms) ---
+  // Only affects future auto-enables, so it must not trigger a reapply via
+  // ctx.notifyUpdate().
+  autoEnableSettleInput.addEventListener('change', async (e) => {
+    const raw = Number((e.target as HTMLInputElement).value);
+    const value = Number.isNaN(raw) ? 300 : Math.min(Math.max(raw, 0), 10000);
+    autoEnableSettleInput.value = String(value);
+    ctx.getState().autoEnableSettleMs = value;
+    await saveSettings({ autoEnableSettleMs: value });
   });
 
   // --- Add Rule ---
@@ -116,17 +140,28 @@ export function initWhitelistPanel(
       const rules = JSON.parse(json);
       if (!Array.isArray(rules)) throw new Error('Invalid format: not an array');
 
-      const validRules: WhitelistRule[] = [];
+      const validated: WhitelistRule[] = [];
       for (const rule of rules) {
-        if (typeof rule === 'object' && rule.pattern && typeof rule.pattern === 'string' && typeof rule.enabled === 'boolean' && validateRulePattern(rule.pattern)) {
-          validRules.push(rule as WhitelistRule);
-        } else {
-          console.warn('Skipping invalid whitelist rule on import:', rule);
+        if (typeof rule !== 'object' || rule === null ||
+            typeof rule.pattern !== 'string' || typeof rule.enabled !== 'boolean') {
+          // Reject the whole file so a typo cannot half-import.
+          throw new Error('Invalid whitelist rule');
         }
+        const pattern = normalizeRulePattern(rule.pattern);
+        if (!validateRulePattern(pattern)) {
+          throw new Error('Invalid whitelist rule');
+        }
+        validated.push({ pattern, enabled: rule.enabled });
       }
 
-      ctx.getState().whitelist = validRules;
-      await saveSettings({ whitelist: ctx.getState().whitelist });
+      // Merge with the existing rules; re-importing a file must not drop rules.
+      const whitelist = [...ctx.getState().whitelist];
+      for (const rule of validated) {
+        if (!whitelist.some(r => r.pattern === rule.pattern)) whitelist.push(rule);
+      }
+
+      ctx.getState().whitelist = whitelist;
+      await saveSettings({ whitelist });
       render();
       showToast(t('importSuccess', 'Import successful'), 'success');
     } catch (error) {

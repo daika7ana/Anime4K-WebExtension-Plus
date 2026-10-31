@@ -28,12 +28,6 @@ function cleanupDom(): void {
   document.body.innerHTML = '';
 }
 
-/**
- * Stub-able mock for document.elementFromPoint.
- * jsdom does not expose this method by default.
- */
-let elementFromPointMock: any;
-
 describe('OverlayManager', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -51,10 +45,6 @@ describe('OverlayManager', () => {
       return setTimeout(() => cb(performance.now()), 0) as unknown as number;
     }));
     vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => clearTimeout(id)));
-
-    // elementFromPoint is not defined in jsdom — polyfill it as a mock.
-    elementFromPointMock = vi.fn((_x: number, _y: number) => null) as any;
-    (document as any).elementFromPoint = elementFromPointMock;
   });
 
   afterEach(() => {
@@ -65,13 +55,14 @@ describe('OverlayManager', () => {
 
   // ── create() ──────────────────────────────────────────────────
   describe('create()', () => {
-    it('creates a host element as a sibling of the video', () => {
+    it('appends the host to body', () => {
       const video = createTestVideo();
       const manager = OverlayManager.create(video);
 
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]');
+      const host = document.body.querySelector(':scope > [data-anime4k-overlay-host]');
       expect(host).toBeDefined();
       expect(host?.tagName).toBe('DIV');
+      expect(video.parentElement?.querySelector('[data-anime4k-overlay-host]')).toBeNull();
 
       manager.destroy();
     });
@@ -86,13 +77,15 @@ describe('OverlayManager', () => {
 
       const removeSpy = vi.spyOn(orphan, 'remove');
 
-      OverlayManager.create(video);
+      const manager = OverlayManager.create(video);
 
       expect(removeSpy).toHaveBeenCalled();
+      manager.destroy();
     });
 
-    it('removes orphaned overlay hosts from body on create', () => {
-      // Create a body-attached orphan
+    it('leaves body-attached hosts alone on create', () => {
+      // Another video's live overlay is a body child; creating this one must
+      // not remove it (both hosts share the same parent).
       const orphan = document.createElement('div');
       orphan.setAttribute('data-anime4k-overlay-host', '');
       document.body.appendChild(orphan);
@@ -100,9 +93,10 @@ describe('OverlayManager', () => {
       const removeSpy = vi.spyOn(orphan, 'remove');
 
       const video = createTestVideo();
-      OverlayManager.create(video);
+      const manager = OverlayManager.create(video);
 
-      expect(removeSpy).toHaveBeenCalled();
+      expect(removeSpy).not.toHaveBeenCalled();
+      manager.destroy();
     });
 
     it('returns an OverlayManager instance', () => {
@@ -216,6 +210,8 @@ describe('OverlayManager', () => {
 
       expect(video.parentElement?.querySelector('canvas')).toBeNull();
       expect(video.style.opacity).toBe('');
+
+      manager.destroy();
     });
   });
 
@@ -225,12 +221,12 @@ describe('OverlayManager', () => {
       const video = createTestVideo();
       const manager = OverlayManager.create(video);
 
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]');
+      const host = document.body.querySelector(':scope > [data-anime4k-overlay-host]');
       expect(host).toBeDefined();
 
       manager.detach();
 
-      expect(video.parentElement?.querySelector('[data-anime4k-overlay-host]')).toBeNull();
+      expect(document.body.querySelector(':scope > [data-anime4k-overlay-host]')).toBeNull();
       manager.destroy();
     });
 
@@ -245,6 +241,23 @@ describe('OverlayManager', () => {
       expect(video.parentElement?.querySelector('canvas')).toBeNull();
       manager.destroy();
     });
+
+    it('restores the video opacity and removes the canvas after showCanvas()', () => {
+      const video = createTestVideo();
+      const manager = OverlayManager.create(video);
+
+      manager.showCanvas();
+      expect(video.style.opacity).toBe('0');
+      expect(video.parentElement?.querySelector('canvas')).toBeDefined();
+
+      manager.detach();
+
+      // Without restoring opacity, the video would stay hidden with no canvas.
+      expect(video.style.opacity).toBe('');
+      expect(video.parentElement?.querySelector('canvas')).toBeNull();
+
+      manager.destroy();
+    });
   });
 
   // ── destroy() ─────────────────────────────────────────────────
@@ -255,7 +268,7 @@ describe('OverlayManager', () => {
 
       manager.destroy();
 
-      expect(video.parentElement?.querySelector('[data-anime4k-overlay-host]')).toBeNull();
+      expect(document.body.querySelector(':scope > [data-anime4k-overlay-host]')).toBeNull();
     });
 
     it('is idempotent — safe to call destroy twice', () => {
@@ -299,27 +312,21 @@ describe('OverlayManager', () => {
       expect(video.parentElement?.querySelector('canvas')).toBeNull();
     });
 
-    it('removes body-strategy event listeners on destroy', () => {
+    it('removes the global event listeners on destroy', () => {
       const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
       const video = createTestVideo();
-
-      // Force body strategy by making elementFromPoint return something not the button
-      elementFromPointMock.mockReturnValue(document.createElement('div'));
       const manager = OverlayManager.create(video);
-
-      // Advance timers so the strategy detection timeout fires
-      vi.advanceTimersByTime(200);
 
       manager.destroy();
 
-      // Should have removed the resize listener when on body strategy
       expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function), true);
     });
   });
 
   // ── reattach() ────────────────────────────────────────────────
   describe('reattach()', () => {
-    it('re-inserts the host into the DOM under the new video', () => {
+    it('re-attaches the host to body for the new video', () => {
       const video = createTestVideo();
       const manager = OverlayManager.create(video);
       manager.detach();
@@ -337,7 +344,8 @@ describe('OverlayManager', () => {
 
       manager.reattach(video2);
 
-      expect(parent2.querySelector('[data-anime4k-overlay-host]')).toBeDefined();
+      expect(document.body.querySelector(':scope > [data-anime4k-overlay-host]')).toBeDefined();
+      expect(parent2.querySelector('[data-anime4k-overlay-host]')).toBeNull();
       manager.destroy();
     });
 
@@ -363,55 +371,33 @@ describe('OverlayManager', () => {
     });
   });
 
-  // ── Body attachment strategy ──────────────────────────────────
-  describe('body attachment strategy', () => {
-    it('switches to body strategy when button is obscured', () => {
+  // ── Body attachment ───────────────────────────────────────────
+  describe('body attachment', () => {
+    it('keeps the host click-through', () => {
       const video = createTestVideo();
-      // elementFromPoint returns something not the button → obscured → switch to body
-      elementFromPointMock.mockReturnValue(document.createElement('div'));
-
       const manager = OverlayManager.create(video);
 
-      // Advance past the 100ms detection timeout
-      vi.advanceTimersByTime(200);
-
-      // Host should now be a direct child of body (body strategy)
-      const hostOnBody = document.body.querySelector(':scope > [data-anime4k-overlay-host]');
-      expect(hostOnBody).toBeDefined();
+      const host = document.body.querySelector(':scope > [data-anime4k-overlay-host]') as HTMLElement;
+      expect(host.style.pointerEvents).toBe('none');
+      expect(host.style.position).toBe('absolute');
 
       manager.destroy();
     });
 
-    it('host is initially a sibling of the video (before strategy detection)', () => {
+    it('debounces scroll events into a single position update', () => {
       const video = createTestVideo();
       const manager = OverlayManager.create(video);
+      const proto = OverlayManager.prototype as unknown as { updatePosition: () => void };
+      const updateSpy = vi.spyOn(proto, 'updatePosition');
 
-      // Before the 100ms strategy-detection timeout fires, the host
-      // should be a direct sibling of the video, not on body
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]');
-      expect(host).toBeDefined();
-      expect(host?.tagName).toBe('DIV');
-      // Use :scope > to check only direct children of body (host is a grandchild)
-      expect(document.body.querySelector(':scope > [data-anime4k-overlay-host]')).toBeNull();
+      window.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new Event('scroll'));
 
-      manager.destroy();
-    });
-
-    it('stays on sibling strategy when button is visible at point', () => {
-      const video = createTestVideo();
-      const manager = OverlayManager.create(video);
-
-      // Make elementFromPoint return the button so strategy stays sibling
-      const button = manager.getButton();
-      elementFromPointMock.mockImplementation(() => button);
-
-      // Fire the 100ms strategy detection timeout
-      vi.advanceTimersByTime(200);
-
-      // Host should still be a sibling of the video, NOT a direct child of body
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]');
-      expect(host).toBeDefined();
-      expect(document.body.querySelector(':scope > [data-anime4k-overlay-host]')).toBeNull();
+      // Coalesced into one rAF callback instead of running per scroll event.
+      expect(updateSpy).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(0);
+      expect(updateSpy).toHaveBeenCalledTimes(1);
 
       manager.destroy();
     });
@@ -419,11 +405,9 @@ describe('OverlayManager', () => {
 
   // ── Fullscreen handling ───────────────────────────────────────
   describe('fullscreen handling', () => {
-    it('moves host into fullscreen element when video goes fullscreen (body strategy)', () => {
+    it('moves host into fullscreen element when video goes fullscreen', () => {
       const video = createTestVideo();
-      elementFromPointMock.mockReturnValue(document.createElement('div'));
       const manager = OverlayManager.create(video);
-      vi.advanceTimersByTime(200); // switch to body strategy
 
       // Create a fullscreen container
       const fsContainer = document.createElement('div');
@@ -486,7 +470,7 @@ describe('OverlayManager', () => {
 
       const manager = OverlayManager.create(video);
 
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]') as HTMLElement;
+      const host = document.body.querySelector(':scope > [data-anime4k-overlay-host]') as HTMLElement;
       expect(host.style.display).toBe('none');
 
       manager.destroy();
@@ -496,7 +480,7 @@ describe('OverlayManager', () => {
       const video = createTestVideo();
       const manager = OverlayManager.create(video);
 
-      const host = video.parentElement?.querySelector('[data-anime4k-overlay-host]') as HTMLElement;
+      const host = document.body.querySelector(':scope > [data-anime4k-overlay-host]') as HTMLElement;
       expect(host.style.display).not.toBe('none');
 
       manager.destroy();

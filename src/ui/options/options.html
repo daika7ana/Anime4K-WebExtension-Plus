@@ -202,6 +202,19 @@
               </label>
             </div>
           </div>
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="diagnostics-detail-select" data-i18n="diagnosticsDetail">Detail level</label>
+              <p class="setting-description" data-i18n="diagnosticsDetailDesc">Choose how much detail the diagnostics overlay shows.</p>
+            </div>
+            <div class="setting-control">
+              <select id="diagnostics-detail-select">
+                <option value="auto" data-i18n="diagnosticsDetailAuto">Auto (compact on small videos)</option>
+                <option value="compact" data-i18n="diagnosticsDetailCompact">Compact</option>
+                <option value="expanded" data-i18n="diagnosticsDetailExpanded">Expanded</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="card">
@@ -240,6 +253,24 @@
                 <option value="balanced" data-i18n="tierBalanced">Balanced</option>
                 <option value="quality" data-i18n="tierQuality">Quality</option>
                 <option value="ultra" data-i18n="tierUltra">Ultra</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Restore policy (local): controls which scale-1 restore passes are emitted -->
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="restore-policy-select" data-i18n="restorePolicyLabel">Restore policy</label>
+              <p class="setting-description" data-i18n="restorePolicyDesc">
+                Controls which restore passes the chain keeps. "Off" runs the full chain (full enhancement); "Gate" keeps every restore and adapts it to local contrast; "Trailing" skips restores after the final Downscale; "Leading" skips restores before the first upscaler.
+              </p>
+            </div>
+            <div class="setting-control">
+              <select id="restore-policy-select" class="theme-select">
+                <option value="off" data-i18n="restorePolicyOff">Off — Full chain</option>
+                <option value="gate" selected data-i18n="restorePolicyGate">Gate — Adaptive restores</option>
+                <option value="trailing" data-i18n="restorePolicyTrailing">Trailing — Skip restores after final Downscale</option>
+                <option value="leading" data-i18n="restorePolicyLeading">Leading — Skip restores before first upscaler</option>
               </select>
             </div>
           </div>
@@ -295,8 +326,17 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header">
-            <h2 class="card-title" data-i18n="autoEnableOnWhitelist">Auto-enable on Whitelisted Sites</h2>
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="whitelist-enabled-toggle" data-i18n="whitelistEnable">Enable Whitelist Mode</label>
+              <p class="setting-description" data-i18n="whitelistEnableDesc">When enabled, only sites and pages on the whitelist are enhanced.</p>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input type="checkbox" id="whitelist-enabled-toggle">
+                <span class="slider round"></span>
+              </label>
+            </div>
           </div>
           <div class="setting-item">
             <div class="setting-label">
@@ -308,6 +348,15 @@
                 <input type="checkbox" id="auto-enable-toggle">
                 <span class="slider round"></span>
               </label>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div class="setting-label">
+              <label for="auto-enable-settle-ms" data-i18n="autoEnableSettleMs">Auto-enable Delay (ms)</label>
+              <p class="setting-description" data-i18n="autoEnableSettleMsDesc">Milliseconds to wait before auto-enabling a video, so transient players are skipped. Set to 0 to disable the delay.</p>
+            </div>
+            <div class="setting-control">
+              <input type="number" id="auto-enable-settle-ms" min="0" max="10000" step="50" value="300">
             </div>
           </div>
         </div>

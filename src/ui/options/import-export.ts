@@ -21,17 +21,14 @@ export function openFile(): Promise<string> {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          resolve(event.target?.result as string);
-        };
-        reader.onerror = (error) => {
+        try {
+          resolve(await file.text());
+        } catch (error) {
           reject(error);
-        };
-        reader.readAsText(file);
+        }
       } else {
         reject(new Error('No file selected'));
       }

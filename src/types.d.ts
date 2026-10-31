@@ -1,5 +1,6 @@
 // ===== Anime4K Library Types =====
 import type { Anime4KPipeline } from 'anime4k-webgpu-async';
+import type { ProfilerSnapshot } from './core/gpu/gpu-timestamp-profiler';
 
 // ===== CSS Module Declarations =====
 declare module "*.css";
@@ -21,6 +22,8 @@ interface EnhancementEffect {
   id: string;       // Unique ID, e.g., "anime4k/Upscale/CNNx2VL"
   name: string;     // Display name, e.g., "Upscale CNNx2VL"
   className: string; // Class name used for instantiation in code, e.g., "CNNx2VL"
+  backendId?: string; // Engine backend id, e.g. "anime4k" | "core"; absent ⇒ resolve by id/className
+  key?: string;       // Backend-local effect key; defaults to className
   params?: Record<string, number>; // Effect parameter configuration (all numeric values)
   upscaleFactor?: number; // Upscale factor of the effect, e.g. 2 means 2x upscale
 }
@@ -43,11 +46,6 @@ interface CustomMode {
 
 // Unified enhancement mode type
 type EnhancementMode = BuiltInMode | CustomMode;
-
-// ===== Effect Class Name (for param-slider registry) =====
-// Class names of effects that expose a user-tunable param.
-// Kept in sync with PARAM_REGISTRY keys — TypeScript will flag any drift.
-type EffectClassName = 'CAS' | 'DoG' | 'BilateralMean' | 'Debanding';
 
 // ===== Param Slider Configuration (for options UI) =====
 interface ParamSliderConfig {
@@ -75,12 +73,6 @@ interface EffectClassDescriptor {
 interface DestroyablePipeline extends Anime4KPipeline {
   destroy?(): void;
 }
-
-/** Constructor signature for Anime4K library effect classes. */
-type Anime4KClassCtor = new (descriptor: EffectClassDescriptor) => DestroyablePipeline;
-
-/** The anime4k-webgpu-async module viewed as a className -> constructor map. */
-type Anime4KClassMap = Record<string, Anime4KClassCtor>;
 
 /** Shape of pipeline objects traversed by safeDestroy -- expose destroy + optional children. */
 interface DisposablePipeline {
@@ -113,16 +105,6 @@ declare global {
   }
 }
 
-// ===== Custom Effect Descriptor (for renderer custom-effect registry) =====
-interface CustomEffectDescriptor {
-  EffectClass: new (descriptor: EffectClassDescriptor) => DestroyablePipeline;
-  getDescriptor: (
-    device: GPUDevice,
-    inputTexture: GPUTexture,
-    params?: Record<string, number>,
-  ) => EffectClassDescriptor;
-}
-
 // ===== GPU Benchmark Result Interface =====
 interface GPUBenchmarkResult {
   tier: PerformanceTier;
@@ -152,9 +134,27 @@ interface SyncedSettings {
   customModes: CustomMode[];
   enableCrossOriginFix: boolean;
   autoEnableOnWhitelist: boolean;
+  autoEnableSettleMs: number;
   enableHotkey: boolean;
   colorGrading: ColorGradingSettings;
 }
+
+/**
+ * How much detail the on-video diagnostics HUD renders.
+ * - `auto`     — expanded, but compact automatically on small video rects;
+ * - `compact`  — minimal always-on HUD (FPS / frame budget / GPU share);
+ * - `expanded` — full metric block plus the per-pass GPU timing table.
+ */
+type DiagnosticsDetailMode = 'auto' | 'compact' | 'expanded';
+
+/**
+ * Restore-pass policy for the emitted effect chain.
+ * - `off`      — keep every restore (full V1 chain), no gating;
+ * - `gate`     — keep every restore, then gate each one by local luma;
+ * - `trailing` — drop restores after the final Downscale (no gating);
+ * - `leading`  — drop restores before the first retained upscaler.
+ */
+type RestorePolicy = 'off' | 'gate' | 'trailing' | 'leading';
 
 // ===== Local-only Settings (storage.local) =====
 interface LocalSettings {
@@ -163,6 +163,14 @@ interface LocalSettings {
 
   hasCompletedOnboarding: boolean;
   showDiagnostics: boolean;
+  /** Diagnostics HUD detail level; defaults to `'auto'`. */
+  diagnosticsDetail?: DiagnosticsDetailMode;
+  /**
+   * Restore-pass policy applied to all modes, built-in and custom. Defaults to
+   * `'gate'` (keep every restore, local-luma gating each one) for
+   * fresh/normalized-missing values. Persisted locally.
+   */
+  restorePolicy?: RestorePolicy;
 }
 
 // ===== Runtime-merged Full Settings =====
@@ -211,10 +219,28 @@ interface RendererOptions {
   onError?: (error: Error) => void;
   /** Callback function invoked when the first frame is successfully rendered */
   onFirstFrameRendered?: () => void;
-  /** Callback invoked after each successfully rendered frame with the frame time in ms */
-  onFrameRendered?: (frameTime: number) => void;
+  /**
+   * Callback invoked after each successfully rendered frame with the frame time
+   * in ms, when GPU timings are enabled the latest profiler snapshot, and the
+   * number of GPU pipeline stages that were built/executed for the frame
+   * (excluding the final blit).
+   */
+  onFrameRendered?: (frameTime: number, profiler?: ProfilerSnapshot | null, pipelineCount?: number) => void;
   /** Initialization progress callback function */
   onProgress?: (stage: string | null, current?: number, total?: number) => void;
+  /**
+   * Enables GPU timestamp profiling via the optional `timestamp-query` feature.
+   * Profiling is silently skipped when the feature is unavailable.
+   */
+  enableGpuTimings?: boolean;
+  /**
+   * Restore-pass policy. Applies to all modes: `'gate'` (default) keeps every
+   * restore and wraps each one in the local-luma gate; `'off'` keeps every
+   * restore without gating; `'trailing'` drops restores after the target-exact
+   * final Downscale; `'leading'` drops restores before the first retained
+   * upscaler.
+   */
+  restorePolicy?: RestorePolicy;
 }
 
 // Export interfaces for use by other modules
@@ -224,6 +250,8 @@ export {
   Anime4KWebExtSettings,
   SyncedSettings,
   LocalSettings,
+  DiagnosticsDetailMode,
+  RestorePolicy,
   ColorGradingSettings,
   Dimensions,
   WhitelistRule,
@@ -232,13 +260,9 @@ export {
   BuiltInMode,
   CustomMode,
   GPUBenchmarkResult,
-  EffectClassName,
   ParamSliderConfig,
-  CustomEffectDescriptor,
   EffectClassDescriptor,
   DestroyablePipeline,
-  Anime4KClassCtor,
-  Anime4KClassMap,
   DisposablePipeline,
   GPUAdapterInfo,
   GPUAdapterWithInfo,

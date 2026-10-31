@@ -119,6 +119,62 @@ describe('ColorAdjust', () => {
     });
   });
 
+  describe('shader param propagation', () => {
+    it('binds paramsBuffer at binding 2 and params2Buffer at binding 3', () => {
+      new ColorAdjust({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      const params2Buffer = (mockDevice.createBuffer as any).mock.results[1]?.value;
+      const entries = mockDevice.createBindGroup.mock.calls[0]?.[0]?.entries as any[];
+
+      expect(entries.find((e) => e.binding === 2)?.resource.buffer).toBe(paramsBuffer);
+      expect(entries.find((e) => e.binding === 3)?.resource.buffer).toBe(params2Buffer);
+    });
+
+    it('routes the configured saturation and exposure to the shader-bound secondary buffer', () => {
+      new ColorAdjust({
+        device: mockDevice as unknown as GPUDevice,
+        inputTexture: inputTexture as unknown as GPUTexture,
+        saturation: 1.4,
+        exposure: -0.7,
+      });
+
+      const params2Buffer = (mockDevice.createBuffer as any).mock.results[1]?.value;
+      const writeCall = mockDevice.queue.writeBuffer.mock.calls.find((c) => c[0] === params2Buffer);
+
+      expect(writeCall).toBeDefined();
+      const writtenData = writeCall?.[2] as Float32Array;
+      expect(writtenData[0]).toBeCloseTo(1.4, 5);
+      expect(writtenData[1]).toBeCloseTo(-0.7, 5);
+    });
+
+    it('routes a runtime saturation update to the shader-bound secondary buffer', () => {
+      const ca = new ColorAdjust({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+      const params2Buffer = (mockDevice.createBuffer as any).mock.results[1]?.value;
+      vi.clearAllMocks();
+
+      ca.updateParam('saturation', 0.6);
+
+      const writeCall = mockDevice.queue.writeBuffer.mock.calls.find((c) => c[0] === params2Buffer);
+      expect(writeCall).toBeDefined();
+      const writtenData = writeCall?.[2] as Float32Array;
+      expect(writtenData[0]).toBeCloseTo(0.6, 5);
+    });
+
+    it('routes a runtime brightness update to the shader-bound primary buffer', () => {
+      const ca = new ColorAdjust({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });
+      const paramsBuffer = (mockDevice.createBuffer as any).mock.results[0]?.value;
+      vi.clearAllMocks();
+
+      ca.updateParam('brightness', 0.25);
+
+      const writeCall = mockDevice.queue.writeBuffer.mock.calls.find((c) => c[0] === paramsBuffer);
+      expect(writeCall).toBeDefined();
+      const writtenData = writeCall?.[2] as Float32Array;
+      expect(writtenData[0]).toBeCloseTo(0.25, 5);
+    });
+  });
+
   describe('updateParam', () => {
     function createColorAdjust() {
       return new ColorAdjust({ device: mockDevice as unknown as GPUDevice, inputTexture: inputTexture as unknown as GPUTexture });

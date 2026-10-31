@@ -14,9 +14,8 @@ export class OverlayManager {
   private canvas?: HTMLCanvasElement;
   private hideButtonTimeout?: number;
 
-  private attachmentStrategy: 'sibling' | 'body' = 'sibling';
-  private boundUpdatePosition!: () => void;
-  private boundHandleFullscreenChange!: () => void;
+  private boundUpdatePosition: () => void;
+  private boundHandleFullscreenChange: () => void;
 
   private resizeObserver: ResizeObserver;
   private mutationObserver: MutationObserver;
@@ -32,20 +31,20 @@ export class OverlayManager {
    * @param video The target video element
    */
   public static create(video: HTMLVideoElement): OverlayManager {
-    // Defensive check: clean up potentially existing old overlay hosts
+    // Defensive check: clean up leftover hosts from an older build that sat
+    // next to the video. Skip when the parent is <body>: hosts live there now,
+    // so every sibling would be another video's live overlay.
     const parent = video.parentElement;
-    if (parent) {
+    if (parent && parent !== document.body) {
       const existingHosts = parent.querySelectorAll(`[${OverlayManager.HOST_MARKER_ATTR}]`);
       existingHosts.forEach(host => {
         console.warn('[Anime4KWebExt] Detected orphaned overlay host, removing:', host);
         host.remove();
       });
     }
-    // Also check for residual hosts using 'body' strategy on body
-    document.querySelectorAll(`body > [${OverlayManager.HOST_MARKER_ATTR}]`).forEach(host => {
-      console.warn('[Anime4KWebExt] Detected orphaned overlay host on body, removing:', host);
-      host.remove();
-    });
+    // No body-wide sweep: hosts live on body now, so it would delete the
+    // overlays of other enhanced videos on the same page. Teardown paths
+    // (detach/destroy) already remove their own host.
 
     return new OverlayManager(video);
   }
@@ -53,13 +52,13 @@ export class OverlayManager {
   private constructor(video: HTMLVideoElement) {
     this.video = video;
 
-    // 1. Create Host element and insert as sibling of the video
+    // 1. Create Host element and attach it to body (viewport-anchored)
     this.host = document.createElement('div');
     this.host.setAttribute(OverlayManager.HOST_MARKER_ATTR, ''); // Add marker attribute for defensive checks
     this.host.style.position = 'absolute';
     this.host.style.pointerEvents = 'none'; // Don't intercept events by default
     this.host.style.zIndex = '2147483646'; // Slightly lower than the button
-    this.video.parentElement?.insertBefore(this.host, this.video);
+    document.body.appendChild(this.host);
 
     // 2. Create Shadow DOM
     this.shadowRoot = this.host.attachShadow({ mode: 'closed' });
@@ -79,11 +78,16 @@ export class OverlayManager {
       attributeFilter: ['style', 'class'],
     });
 
+    // Global listeners: the host is body-attached, so track viewport and
+    // fullscreen changes. All of them re-position through the rAF debounce.
+    this.boundUpdatePosition = this.scheduleUpdatePosition.bind(this);
+    this.boundHandleFullscreenChange = this.handleFullscreenChange.bind(this);
+    window.addEventListener('resize', this.boundUpdatePosition);
+    window.addEventListener('scroll', this.boundUpdatePosition, true);
+    document.addEventListener('fullscreenchange', this.boundHandleFullscreenChange);
+
     // Execute immediately to determine initial position
     this.updatePosition();
-
-    // Delayed detection to ensure initial rendering is complete
-    setTimeout(() => this.detectAndSwitchStrategy(), 100);
   }
 
   /**
@@ -102,38 +106,25 @@ export class OverlayManager {
    * Uniformly update Host and Canvas positions
    */
   private updatePosition(): void {
-    // Hide overlay when video is removed from DOM or not visible
-    if (!this.video.isConnected || (this.video.offsetWidth === 0 && this.video.offsetHeight === 0)) {
+    // Hide overlay when the video or the host itself left the DOM
+    if (!this.host.isConnected || !this.video.isConnected || (this.video.offsetWidth === 0 && this.video.offsetHeight === 0)) {
       this.host.style.display = 'none';
       return;
     }
     this.host.style.display = ''; // Ensure visible
 
     const videoStyle = window.getComputedStyle(this.video);
-    let hostStyles: Record<string, string>;
 
-    if (this.attachmentStrategy === 'body') {
-      // Body strategy: use getBoundingClientRect for viewport-relative position
-      const rect = this.video.getBoundingClientRect();
-      hostStyles = {
-        top: `${rect.top + window.scrollY}px`,
-        left: `${rect.left + window.scrollX}px`,
-        width: `${rect.width}px`,
-        height: `${rect.height}px`,
-        transform: videoStyle.transform,
-        transformOrigin: videoStyle.transformOrigin,
-      };
-    } else {
-      // Sibling strategy: use offsetTop/Left for parent-relative position
-      hostStyles = {
-        top: `${this.video.offsetTop}px`,
-        left: `${this.video.offsetLeft}px`,
-        width: `${this.video.offsetWidth}px`,
-        height: `${this.video.offsetHeight}px`,
-        transform: videoStyle.transform,
-        transformOrigin: videoStyle.transformOrigin,
-      };
-    }
+    // Host is body-attached: use getBoundingClientRect for viewport-relative position
+    const rect = this.video.getBoundingClientRect();
+    const hostStyles: Record<string, string> = {
+      top: `${rect.top + window.scrollY}px`,
+      left: `${rect.left + window.scrollX}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      transform: videoStyle.transform,
+      transformOrigin: videoStyle.transformOrigin,
+    };
 
     // Update Host
     Object.assign(this.host.style, hostStyles);
@@ -165,57 +156,17 @@ export class OverlayManager {
     }
   }
 
-  /**
-   * Detect if the button is obscured and decide whether to switch to 'body' attachment strategy based on the result.
-   */
-  private detectAndSwitchStrategy(): void {
-    // Ensure button is visible for detection
-    const initialOpacity = this.button.style.opacity;
-    this.button.style.opacity = '1';
-
-    const rect = this.button.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const elementAtPoint = document.elementFromPoint(centerX, centerY);
-
-    // Restore original opacity
-    this.button.style.opacity = initialOpacity;
-
-    const isButtonOrChild = this.button.contains(elementAtPoint) || this.button === elementAtPoint;
-
-    if (!isButtonOrChild) {
-      console.log('Anime4K button is obscured. Switching to body attachment strategy.');
-      this.attachmentStrategy = 'body';
-
-      // Move Host to body
-      document.body.appendChild(this.host);
-
-      // Bind context and add global event listeners
-      this.boundUpdatePosition = this.updatePosition.bind(this);
-      this.boundHandleFullscreenChange = this.handleFullscreenChange.bind(this);
-      window.addEventListener('resize', this.boundUpdatePosition);
-      window.addEventListener('scroll', this.boundUpdatePosition, true);
-      document.addEventListener('fullscreenchange', this.boundHandleFullscreenChange);
-
-      // Immediately recalculate position
-      this.updatePosition();
-    }
-  }
-
   private handleFullscreenChange(): void {
     const fullscreenElement = document.fullscreenElement;
     // When video enters fullscreen, move Host into the fullscreen element to ensure it's visible
     if (fullscreenElement && fullscreenElement.contains(this.video)) {
       fullscreenElement.appendChild(this.host);
-    } else {
-      // When exiting fullscreen or video is no longer fullscreen, move Host back to body
-      // Only move back to body when strategy is 'body'
-      if (this.attachmentStrategy === 'body' && this.host.parentElement !== document.body) {
-        document.body.appendChild(this.host);
-      }
+    } else if (this.host.parentElement !== document.body) {
+      // When exiting fullscreen, move Host back to body
+      document.body.appendChild(this.host);
     }
-    // Update position immediately after DOM structure changes
-    this.updatePosition();
+    // Update position after the DOM structure change
+    this.scheduleUpdatePosition();
   }
 
   /**
@@ -283,6 +234,10 @@ export class OverlayManager {
     if (this.canvas) {
       this.canvas.remove();
     }
+    // The canvas that covered the video is gone, so the original video must be
+    // made visible again. Otherwise the element stays at opacity 0 with no
+    // canvas on top, leaving a permanently black video.
+    this.video.style.opacity = '';
   }
 
   /**
@@ -295,13 +250,8 @@ export class OverlayManager {
 
     this.video = newVideo;
 
-    // Re-insert host according to attachment strategy (removed from DOM during detach)
-    if (this.attachmentStrategy === 'sibling') {
-      newVideo.parentElement?.insertBefore(this.host, newVideo);
-    } else {
-      // Body strategy: reattach to body
-      document.body.appendChild(this.host);
-    }
+    // Re-insert host into the DOM (removed during detach)
+    document.body.appendChild(this.host);
 
     if (this.canvas) {
       newVideo.parentElement?.insertBefore(this.canvas, this.video);
@@ -329,12 +279,10 @@ export class OverlayManager {
     this.host.remove();
     this.hideCanvas();
 
-    // If switched to body strategy, remove additional listeners
-    if (this.attachmentStrategy === 'body') {
-      window.removeEventListener('resize', this.boundUpdatePosition);
-      window.removeEventListener('scroll', this.boundUpdatePosition, true);
-      document.removeEventListener('fullscreenchange', this.boundHandleFullscreenChange);
-    }
+    // Global listeners are always registered (host is body-attached)
+    window.removeEventListener('resize', this.boundUpdatePosition);
+    window.removeEventListener('scroll', this.boundUpdatePosition, true);
+    document.removeEventListener('fullscreenchange', this.boundHandleFullscreenChange);
 
     if (this.hideButtonTimeout) {
       clearTimeout(this.hideButtonTimeout);

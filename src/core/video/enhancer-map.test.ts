@@ -6,7 +6,7 @@ import {
   dissociateEnhancer,
   getAllManagedVideos,
   clearAll,
-} from './enhancer-map';
+} from './video-manager';
 
 // Minimal mock VideoEnhancer — just enough to be a Map value
 const mockEnhancer = { destroy: vi.fn(), detach: vi.fn() } as any;
@@ -15,7 +15,7 @@ function makeVideo(): HTMLVideoElement {
   return document.createElement('video') as HTMLVideoElement;
 }
 
-describe('enhancer-map', () => {
+describe('enhancer store (video-manager)', () => {
   // Each test gets a fresh module state via clearAll
   beforeEach(() => {
     clearAll();

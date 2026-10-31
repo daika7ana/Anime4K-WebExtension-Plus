@@ -18,6 +18,18 @@ export function stashEnhancer(enhancer: VideoEnhancer): void {
   console.log(`[Anime4KWebExt] Stashing enhancer for video src: ${videoSrc}`);
   enhancer.detach();
 
+  // If an entry already exists under this key, cancel its stale timer so it can
+  // never destroy the entry we are about to store. A different enhancer means
+  // the previous one is orphaned and must be torn down explicitly.
+  const existing = stash.get(videoSrc);
+  if (existing) {
+    clearTimeout(existing.cleanupTimer);
+    if (existing.enhancer !== enhancer) {
+      stash.delete(videoSrc);
+      existing.enhancer.destroy();
+    }
+  }
+
   const cleanupTimer = window.setTimeout(() => {
     console.log(`[Anime4KWebExt] Stash for ${videoSrc} expired. Cleaning up.`);
     clearStashEntry(videoSrc);

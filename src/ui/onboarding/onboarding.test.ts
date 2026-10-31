@@ -5,9 +5,9 @@ vi.mock('./onboarding.css', () => ({}));
 vi.mock('../common-vars.css', () => ({}));
 
 // Mock theme manager
-const mockGetTheme = vi.fn();
+const mockInitTheme = vi.fn();
 vi.mock('../theme-manager', () => ({
-  themeManager: { getTheme: mockGetTheme },
+  themeManager: { initTheme: mockInitTheme },
 }));
 
 // Mock i18n
@@ -152,6 +152,6 @@ describe('WebGPU fallback onboarding', () => {
     expect(step1.classList.contains('active')).toBe(true);
 
     // Theme should have been initialized
-    expect(mockGetTheme).toHaveBeenCalled();
+    expect(mockInitTheme).toHaveBeenCalled();
   });
 });
