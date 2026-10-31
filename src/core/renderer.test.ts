@@ -23,7 +23,6 @@ const {
 });
 
 vi.mock('@core/gpu/gpu-device-manager', () => ({
-  preWarmGPU: vi.fn(),
   acquireGPUDevice: mockAcquireGPUDevice,
   invalidatePreWarm: mockInvalidatePreWarm,
   getPreWarmer: mockGetPreWarmer,
@@ -774,36 +773,6 @@ describe('Renderer', () => {
       const submitSpy = mock.device.queue.submit as ReturnType<typeof vi.fn>;
       expect(submitSpy).not.toHaveBeenCalled();
       r.destroy();
-    });
-
-    it('resumes rendering when tab becomes visible', async () => {
-      // Start hidden — no GPU commands
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true, writable: true });
-      const r = await createRenderer();
-      const submitSpy = mock.device.queue.submit as ReturnType<typeof vi.fn>;
-      expect(submitSpy).not.toHaveBeenCalled();
-
-      const rvfc = video.requestVideoFrameCallback as ReturnType<typeof vi.fn>;
-      rvfc.mockClear();
-
-      // Simulate tab becoming visible
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true, writable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-
-      // The visibilitychange handler should cancel the pending callback and request an immediate one
-      const cvfc = video.cancelVideoFrameCallback as ReturnType<typeof vi.fn>;
-      expect(cvfc).toHaveBeenCalled();
-      expect(rvfc).toHaveBeenCalled();
-      r.destroy();
-    });
-
-    it('removes visibilitychange listener on destroy', async () => {
-      const r = await createRenderer();
-      r.destroy();
-
-      // After destroy, dispatching visibilitychange should not throw or cause errors
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true, writable: true });
-      expect(() => document.dispatchEvent(new Event('visibilitychange'))).not.toThrow();
     });
   });
 

@@ -91,9 +91,37 @@ for (const target of DIST_TARGETS) {
     }
   }
 
-  const jsFiles = walkFiles(distDir, (abs) => abs.endsWith('.js'));
-  for (const jsFile of jsFiles) {
-    const content = readFileSync(jsFile, 'utf8');
+  // Code-split chunks (e.g. the bundled Anime4K library) are fetched at runtime
+  // by the content script through chrome.runtime.getURL. That only works while
+  // they are web-accessible - deleting this block breaks enhancement with no
+  // visible error, so guard it here.
+  const manifestPath = path.join(distDir, 'manifest.json');
+  if (existsSync(manifestPath)) {
+    let manifest = null;
+    try {
+      manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    } catch (error) {
+      problems.push(`${target}/manifest.json is not valid JSON: ${error.message}`);
+    }
+    const servesJs = (manifest?.web_accessible_resources ?? []).some((entry) =>
+      (entry.resources ?? []).some((pattern) => pattern.endsWith('.js')),
+    );
+    if (manifest && !servesJs) {
+      problems.push(
+        `${target}/manifest.json must keep web_accessible_resources for "*.js": ` +
+          'webpack async chunks are loaded via chrome.runtime.getURL and enhancement fails without it.',
+      );
+    }
+  }
+
+  // Scan every shipped text asset, not just JS: a leaked test hook in HTML or
+  // CSS is just as visible to a page.
+  const scannedFiles = walkFiles(
+    distDir,
+    (abs) => abs.endsWith('.js') || abs.endsWith('.html') || abs.endsWith('.css'),
+  );
+  for (const file of scannedFiles) {
+    const content = readFileSync(file, 'utf8');
     for (const { token, pattern } of FORBIDDEN_TOKEN_PATTERNS) {
       const match = pattern.exec(content);
       if (match) {
@@ -102,12 +130,12 @@ for (const target of DIST_TARGETS) {
         const line = before.split('\n').length;
         const column = index - before.lastIndexOf('\n');
         problems.push(
-          `${path.relative(rootDir, jsFile)}:${line}:${column} contains forbidden test-only token "${token}".`,
+          `${path.relative(rootDir, file)}:${line}:${column} contains forbidden test-only token "${token}".`,
         );
       }
     }
   }
-  console.log(`Scanned ${jsFiles.length} JavaScript file(s) in ${target}/.`);
+  console.log(`Scanned ${scannedFiles.length} bundle file(s) in ${target}/.`);
 }
 
 if (problems.length > 0) {

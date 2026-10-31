@@ -146,6 +146,34 @@ describe('VideoEnhancer', () => {
     });
   });
 
+  describe('cross-origin fix', () => {
+    it('restores the element when the CORS reload fails', async () => {
+      (getSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        selectedModeId: 'builtin-mode-a',
+        enhancementModes: [
+          { id: 'builtin-mode-a', baseMode: 'A', name: 'Mode A', isBuiltIn: true },
+        ],
+        targetResolutionSetting: 'x2',
+        performanceTier: 'balanced',
+        enableCrossOriginFix: true,
+      });
+
+      video.src = 'https://cdn.example.com/clip.mp4';
+      const enhancer = VideoEnhancer.create(video);
+
+      const toggle = enhancer.toggleEnhancement();
+      // Let the proactive check install its listeners, then fail the reload the
+      // way a server without CORS headers does.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      video.dispatchEvent(new Event('error'));
+      await toggle;
+
+      // Attribute undone, so the user's playback is not left broken.
+      expect(video.crossOrigin).toBeNull();
+      enhancer.destroy();
+    });
+  });
+
   describe('toggleEnhancement (off → on)', () => {
     it('sets data-anime4k-applied attribute on video', async () => {
       const enhancer = VideoEnhancer.create(video);

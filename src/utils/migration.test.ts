@@ -17,8 +17,11 @@ function mockStorageApi(): void {
 
   // Promise-returning variants to match how migration.ts consumes them (await, no callback)
   (chrome.storage.sync.get as any).mockImplementation(
-    (_keys: string | string[] | Record<string, unknown>): Promise<Record<string, unknown>> => {
+    (_keys: null | string | string[] | Record<string, unknown>): Promise<Record<string, unknown>> => {
       const out: Record<string, unknown> = {};
+      if (_keys === null) {
+        return Promise.resolve({ ...syncStore });
+      }
       if (Array.isArray(_keys)) {
         for (const k of _keys) {
           if (k in syncStore) out[k] = syncStore[k];
@@ -94,7 +97,10 @@ function expectSyncedDefaults(): void {
   expect(syncStore['selectedModeId']).toBe('builtin-mode-a');
   expect(syncStore['targetResolutionSetting']).toBe('x2');
   expect(syncStore['whitelistEnabled']).toBe(false);
-  expect(syncStore['whitelist']).toEqual([]);
+  expect(syncStore['whitelist']).toEqual([
+    { pattern: 'ani.gamer.com.tw/animeVideo.php', enabled: true },
+    { pattern: 'www.bilibili.com/bangumi/play/*', enabled: true },
+  ]);
   expect(syncStore['customModes']).toEqual([]);
   expect(syncStore['enableCrossOriginFix']).toBe(false);
   expect(syncStore['autoEnableOnWhitelist']).toBe(false);
@@ -422,11 +428,23 @@ describe('ensureLatestConfig', () => {
     expectSyncedDefaults();
     expect(localStore['performanceTier']).toBe('balanced');
     expect(localStore['gpuBenchmarkResult']).toBeNull();
-    expect(localStore['gpuAdapterInfo']).toBeNull();
     expect(localStore['hasCompletedOnboarding']).toBe(false);
     expect(localStore['showDiagnostics']).toBe(false);
     expect(localStore['diagnosticsDetail']).toBe('auto');
     expect(localStore['restorePolicy']).toBe('gate');
+  });
+
+  it('does not re-initialize an unversioned config that holds other keys', async () => {
+    const whitelist = [{ pattern: 'example.com/*', enabled: true }];
+    syncStore['whitelist'] = whitelist;
+    syncStore['whitelistEnabled'] = true;
+
+    await ensureLatestConfig();
+
+    // Existing data survives — only missing keys are backfilled.
+    expect(syncStore['whitelist']).toEqual(whitelist);
+    expect(syncStore['whitelistEnabled']).toBe(true);
+    expect(syncStore['_configVersion']).toBe(4);
   });
 
   // ── Local defaults when performanceTier already set ──────────

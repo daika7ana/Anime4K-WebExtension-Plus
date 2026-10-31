@@ -11,10 +11,25 @@ vi.mock('./messaging', () => ({
   sendMessage: vi.fn(),
 }));
 
-import { validateRulePattern, isUrlWhitelisted, getMatchingWhitelistRules, removeWhitelistRules, addWhitelistRule } from './whitelist';
+import { normalizeRulePattern, validateRulePattern, isUrlWhitelisted, getMatchingWhitelistRules, removeWhitelistRules, addWhitelistRule } from './whitelist';
 import { getSettings, saveSettings } from './settings';
 import { sendMessage } from './messaging';
 import type { WhitelistRule, Anime4KWebExtSettings } from '../types';
+
+describe('normalizeRulePattern', () => {
+  it('strips the scheme and query/fragment a pasted URL carries', () => {
+    expect(normalizeRulePattern('https://www.bilibili.com/bangumi/play/ep1?x=1#t'))
+      .toBe('www.bilibili.com/bangumi/play/ep1');
+  });
+
+  it('leaves an already-valid pattern untouched', () => {
+    expect(normalizeRulePattern('*.example.com/*')).toBe('*.example.com/*');
+  });
+
+  it('produces a value the validator accepts', () => {
+    expect(validateRulePattern(normalizeRulePattern('https://example.com/a?b=1'))).toBe(true);
+  });
+});
 
 describe('validateRulePattern', () => {
   it('returns true for a valid non-empty pattern', () => {
@@ -35,6 +50,29 @@ describe('validateRulePattern', () => {
 
   it('returns true for a single character', () => {
     expect(validateRulePattern('a')).toBe(true);
+  });
+
+  it('rejects a pattern with a URL scheme', () => {
+    expect(validateRulePattern('https://x.com/*')).toBe(false);
+  });
+
+  it('rejects query strings and fragments', () => {
+    expect(validateRulePattern('example.com/page?x=1')).toBe(false);
+    expect(validateRulePattern('example.com/page#anchor')).toBe(false);
+  });
+
+  it('rejects internal whitespace', () => {
+    expect(validateRulePattern('example.com/foo bar')).toBe(false);
+  });
+
+  it('rejects patterns with no literal characters', () => {
+    expect(validateRulePattern('*')).toBe(false);
+    expect(validateRulePattern('*/')).toBe(false);
+  });
+
+  it('accepts the shipped default rules', () => {
+    expect(validateRulePattern('ani.gamer.com.tw/animeVideo.php')).toBe(true);
+    expect(validateRulePattern('www.bilibili.com/bangumi/play/*')).toBe(true);
   });
 });
 

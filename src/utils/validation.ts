@@ -580,10 +580,10 @@ export function validateGPUBenchmarkResult(
     }
     for (const tier of PERFORMANCE_TIERS) {
       const value = scores[tier];
-      if (typeof value !== 'number' || Number.isNaN(value)) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
         issues.push({
           path: `gpuBenchmarkResult.${scoreKey}.${tier}`,
-          message: 'Must be a number',
+          message: 'Must be a finite number',
         });
       }
     }

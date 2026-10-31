@@ -102,12 +102,17 @@ export function initModesPanel(
   }
 
   // Persist custom modes; re-reads state at call time (post-render mutations make snapshots stale).
-  function persistCustomModes(extra?: Partial<import('@/types').Anime4KWebExtSettings>): Promise<void> {
+  async function persistCustomModes(extra?: Partial<import('@/types').Anime4KWebExtSettings>): Promise<void> {
     const state = ctx.getState();
-    return saveSettings({
-      customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
-      ...extra,
-    });
+    try {
+      await saveSettings({
+        customModes: state.enhancementModes.filter(m => !m.isBuiltIn) as CustomMode[],
+        ...extra,
+      });
+    } catch {
+      // storage.sync rejects at the 8 KB per-item quota; the edit stays in the page only.
+      showToast(t('saveFailed', 'Failed to save: extension storage is full'), 'error');
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -136,7 +141,7 @@ export function initModesPanel(
       const card = document.createElement('div');
       card.className = 'mode-card collapsed';
       card.dataset.modeId = mode.id;
-      card.draggable = true;
+      card.draggable = !mode.isBuiltIn;
 
       // --- Drag and drop for mode reordering ---
       card.addEventListener('dragstart', (e) => {
@@ -160,6 +165,9 @@ export function initModesPanel(
       });
 
       card.addEventListener('dragover', (e) => {
+        // Built-in modes always render first and their order is never saved, so
+        // they are not valid drop targets.
+        if (mode.isBuiltIn) return;
         e.preventDefault();
         const target = card;
         if (draggedElement && draggedElement !== target) {
@@ -173,6 +181,8 @@ export function initModesPanel(
         e.preventDefault();
         card.classList.remove('drag-over');
         if (!draggedModeId || draggedModeId === mode.id) return;
+        // Only custom modes reorder: built-ins are rebuilt first on every load.
+        if (mode.isBuiltIn) return;
 
         const fromIndex = settingsState.enhancementModes.findIndex(m => m.id === draggedModeId);
         const toIndex = settingsState.enhancementModes.findIndex(m => m.id === mode.id);
@@ -444,7 +454,11 @@ export function initModesPanel(
           const targetMode = settingsState.enhancementModes.find(m => m.id === mode.id);
 
           if (targetMode && !targetMode.isBuiltIn && effectToAdd) {
-            targetMode.effects.push(effectToAdd);
+            // Clone: AVAILABLE_EFFECTS is module-level shared state.
+            targetMode.effects.push({
+              ...effectToAdd,
+              params: effectToAdd.params ? { ...effectToAdd.params } : undefined,
+            });
             render();
             await persistCustomModes();
             ctx.notifyUpdate(mode.id);

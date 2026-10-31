@@ -121,6 +121,8 @@ export class DiagnosticsOverlay {
   private static readonly MAX_FRAME_TIMES = 60;
   private static readonly MAX_REASONABLE_DELTA_MS = 500;
   private static readonly TIMING_THROTTLE_MS = 250;
+  /** Frame sampling runs on every frame; the HUD DOM is only rewritten this often. */
+  private static readonly RENDER_THROTTLE_MS = 200;
   /** Fallback display budget: one 60 Hz refresh interval. */
   private static readonly DEFAULT_FRAME_BUDGET_MS = 16.667;
   /**
@@ -172,6 +174,7 @@ export class DiagnosticsOverlay {
   private timingFramesEl: HTMLElement | null = null;
   private timingVisible = false;
   private lastTimingRenderTime = Number.NEGATIVE_INFINITY;
+  private lastRenderTime = Number.NEGATIVE_INFINITY;
   private lastSnapshot: ProfilerSnapshot | null = null;
   private frameTimes: number[] = [];
   private lastUpdateTime = 0;
@@ -903,6 +906,13 @@ export class DiagnosticsOverlay {
     const gpuMs = snapshot?.totalGpuP50 ?? 0;
     const processingMs = Math.max(frameTime, gpuMs);
 
+    // Sampling above runs on every frame, but the DOM is only rewritten at
+    // ~5 Hz: per-frame textContent/style writes are pure overhead.
+    if (now - this.lastRenderTime < DiagnosticsOverlay.RENDER_THROTTLE_MS) {
+      return;
+    }
+    this.lastRenderTime = now;
+
     if (this.fpsEl) {
       this.fpsEl.textContent = fps.toFixed(2);
     }
@@ -1156,9 +1166,31 @@ export class DiagnosticsOverlay {
       this.host = null;
       this.shadowRoot = null;
     }
+    this.containerEl = null;
+    this.fpsEl = null;
+    this.frameLabelEl = null;
+    this.frameRowEl = null;
+    this.budgetFillEl = null;
+    this.frameTimeEl = null;
+    this.avgFrameTimeEl = null;
+    this.cpuEl = null;
+    this.pipelineCountEl = null;
+    this.adapterInfoEl = null;
+    this.modeEl = null;
+    this.tierEl = null;
+    this.inputResolutionEl = null;
+    this.targetResolutionEl = null;
     this.restorePolicyEl = null;
+    this.gpuShareEl = null;
+    this.timingSectionEl = null;
+    this.timingTitleEl = null;
+    this.timingStatusEl = null;
+    this.timingGridEl = null;
+    this.timingNoteEl = null;
+    this.timingFramesEl = null;
     this.timingVisible = false;
     this.lastTimingRenderTime = Number.NEGATIVE_INFINITY;
+    this.lastRenderTime = Number.NEGATIVE_INFINITY;
     this.lastSnapshot = null;
     this.isCompact = false;
     this.lastBudgetState = 'ok';

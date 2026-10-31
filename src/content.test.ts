@@ -29,6 +29,23 @@ vi.mock('@utils/whitelist', () => ({
 }));
 
 describe('content.ts', () => {
+  // content.ts gates on getSettings(), which wraps the callback-style storage API.
+  function setWhitelistEnabled(enabled: boolean): void {
+    const data = { whitelistEnabled: enabled };
+    (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
+      (_keys: any, cb?: (value: any) => void) => {
+        if (cb) { cb(data); return undefined; }
+        return Promise.resolve(data);
+      },
+    );
+    (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockImplementation(
+      (_keys: any, cb?: (value: any) => void) => {
+        if (cb) { cb({}); return undefined; }
+        return Promise.resolve({});
+      },
+    );
+  }
+
   let messageListener: (request: any, sender: any, sendResponse: (response?: any) => void) => boolean | void;
 
   beforeEach(() => {
@@ -40,10 +57,7 @@ describe('content.ts', () => {
     mockGetWhitelistRules.mockResolvedValue([]);
     mockDisableAllAutoEnabled.mockReturnValue(0);
 
-    // chrome.storage.sync.get is used with await (promise style) in content.ts
-    (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-      (_keys: any) => Promise.resolve({ whitelistEnabled: false })
-    );
+    setWhitelistEnabled(false);
   });
 
   async function loadContentScript() {
@@ -63,9 +77,7 @@ describe('content.ts', () => {
 
   describe('initialization', () => {
     it('calls initializeOnPage when whitelist is disabled', async () => {
-      (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (_keys: any) => Promise.resolve({ whitelistEnabled: false })
-      );
+      setWhitelistEnabled(false);
 
       await loadContentScript();
 
@@ -73,9 +85,7 @@ describe('content.ts', () => {
     });
 
     it('calls initializeOnPage when whitelist enabled and URL matches', async () => {
-      (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (_keys: any) => Promise.resolve({ whitelistEnabled: true })
-      );
+      setWhitelistEnabled(true);
       mockGetWhitelistRules.mockResolvedValue([{ pattern: 'example.com/*', enabled: true }]);
       mockIsUrlWhitelisted.mockReturnValue(true);
 
@@ -85,9 +95,7 @@ describe('content.ts', () => {
     });
 
     it('does NOT call initializeOnPage when whitelist enabled and URL does not match', async () => {
-      (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (_keys: any) => Promise.resolve({ whitelistEnabled: true })
-      );
+      setWhitelistEnabled(true);
       mockGetWhitelistRules.mockResolvedValue([{ pattern: 'other.com/*', enabled: true }]);
       mockIsUrlWhitelisted.mockReturnValue(false);
 
@@ -96,14 +104,14 @@ describe('content.ts', () => {
       expect(mockInitializeOnPage).not.toHaveBeenCalled();
     });
 
-    it('defaults to initializing on storage error (extension context invalidated)', async () => {
+    it('fails closed on storage error (extension context invalidated)', async () => {
       (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
         (_keys: any) => Promise.reject(new Error('Extension context invalidated'))
       );
 
       await loadContentScript();
 
-      expect(mockInitializeOnPage).toHaveBeenCalled();
+      expect(mockInitializeOnPage).not.toHaveBeenCalled();
     });
   });
 
@@ -128,9 +136,7 @@ describe('content.ts', () => {
     });
 
     it('URL_UPDATED re-evaluates whitelist state', async () => {
-      (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (_keys: any) => Promise.resolve({ whitelistEnabled: false })
-      );
+      setWhitelistEnabled(false);
 
       await loadContentScript();
       mockInitializeOnPage.mockClear();
@@ -225,9 +231,7 @@ describe('content.ts', () => {
   describe('whitelist state transitions', () => {
     it('deactivates when URL stops matching whitelist', async () => {
       // Start with whitelist matching
-      (chrome.storage.sync.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (_keys: any) => Promise.resolve({ whitelistEnabled: true })
-      );
+      setWhitelistEnabled(true);
       mockGetWhitelistRules.mockResolvedValue([{ pattern: 'example.com/*', enabled: true }]);
       mockIsUrlWhitelisted.mockReturnValue(true);
 

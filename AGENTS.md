@@ -45,7 +45,7 @@ All effects run through `anime4k-webgpu-async`'s `BackendRegistry` / `AlgorithmB
 
 ## Rendering pipeline invariants
 
-- `src/core/gpu/gpu-device-manager.ts` — ref-counted shared `GPUDevice` leases (`GpuDeviceLease`), one `device.lost` listener per shared device. Pre-warm devices auto-destroy after 30s; call `invalidatePreWarm()` on loss/teardown.
+- `src/core/gpu/gpu-device-manager.ts` — ref-counted shared `GPUDevice` leases (`GpuDeviceLease`), one `device.lost` listener per shared device. There is no device pre-warm path; `invalidatePreWarm()` clears the shader pre-warm cache and is called on loss/teardown.
 - `src/core/renderer.ts` — `buildGeneration` guard: a superseded build must destroy its own result and must not clear/overwrite the winning build state. Preserve this in `buildPipelines`/`handleSourceResize`/`updateConfiguration`/`recoverFromDeviceLoss`. Default `restorePolicy` is `'gate'`; it has ImageBitmap (e.g. Firefox) and DRM canvas-2D black-frame fallbacks.
 - `src/core/gpu/effect-chain-compiler.ts` `compileEffectChain` — the single ordered chain walk shared by renderer and GPU benchmark. It must stay **library-free** (type-only imports); callers inject `compileEffect`.
 - `src/core/gpu/effect-chain.ts` — pure geometry + restore suppression (its `RestoreSuppression` union mirrors `RestorePolicy` from `src/types.d.ts`). Suppression markers are attached **non-enumerably** on purpose; do not convert them to plain fields.
@@ -72,6 +72,7 @@ All effects run through `anime4k-webgpu-async`'s `BackendRegistry` / `AlgorithmB
 - Global types are ambient in `src/types.d.ts` (not `types.ts`) and available without imports; it also declares `*.css`.
 - Path aliases (`@`, `@core`, `@core/video|gpu|effects|ui|utils`, `@utils`, `@shaders`) are duplicated in `tsconfig.json` `paths`, `webpack.config.js` `resolve.alias`, and `vitest.config.mts` `resolve.alias` — update all three.
 - `module`/`moduleResolution` are `nodenext`, so dynamic imports of local TS use an explicit `.js` specifier (e.g. `import('@core/engines/registry.js')`); webpack maps it back via `resolve.extensionAlias`. Tests mock that exact `.js` specifier.
+- Those dynamic imports emit async webpack chunks (`918.js` is the bundled Anime4K library). The content script loads them through `chrome.runtime.getURL`, so `manifest.json` must keep `web_accessible_resources` for `*.js` — removing it makes enhancement fail to start with no visible error. `pnpm check:bundle` now enforces this.
 - Production builds strip `console.log`/`console.warn` (keep `console.error`), inject `package.json` version into the emitted manifest, and transform the manifest per target (Firefox swaps `background.service_worker` for `background.scripts`).
 
 ## Tests

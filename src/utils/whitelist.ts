@@ -7,12 +7,24 @@ import { sendMessage } from './messaging';
 import type { WhitelistRule } from '../types';
 
 /**
+ * Accept what users paste: drop the scheme and any query/fragment, which the
+ * matcher (host + path) never looks at.
+ */
+export function normalizeRulePattern(pattern: string): string {
+  return pattern.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split(/[?#]/)[0];
+}
+
+/**
  * Validate whitelist rule syntax
  * @param pattern Wildcard pattern
  */
 export function validateRulePattern(pattern: string): boolean {
-  // Simple validation: must not be empty and contain at least one valid character
-  return pattern.trim().length > 0;
+  const trimmed = pattern.trim();
+  // Patterns are `host/path` with `*` as the only wildcard; matching strips
+  // protocol and query, so those characters would silently never match.
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  if (trimmed.includes('://') || /[?#]/.test(trimmed)) return false;
+  return /[^*/]/.test(trimmed);
 }
 
 /**
@@ -154,19 +166,4 @@ export async function updateWhitelistRule(oldPattern: string, update: boolean | 
 export async function getWhitelistRules(): Promise<WhitelistRule[]> {
   const settings = await getSettings();
   return settings.whitelist || [];
-}
-
-/**
- * Set default whitelist rules
- */
-export async function setDefaultWhitelist(): Promise<void> {
-  const defaultRules = [
-    { pattern: 'ani.gamer.com.tw/animeVideo.php', enabled: true },
-    { pattern: 'www.bilibili.com/bangumi/play/*', enabled: true }
-  ];
-
-  await saveSettings({
-    whitelist: defaultRules,
-    whitelistEnabled: false
-  });
 }

@@ -236,10 +236,28 @@ function handleMediaEvent(event: Event): void {
  * This is the key to monitoring videos inside Shadow DOM.
  * @param doc Document or ShadowRoot
  */
+/**
+ * Drop tracked ShadowRoots whose host left the page. The strong Set entry pins
+ * the whole detached subtree, so this must run as soon as a removal is seen,
+ * not only when the next root appears.
+ */
+function pruneDetachedDocs(): void {
+  for (const processedDoc of processedDocs) {
+    if (processedDoc !== document && !(processedDoc as ShadowRoot).host?.isConnected) {
+      for (const eventName of mediaEventsToWatch) {
+        processedDoc.removeEventListener(eventName, handleMediaEvent, { capture: true });
+      }
+      processedDocs.delete(processedDoc);
+    }
+  }
+}
+
 function processDoc(doc: Document | ShadowRoot): void {
   if (processedDocs.has(doc)) {
     return; // Avoid duplicate processing
   }
+
+  pruneDetachedDocs();
 
   console.log('[Anime4KWebExt] Processing document/shadowRoot for media events:', doc);
   for (const eventName of mediaEventsToWatch) {
@@ -329,6 +347,9 @@ function setupDOMObserver(): MutationObserver {
         }
       });
     }
+
+    // A removed shadow host must release its captured subtree right away.
+    pruneDetachedDocs();
 
     // Batch process added nodes (debounce: merge multiple DOM changes within the same event loop)
     if (mutationDebounceTimer !== null) {

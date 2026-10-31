@@ -49,11 +49,14 @@ export const BUILTIN_MODES: BuiltInMode[] = [
 ];
 
 // ===== Default Settings =====
-const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
+export const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
   selectedModeId: 'builtin-mode-a',
   targetResolutionSetting: 'x2',
   whitelistEnabled: false,
-  whitelist: [],
+  whitelist: [
+    { pattern: 'ani.gamer.com.tw/animeVideo.php', enabled: true },
+    { pattern: 'www.bilibili.com/bangumi/play/*', enabled: true },
+  ],
   customModes: [],
   enableCrossOriginFix: false,
   autoEnableOnWhitelist: false,
@@ -62,7 +65,7 @@ const DEFAULT_SYNCED_SETTINGS: SyncedSettings = {
   colorGrading: { ...DEFAULT_COLOR_GRADING },
 };
 
-const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
+export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   performanceTier: 'balanced',
   gpuBenchmarkResult: null,
   hasCompletedOnboarding: false,
@@ -187,7 +190,11 @@ export function normalizeSyncedSettings(data: Record<string, unknown>): SyncedSe
       DEFAULT_SYNCED_SETTINGS.whitelistEnabled,
       isBoolean,
     ),
-    whitelist: sanitizeWhitelist(data.whitelist),
+    // A never-seeded whitelist key falls back to the shipped rules; an explicitly
+    // stored empty array is the user's choice and is preserved.
+    whitelist: data.whitelist === undefined
+      ? DEFAULT_SYNCED_SETTINGS.whitelist.map(rule => ({ ...rule }))
+      : sanitizeWhitelist(data.whitelist),
     customModes: sanitizeCustomModes(data.customModes),
     enableCrossOriginFix: coerce(
       'enableCrossOriginFix',
@@ -311,13 +318,47 @@ export async function getLocalSettings(): Promise<LocalSettings> {
 }
 
 /**
+ * Deep-copy the parts of a mode graph that callers mutate in place (mode name,
+ * effect list/order, effect params), so a page-local edit never corrupts the
+ * settings cache.
+ */
+function cloneModes(modes: EnhancementMode[]): EnhancementMode[] {
+  return modes.map(mode =>
+    mode.isBuiltIn
+      ? { ...mode }
+      : {
+          ...mode,
+          effects: mode.effects.map(effect => ({
+            ...effect,
+            params: effect.params ? { ...effect.params } : undefined,
+          })),
+        },
+  );
+}
+
+/** Copy a settings snapshot; the custom modes are shared between both mode arrays. */
+function cloneSettings(settings: Anime4KWebExtSettings): Anime4KWebExtSettings {
+  const customModes = cloneModes(settings.customModes) as CustomMode[];
+  return {
+    ...settings,
+    whitelist: settings.whitelist.map(rule => ({ ...rule })),
+    customModes,
+    enhancementModes: [
+      ...settings.enhancementModes.filter(m => m.isBuiltIn).map(m => ({ ...m })),
+      ...customModes,
+    ],
+  };
+}
+
+/**
  * Get full settings (merged sync and local)
  * Built-in modes dynamically resolve effect chains based on the current tier
  * Uses a TTL cache to avoid redundant chrome.storage IPC calls
+ * Every call returns a fresh copy: callers edit settings in place.
  */
 export async function getSettings(): Promise<Anime4KWebExtSettings> {
   if (cachedSettings && (Date.now() - cacheTimestamp) < SETTINGS_CACHE_TTL) {
-    return cachedSettings;
+    return cloneSettings(cachedSettings);
   }
 
   const [synced, local] = await Promise.all([
@@ -343,7 +384,7 @@ export async function getSettings(): Promise<Anime4KWebExtSettings> {
 
   cachedSettings = result;
   cacheTimestamp = Date.now();
-  return result;
+  return cloneSettings(result);
 }
 
 /**
@@ -431,6 +472,10 @@ export async function saveSettings(settings: Partial<Anime4KWebExtSettings>): Pr
   }
 
   await Promise.all(promises);
+
+  // Callers may read straight after saving: never serve the pre-write snapshot
+  // while waiting for the storage.onChanged round trip.
+  cachedSettings = null;
 }
 
 /**

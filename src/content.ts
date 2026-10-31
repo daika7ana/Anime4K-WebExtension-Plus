@@ -4,6 +4,7 @@
  */
 import { initializeOnPage, deinitializeOnPage, handleSettingsUpdate, disableAllAutoEnabled, getAllManagedVideos, getEnhancer } from '@core/video/video-manager';
 import { isUrlWhitelisted, getWhitelistRules } from '@utils/whitelist';
+import { getSettings } from '@utils/settings';
 import { onMessage } from '@utils/messaging';
 
 let isCurrentlyActive = false; // Track enhancement state for the current page
@@ -11,7 +12,7 @@ let isCurrentlyActive = false; // Track enhancement state for the current page
 // Check if the current page is on the whitelist
 async function shouldInitialize(): Promise<boolean> {
   try {
-    const settings = await chrome.storage.sync.get(['whitelistEnabled']);
+    const settings = await getSettings();
     if (!settings.whitelistEnabled) return true; // Always initialize when whitelist is disabled
 
     const rules = await getWhitelistRules();
@@ -35,9 +36,10 @@ async function shouldInitialize(): Promise<boolean> {
 
     return false;
   } catch {
-    // Extension context may be invalidated (e.g. extension update).
-    // Default to allowing initialization.
-    return true;
+    // Extension context may be invalidated (e.g. extension update) or storage
+    // failed. Fail closed: whitelistEnabled defaults to false, so the user's
+    // intent is unknown and we must not enhance an excluded site.
+    return false;
   }
 }
 

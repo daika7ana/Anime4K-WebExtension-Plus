@@ -344,6 +344,23 @@ describe('normalizeSyncedSettings', () => {
     expect(result.customModes).toEqual([]);
   });
 
+  it('seeds the shipped whitelist rules when the whitelist key was never stored', () => {
+    expect(normalizeSyncedSettings({}).whitelist).toEqual([
+      { pattern: 'ani.gamer.com.tw/animeVideo.php', enabled: true },
+      { pattern: 'www.bilibili.com/bangumi/play/*', enabled: true },
+    ]);
+  });
+
+  it('accepts the shipped whitelist patterns unchanged', () => {
+    const shipped = [
+      { pattern: 'ani.gamer.com.tw/animeVideo.php', enabled: true },
+      { pattern: 'www.bilibili.com/bangumi/play/*', enabled: true },
+    ];
+    expect(normalizeSyncedSettings({ whitelist: shipped }).whitelist).toEqual(shipped);
+    // An explicitly emptied whitelist is the user's choice: never re-seeded.
+    expect(normalizeSyncedSettings({ whitelist: [] }).whitelist).toEqual([]);
+  });
+
   it('rounds a valid autoEnableSettleMs number', () => {
     expect(normalizeSyncedSettings({ autoEnableSettleMs: 123.6 }).autoEnableSettleMs).toBe(124);
   });
@@ -496,8 +513,7 @@ describe('getSettings cache', () => {
     vi.restoreAllMocks();
   });
 
-  it('serves the cached value within the TTL and re-reads after a storage change', async () => {
-    let storedMode = 'builtin-mode-a';
+  it('serves the cached value within the TTL and re-reads after a storage change', async () => {    let storedMode = 'builtin-mode-a';
     (chrome.storage.sync.get as any).mockImplementation((_keys: any, cb: any) =>
       cb?.({ selectedModeId: storedMode }),
     );
@@ -513,6 +529,38 @@ describe('getSettings cache', () => {
     // A storage change clears the cache -> the next read re-fetches.
     capturedOnChanged?.();
     expect((await getSettings()).selectedModeId).toBe('builtin-mode-c');
+  });
+
+  it('returns a fresh copy so caller mutations never reach the cache', async () => {
+    (chrome.storage.sync.get as any).mockImplementation((_keys: any, cb: any) =>
+      cb?.({
+        whitelist: [{ pattern: 'example.com', enabled: true }],
+        customModes: [
+          {
+            id: 'custom-1',
+            name: 'Mine',
+            isBuiltIn: false,
+            effects: [{ id: 'anime4k/Sharpen/CAS', params: { sharpness: 0.5 } }],
+          },
+        ],
+      }),
+    );
+    capturedOnChanged?.();
+
+    const first = await getSettings();
+    first.whitelist[0].pattern = 'mutated.example';
+    first.customModes[0].name = 'Mutated';
+    first.customModes[0].effects[0].params!.sharpness = 1;
+    first.customModes[0].effects.push({ id: 'x/y', name: 'x', className: 'y' });
+
+    // Within one page the custom mode is the same object in both arrays.
+    expect(first.enhancementModes.find(m => !m.isBuiltIn)).toBe(first.customModes[0]);
+
+    const second = await getSettings();
+    expect(second.whitelist[0].pattern).toBe('example.com');
+    expect(second.customModes[0].name).toBe('Mine');
+    expect(second.customModes[0].effects).toHaveLength(1);
+    expect(second.customModes[0].effects[0].params).toEqual({ sharpness: 0.5 });
   });
 });
 

@@ -43,8 +43,9 @@
 2. 运行 `pnpm install` 安装依赖
 3. 运行 `pnpm build` 构建项目
 4. 在浏览器中加载构建好的扩展：
-   - Chrome: 打开拓展页面(`chrome://extensions`) → 启用"开发者模式" → "加载已解压的扩展程序" → 选择项目中的 `dist` 目录
-   - Edge: 打开拓展页面(`edge://extensions`) → 启用"开发人员模式" → "加载解压缩的扩展" → 选择项目中的 `dist` 目录
+   - Chrome: 打开拓展页面(`chrome://extensions`) → 启用"开发者模式" → "加载已解压的扩展程序" → 选择项目中的 `dist-chrome` 目录
+   - Edge: 打开拓展页面(`edge://extensions`) → 启用"开发人员模式" → "加载解压缩的扩展" → 选择项目中的 `dist-chrome` 目录
+   - Firefox: 运行 `pnpm build:firefox`，然后加载 `dist-firefox` 目录
 
 ### 一、初次设置 (Onboarding)
 

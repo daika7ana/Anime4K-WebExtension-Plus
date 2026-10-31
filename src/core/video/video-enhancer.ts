@@ -113,6 +113,7 @@ export class VideoEnhancer {
   private async fixCrossOrigin(isFallback = false): Promise<void> {
     console.log(`[Anime4KWebExt] Executing cross-origin fix. Is fallback: ${isFallback}`);
     this.fixAttempted = true;
+    const previousCrossOrigin = this.video.crossOrigin;
     this.video.crossOrigin = 'anonymous';
 
     const currentTime = this.video.currentTime;
@@ -131,7 +132,20 @@ export class VideoEnhancer {
     this.video.src = originalSrc;
     this.video.load();
 
-    await ready;
+    try {
+      await ready;
+    } catch (error) {
+      // The server sent no CORS headers: put the element back the way it was so
+      // the user's playback is not left broken, then let the caller report it.
+      this.video.crossOrigin = previousCrossOrigin;
+      this.video.src = '';
+      this.video.src = originalSrc;
+      this.video.load();
+      if (!isPaused) {
+        this.video.play()?.catch(() => { /* autoplay may be blocked after reload */ });
+      }
+      throw error;
+    }
     this.video.currentTime = currentTime;
     if (!isPaused) {
       this.video.play().catch(e => console.warn('[Anime4KWebExt] Autoplay after reload was blocked.', e));

@@ -34,13 +34,22 @@ interface CoreEffectEntry {
   ) => EffectClassDescriptor;
 }
 
+const CORE_PARAM_DEFAULTS = Object.fromEntries(
+  coreEffectDescriptors.map((descriptor) => [
+    descriptor.key,
+    Object.fromEntries(
+      Object.entries(descriptor.paramsSchema ?? {}).map(([name, schema]) => [name, schema.defaultValue]),
+    ),
+  ]),
+) as Record<string, Record<string, number>>;
+
 /**
  * Core effect constructors + descriptor builders keyed by backend-local key.
  *
  * Adding a new core effect is a one-entry change here. The descriptor builder
  * receives the live effect params so per-effect values (e.g. strength,
- * threshold) flow through uniformly; each param falls back to the default used
- * by the corresponding descriptor schema.
+ * threshold) flow through uniformly; each param falls back to the descriptor
+ * schema default (the single source of truth for defaults/bounds).
  */
 const CORE_EFFECTS: Record<string, CoreEffectEntry> = {
   CAS: {
@@ -48,7 +57,7 @@ const CORE_EFFECTS: Record<string, CoreEffectEntry> = {
     getDescriptor: (device, inputTexture, params) => ({
       device,
       inputTexture,
-      sharpness: params?.sharpness ?? 0.5,
+      sharpness: params?.sharpness ?? CORE_PARAM_DEFAULTS.CAS.sharpness,
     }),
   },
   Debanding: {
@@ -56,8 +65,8 @@ const CORE_EFFECTS: Record<string, CoreEffectEntry> = {
     getDescriptor: (device, inputTexture, params) => ({
       device,
       inputTexture,
-      strength: params?.strength ?? 0.5,
-      bandThreshold: params?.bandThreshold ?? 0.08,
+      strength: params?.strength ?? CORE_PARAM_DEFAULTS.Debanding.strength,
+      bandThreshold: params?.bandThreshold ?? CORE_PARAM_DEFAULTS.Debanding.bandThreshold,
     }),
   },
   ColorAdjust: {
@@ -65,12 +74,12 @@ const CORE_EFFECTS: Record<string, CoreEffectEntry> = {
     getDescriptor: (device, inputTexture, params) => ({
       device,
       inputTexture,
-      brightness: params?.brightness ?? 0,
-      gamma: params?.gamma ?? 1,
-      contrast: params?.contrast ?? 1,
-      saturation: params?.saturation ?? 1,
-      vibrance: params?.vibrance ?? 0,
-      exposure: params?.exposure ?? 0,
+      brightness: params?.brightness ?? CORE_PARAM_DEFAULTS.ColorAdjust.brightness,
+      gamma: params?.gamma ?? CORE_PARAM_DEFAULTS.ColorAdjust.gamma,
+      contrast: params?.contrast ?? CORE_PARAM_DEFAULTS.ColorAdjust.contrast,
+      saturation: params?.saturation ?? CORE_PARAM_DEFAULTS.ColorAdjust.saturation,
+      vibrance: params?.vibrance ?? CORE_PARAM_DEFAULTS.ColorAdjust.vibrance,
+      exposure: params?.exposure ?? CORE_PARAM_DEFAULTS.ColorAdjust.exposure,
     }),
   },
 };

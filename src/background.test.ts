@@ -106,10 +106,20 @@ describe('background onInstalled startup', () => {
 
     expect(mocks.ensureLatestConfig).toHaveBeenCalledTimes(1);
     expect(chromeAny.declarativeNetRequest.updateEnabledRulesets).toHaveBeenCalledTimes(1);
-    expect(chromeAny.tabs.create).toHaveBeenCalledTimes(1);
+    // Onboarding does not reopen on update, even when it was never completed.
+    expect(chromeAny.tabs.create).not.toHaveBeenCalled();
   });
 
-  it('does not open onboarding for a non-install/update reason', async () => {
+  it('opens onboarding on install when onboarding is incomplete', async () => {
+    await installedListener!({ reason: 'install' });
+
+    expect(mocks.getLocalSettings).toHaveBeenCalled();
+    expect(chromeAny.tabs.create).toHaveBeenCalledWith({
+      url: 'chrome-extension://test/onboarding.html',
+    });
+  });
+
+  it('does not open onboarding for a non-install reason', async () => {
     await installedListener!({ reason: 'chrome_update' });
 
     expect(chromeAny.tabs.create).not.toHaveBeenCalled();

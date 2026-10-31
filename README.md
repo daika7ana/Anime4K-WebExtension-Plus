@@ -43,8 +43,9 @@ Significantly improve the image quality of anime videos with the Anime4K real-ti
 2. Run `pnpm install` to install dependencies
 3. Run `pnpm build` to build the project
 4. Load the built extension in your browser:
-   - Chrome: Open extensions page (`chrome://extensions`) → Enable "Developer mode" → "Load unpacked" → Select the `dist` directory in the project
-   - Edge: Open extensions page (`edge://extensions`) → Enable "Developer mode" → "Load unpacked" → Select the `dist` directory in the project
+   - Chrome: Open extensions page (`chrome://extensions`) → Enable "Developer mode" → "Load unpacked" → Select the `dist-chrome` directory in the project
+   - Edge: Open extensions page (`edge://extensions`) → Enable "Developer mode" → "Load unpacked" → Select the `dist-chrome` directory in the project
+   - Firefox: Run `pnpm build:firefox` and load the `dist-firefox` directory instead
 
 ### I. First Run (Onboarding)
 

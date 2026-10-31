@@ -11,6 +11,7 @@
 import type { CustomMode, EnhancementEffect, PerformanceTier } from '../types';
 import { AVAILABLE_EFFECTS } from './effects-map';
 import { DEFAULT_COLOR_GRADING } from './validation';
+import { DEFAULT_SYNCED_SETTINGS, DEFAULT_LOCAL_SETTINGS } from './settings';
 
 // v1 mode definitions (legacy format). Stored data is untrusted, so every
 // field is treated as optional/unknown until validated at runtime.
@@ -225,28 +226,11 @@ async function migrateV3ToV4(): Promise<void> {
  */
 async function initializeDefaultConfig(): Promise<void> {
     await chrome.storage.sync.set({
-        customModes: [],
-        selectedModeId: 'builtin-mode-a',
-        targetResolutionSetting: 'x2',
-        whitelistEnabled: false,
-        whitelist: [],
-        enableCrossOriginFix: false,
-        autoEnableOnWhitelist: false,
-        autoEnableSettleMs: 300,
-        enableHotkey: true,
-        colorGrading: { ...DEFAULT_COLOR_GRADING },
+        ...DEFAULT_SYNCED_SETTINGS,
         _configVersion: CURRENT_CONFIG_VERSION,
     });
 
-    await chrome.storage.local.set({
-        performanceTier: 'balanced' as PerformanceTier,
-        gpuBenchmarkResult: null,
-        gpuAdapterInfo: null,
-        hasCompletedOnboarding: false,
-        showDiagnostics: false,
-        diagnosticsDetail: 'auto',
-        restorePolicy: 'gate',
-    });
+    await chrome.storage.local.set({ ...DEFAULT_LOCAL_SETTINGS });
 
     console.log('[Migration] Initialized new config with defaults');
 }
@@ -256,13 +240,16 @@ async function initializeDefaultConfig(): Promise<void> {
  * chain. Safe to call repeatedly: once the config is current this is a no-op.
  */
 export async function ensureLatestConfig(): Promise<void> {
-    const syncData = await chrome.storage.sync.get(['_configVersion', 'enhancementModes']);
+    // Read the whole sync store once: "missing both keys" is not proof of a
+    // fresh install (an unversioned config may hold e.g. `whitelist`), so the
+    // fresh-install path must only run when the store is genuinely empty.
+    const syncData = await chrome.storage.sync.get(null);
     const storedVersion = typeof syncData._configVersion === 'number'
         ? syncData._configVersion
         : 0;
 
-    // Fresh install: no version marker and no legacy data to migrate.
-    if (storedVersion === 0 && !syncData.enhancementModes) {
+    // Fresh install: nothing at all in sync storage.
+    if (Object.keys(syncData).length === 0) {
         await initializeDefaultConfig();
         return;
     }

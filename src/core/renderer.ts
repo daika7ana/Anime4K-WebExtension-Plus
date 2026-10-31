@@ -58,8 +58,6 @@ export class Renderer {
   private drmCtx: OffscreenCanvasRenderingContext2D | null = null;
   /** Whether the DRM canvas fallback has produced a valid (non-black) frame */
   private drmFrameValidated = false;
-  /** Visibility change listener to pause/resume rendering based on tab visibility */
-  private onVisibilityChange: (() => void) | null = null;
 
   // --- WebGPU objects ---
   private device!: GPUDevice;
@@ -75,6 +73,8 @@ export class Renderer {
   private pipelines: DestroyablePipeline[] = [];
   /** Labels for each built pipeline, in encode order (parallel to this.pipelines) */
   private pipelineLabels: string[] = [];
+  /** Per-frame occurrence counts for duplicate pipeline labels (reused to avoid per-frame allocation) */
+  private labelCounts = new Map<string, number>();
   /** Optional GPU timestamp profiler; null when timings are disabled or unsupported */
   private profiler: GpuTimestampProfiler | null = null;
   /** Generation counter to prevent concurrent buildPipelines() calls from clobbering each other */
@@ -85,10 +85,6 @@ export class Renderer {
   private renderPipeline!: GPURenderPipeline;
   private sampler!: GPUSampler;
   private renderBindGroup!: GPUBindGroup;
-
-  // --- Static backward-compat alias (delegates to GPUDeviceManager) ---
-  /** @deprecated Use GPUDeviceManager.preWarmGPU() directly. Kept for backward compatibility. */
-  public static preWarmGPU = GPUDeviceManager.preWarmGPU;
 
   private constructor(options: RendererOptions) {
     this.video = options.video;
@@ -172,16 +168,6 @@ export class Renderer {
 
       // Start render loop: attempt to render the first frame and begin continuous rendering
       this.renderFirstFrameAndStartLoop();
-
-      // Listen for visibility changes to pause/resume rendering based on tab visibility
-      this.onVisibilityChange = () => {
-        if (!this.destroyed && document.visibilityState === 'visible' && this.animationFrameId !== null) {
-          // Cancel the pending callback and request an immediate one to resume faster
-          this.video.cancelVideoFrameCallback(this.animationFrameId);
-          this.animationFrameId = this.video.requestVideoFrameCallback(this.renderLoop);
-        }
-      };
-      document.addEventListener('visibilitychange', this.onVisibilityChange);
     } catch (error) {
       // Any failure after the lease was acquired must release it (and tear down
       // whatever was built on it) or the shared device's refCount leaks for the
@@ -218,10 +204,6 @@ export class Renderer {
       if (this.animationFrameId !== null) {
         this.video.cancelVideoFrameCallback(this.animationFrameId);
         this.animationFrameId = null;
-      }
-      if (this.onVisibilityChange) {
-        document.removeEventListener('visibilitychange', this.onVisibilityChange);
-        this.onVisibilityChange = null;
       }
       this.profiler?.destroy();
       this.profiler = null;
@@ -580,7 +562,8 @@ export class Renderer {
       // identical labels would collapse every duplicate pass into a single HUD
       // row and hide the real chain. Disambiguate occurrences here so each pass
       // is measured and reported separately.
-      const labelCounts = new Map<string, number>();
+      const labelCounts = this.labelCounts;
+      labelCounts.clear();
       for (let i = 0; i < this.pipelines.length; i++) {
         const baseLabel = this.pipelineLabels[i] ?? `pass ${i + 1}`;
         const occurrence = (labelCounts.get(baseLabel) ?? 0) + 1;
@@ -1006,12 +989,6 @@ export class Renderer {
     if (this.destroyed) return;
     // Immediately set the destroy flag to prevent any async operations (e.g., device.lost) from performing unnecessary actions during destruction
     this.destroyed = true;
-
-    // Remove the visibility change listener
-    if (this.onVisibilityChange) {
-      document.removeEventListener('visibilitychange', this.onVisibilityChange);
-      this.onVisibilityChange = null;
-    }
 
     // Stop the render loop
     if (this.animationFrameId) {

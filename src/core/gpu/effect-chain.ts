@@ -115,9 +115,13 @@ export function computeRemainingUpscaleFactors(
     effects: ReadonlyArray<Pick<EnhancementEffect, 'upscaleFactor'>>,
 ): number[] {
     const upscaleFactors = effects.map(e => e.upscaleFactor ?? 1);
-    return upscaleFactors.map((_, i) =>
-        upscaleFactors.slice(i + 1).reduce((acc, val) => acc * val, 1)
-    );
+    const remaining = new Array<number>(upscaleFactors.length);
+    let suffixProduct = 1;
+    for (let i = upscaleFactors.length - 1; i >= 0; i--) {
+        remaining[i] = suffixProduct;
+        suffixProduct *= upscaleFactors[i];
+    }
+    return remaining;
 }
 
 /**

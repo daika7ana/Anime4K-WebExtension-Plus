@@ -295,15 +295,35 @@ describe('DiagnosticsOverlay', () => {
       overlay.update(0, 4);
       expect(overlay['fpsEl']?.textContent).toBe('0.00');
 
-      // Advance time by 16.67ms (~60 FPS — 1000/16.67 ≈ 59.99)
-      currentTime = 16.67;
-      overlay.update(0, 4);
+      // Sample a 60 fps cadence; the HUD only repaints once the 200 ms DOM
+      // throttle opens, so the last sample has to cross that window.
+      for (let i = 1; i <= 12; i++) {
+        currentTime = i * 16.67;
+        overlay.update(0, 4);
+      }
       expect(overlay['fpsEl']?.textContent).toBe('59.99');
 
-      // Advance by another 16.67ms — avg stays at 16.67ms
-      currentTime = 33.34;
+      overlay.destroy();
+    });
+
+    it('samples every frame but repaints the HUD at most every 200 ms', () => {
+      const video = createTestVideo();
+      const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
+      const frameTimeEl = overlay['frameTimeEl'] as HTMLElement;
+
       overlay.update(0, 4);
-      expect(overlay['fpsEl']?.textContent).toBe('59.99');
+      expect(frameTimeEl.textContent).toBe('0.0 ms');
+
+      // Inside the throttle window: the sample is recorded, the DOM is not written.
+      currentTime = 16.67;
+      overlay.update(0, 4);
+      expect(overlay['frameTimes'].length).toBe(1);
+      expect(frameTimeEl.textContent).toBe('0.0 ms');
+
+      // Past 200 ms the sample is written out.
+      currentTime = 216.67;
+      overlay.update(0, 4);
+      expect(frameTimeEl.textContent).toBe('200.0 ms');
 
       overlay.destroy();
     });
@@ -315,21 +335,21 @@ describe('DiagnosticsOverlay', () => {
       // First call — no delta yet
       overlay.update(0, 3);
 
-      // Advance by 10ms (100 FPS)
-      currentTime = 10;
+      // Advance by 150ms — sampled, but still inside the 200 ms repaint window.
+      currentTime = 150;
       overlay.update(0, 3);
 
-      // Advance by another 20ms (now buffer: [10, 20], avg = 15ms)
-      currentTime = 30;
+      // Advance by another 160ms (buffer: [150, 160], avg = 155ms) — repaints.
+      currentTime = 310;
       overlay.update(0, 3);
 
       const host = video.parentElement?.querySelector('div') as HTMLElement;
       const textContent = host.shadowRoot?.textContent ?? '';
 
       // Latest frame time (wall-clock delta)
-      expect(textContent).toContain('20.0 ms');
-      // Average frame time: (10 + 20) / 2 = 15ms
-      expect(textContent).toContain('15.0 ms');
+      expect(textContent).toContain('160.0 ms');
+      // Average frame time: (150 + 160) / 2 = 155ms
+      expect(textContent).toContain('155.0 ms');
 
       overlay.destroy();
     });
@@ -387,14 +407,17 @@ describe('DiagnosticsOverlay', () => {
       currentTime += 1000; // 1 second gap (>500ms threshold)
       overlay.update(0, 4);
 
-      // Buffer should be empty after the reset
+      // Buffer should be empty after the reset, and the repaint shows no FPS.
       expect(overlay['frameTimes'].length).toBe(0);
       expect(overlay['fpsEl']?.textContent).toBe('0.00');
 
-      // Next normal frame should recover immediately
-      currentTime += 1000 / 60;
-      overlay.update(0, 4);
-      expect(overlay['frameTimes'].length).toBe(1);
+      // Recovery: normal frames sample again (buffer refilled) and the average
+      // repaints as soon as the 200 ms DOM throttle window opens.
+      for (let i = 0; i < 12; i++) {
+        currentTime += 1000 / 60;
+        overlay.update(0, 4);
+      }
+      expect(overlay['frameTimes'].length).toBe(12);
       expect(overlay['fpsEl']?.textContent).toBe('60.00');
 
       overlay.destroy();
@@ -420,6 +443,23 @@ describe('DiagnosticsOverlay', () => {
       overlay.destroy();
 
       expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it('releases the HUD element references', () => {
+      const video = createTestVideo();
+      const overlay = DiagnosticsOverlay.create(video, 'Test GPU');
+      overlay.update(0, 4);
+
+      overlay.destroy();
+
+      const fields = [
+        'containerEl', 'fpsEl', 'frameTimeEl', 'avgFrameTimeEl', 'cpuEl',
+        'pipelineCountEl', 'budgetFillEl', 'timingGridEl', 'timingSectionEl',
+      ];
+      for (const field of fields) {
+        // Detached-tree references would retain the whole HUD.
+        expect((overlay as unknown as Record<string, unknown>)[field]).toBeNull();
+      }
     });
 
     it('is idempotent — safe to call destroy twice', () => {
@@ -711,8 +751,9 @@ describe('DiagnosticsOverlay', () => {
 
       // 24 fps wall-clock content with an over-budget processing cost is still a
       // renderer fault: the display budget is a valid reference at any cadence.
+      // (The gap also clears the 200 ms HUD repaint throttle.)
       overlay.update(0, 4);
-      currentTime = 1000 / 24;
+      currentTime = 1000 / 24 + 250;
       overlay.update(20, 4);
 
       const row = containerOf(video).querySelector('.metric--frame') as HTMLElement;
@@ -731,6 +772,8 @@ describe('DiagnosticsOverlay', () => {
       expect(row.getAttribute('data-state')).toBe('ok');
 
       // ...but the GPU-derived cost (20 ms) pushes the same frame over budget.
+      // The time advance only clears the 200 ms HUD repaint throttle.
+      currentTime = 250;
       overlay.update(2, 4, activeSnapshot({ totalGpuP50: 20 }));
       row = containerOf(video).querySelector('.metric--frame') as HTMLElement;
       expect(row.getAttribute('data-state')).toBe('over');

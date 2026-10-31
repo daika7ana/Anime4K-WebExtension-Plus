@@ -467,12 +467,12 @@ describe('validateGPUBenchmarkResult', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('accepts Infinity scores (untested tiers keep Infinity)', () => {
+  it('rejects an Infinity score', () => {
     const result = validateGPUBenchmarkResult({
       ...valid,
       scores: { ...valid.scores, ultra: Number.POSITIVE_INFINITY },
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
   });
 });
 

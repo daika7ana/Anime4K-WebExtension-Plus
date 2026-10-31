@@ -315,11 +315,12 @@ h1 {
   transform: translateY(-1px);
 }
 
-.mode-card.collapsed {
+/* Only cards that can actually be reordered show the grab affordance. */
+.mode-card.collapsed[draggable="true"] {
   cursor: grab;
 }
 
-.mode-card.collapsed:active {
+.mode-card.collapsed[draggable="true"]:active {
   cursor: grabbing;
 }
 

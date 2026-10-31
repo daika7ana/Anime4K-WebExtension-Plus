@@ -4,9 +4,8 @@ import '../common-vars.css';
 import '../common/toast.css';
 import { showToast } from '../common/toast';
 import { getSettings, saveSettings, getLocalSettings, saveLocalSettings } from '../../utils/settings';
-import { setDefaultWhitelist } from '../../utils/whitelist';
 import { themeManager } from '../theme-manager';
-import { sendTabMessage } from '@utils/messaging';
+import { sendMessage } from '@utils/messaging';
 import { t, applyI18n } from '@utils/i18n';
 import type { PerformanceTier } from '../../types';
 import { initTierControls } from './tier-controls';
@@ -136,12 +135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Check if a custom mode is selected
     const isCustomMode = currentSettings.selectedModeId.startsWith('custom-');
     tierControls.setDisabled(isCustomMode);
-
-    // If whitelist is empty, set default rules
-    if (currentSettings.whitelist.length === 0) {
-      await setDefaultWhitelist();
-      currentSettings = await getSettings();
-    }
   } catch (error) {
     console.error('Error loading settings:', error);
     modeSelect.value = 'builtin-mode-a';
@@ -198,24 +191,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       initialResolution = selectedResolution;
       initialTier = currentTier;
 
-      // Notify content script in the active tab that settings have been updated
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) {
-          sendTabMessage(tabs[0].id, {
-            type: 'SETTINGS_UPDATED',
-            settings: {
-              selectedModeId,
-              targetResolutionSetting: selectedResolution,
-              performanceTier: currentTier,
-            }
-          }).then((response) => {
-            console.log('Content script response:', response);
-          }).catch((error: Error) => {
-            if (!error.message.includes('Receiving end does not exist')) {
-              console.warn('Message send error:', error.message);
-            }
-          });
-        }
+      // Mode and tier are global (storage.sync), so relay through the
+      // background, which forwards SETTINGS_UPDATED to every open tab.
+      sendMessage({ type: 'SETTINGS_UPDATED' }).catch((error: Error) => {
+        console.warn('Settings update relay failed:', error.message);
       });
 
       // Re-enable button after save completes (disabled state tracks dirty state)
@@ -237,16 +216,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       await saveSettings({ colorGrading });
       console.log('Color grading enabled:', colorGradingToggle.checked);
 
-      // Notify content script
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) {
-          sendTabMessage(tabs[0].id, { type: 'SETTINGS_UPDATED' })
-            .catch((error: Error) => {
-              if (!error.message.includes('Receiving end does not exist')) {
-    console.warn('Message send error:', error.message);
-            }
-          });
-        }
+      // Notify every tab via the background relay
+      sendMessage({ type: 'SETTINGS_UPDATED' }).catch((error: Error) => {
+        console.warn('Message send error:', error.message);
       });
     } catch (error) {
       console.error('Error saving color grading toggle:', error);

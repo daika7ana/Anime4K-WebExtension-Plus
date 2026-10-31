@@ -1,25 +1,16 @@
 /**
- * Tests for GPU Device Manager — shared ref-counted device leases, pre-warming,
- * loss notification, and recovery.
+ * Tests for GPU Device Manager — shared ref-counted device leases, loss
+ * notification, and recovery.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { installGPUMock, removeGPUMock } from '@/test/webgpu-mock';
 import type { MockGPUObjects } from '@/test/webgpu-mock';
 import {
-  preWarmGPU,
   acquireGPUDevice,
   invalidatePreWarm,
   getPreWarmer,
   MAX_DEVICE_ACQUIRE_ATTEMPTS,
 } from './gpu-device-manager';
-
-/**
- * Helper: wait for preWarmGPU's internal async work to complete.
- * The mock resolves on microtasks, so a macrotask tick is enough.
- */
-async function awaitPreWarm(): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, 0));
-}
 
 /** Minimal stand-in for a GPUDevice whose `lost` promise never settles. */
 function createFakeDevice(): { lost: Promise<never>; destroy: ReturnType<typeof vi.fn> } {
@@ -38,7 +29,7 @@ function createImmediatelyLostDevice(): {
 }
 
 describe('gpu-device-manager', () => {
-  describe('acquisition, sharing, and pre-warming', () => {
+  describe('acquisition and sharing', () => {
     let mock: MockGPUObjects;
 
     beforeEach(() => {
@@ -157,144 +148,13 @@ describe('gpu-device-manager', () => {
       expect(mock.device.destroy).toHaveBeenCalledTimes(1);
     });
 
-    // ── preWarmGPU ──
-
-    it('preWarmGPU() is idempotent — second call is a no-op', async () => {
-      preWarmGPU();
-      preWarmGPU(); // second call should return immediately
-      await awaitPreWarm();
-
-      const gpu = navigator.gpu as any;
-      expect(gpu.requestAdapter).toHaveBeenCalledTimes(1);
-    });
-
-    it('preWarmGPU() requests adapter with high-performance on non-Windows', async () => {
-      preWarmGPU();
-      await awaitPreWarm();
-
-      const gpu = navigator.gpu as any;
-      expect(gpu.requestAdapter).toHaveBeenCalledWith(
-        expect.objectContaining({ powerPreference: 'high-performance' }),
-      );
-    });
-
-    it('preWarmGPU() does not set powerPreference on Windows', async () => {
-      const origPlatform = navigator.platform;
-      try {
-        Object.defineProperty(navigator, 'platform', {
-          value: 'Win32',
-          configurable: true,
-          writable: true,
-        });
-      } catch {
-        (navigator as any).platform = 'Win32';
-      }
-
-      preWarmGPU();
-      await awaitPreWarm();
-
-      const gpu = navigator.gpu as any;
-      expect(gpu.requestAdapter).toHaveBeenCalled();
-      expect(gpu.requestAdapter).toHaveBeenCalledWith({});
-
-      // Restore
-      try {
-        Object.defineProperty(navigator, 'platform', {
-          value: origPlatform,
-          configurable: true,
-          writable: true,
-        });
-      } catch {
-        (navigator as any).platform = origPlatform;
-      }
-    });
-
-    it('preWarmGPU() requests timestamp-query when the adapter advertises it', async () => {
-      mock.adapter.features.add('timestamp-query');
-
-      preWarmGPU();
-      await awaitPreWarm();
-
-      expect(mock.adapter.requestDevice).toHaveBeenCalledWith(
-        expect.objectContaining({ requiredFeatures: ['timestamp-query'] }),
-      );
-    });
-
-    it('preWarmGPU() omits timestamp-query when the adapter does not advertise it', async () => {
-      mock.adapter.features.delete('timestamp-query');
-
-      preWarmGPU();
-      await awaitPreWarm();
-
-      expect(mock.adapter.requestDevice).toHaveBeenCalledWith(
-        expect.objectContaining({ requiredFeatures: [] }),
-      );
-    });
-
-    it('acquireGPUDevice() claims a prewarmed device without a second request', async () => {
-      preWarmGPU();
-      await awaitPreWarm();
-
-      const lease = await acquireGPUDevice();
-
-      expect(lease.device).toBe(mock.device);
-      expect(mock.adapter.requestDevice).toHaveBeenCalledTimes(1);
-
-      lease.release();
-    });
+    // ── getPreWarmer ──
 
     it('getPreWarmer() returns the same singleton instance', () => {
       const a = getPreWarmer();
       const b = getPreWarmer();
       expect(a).toBe(b);
       expect(a).toBeDefined();
-    });
-  });
-
-  // ── 30-second idle auto-release timer (uses fake timers) ──
-
-  describe('30s idle auto-release timer', () => {
-    let mock: MockGPUObjects;
-
-    beforeEach(() => {
-      invalidatePreWarm();
-      mock = installGPUMock();
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-      removeGPUMock();
-    });
-
-    it('destroys a prewarmed device after 30s if never leased', async () => {
-      preWarmGPU();
-      // Let the prewarm async work complete (microtasks)
-      await vi.advanceTimersByTimeAsync(0);
-
-      const device = mock.device;
-      expect(device.destroy).not.toHaveBeenCalled();
-
-      // Advance 30 seconds
-      vi.advanceTimersByTime(30000);
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(device.destroy).toHaveBeenCalled();
-    });
-
-    it('acquiring the prewarmed device cancels the 30s auto-release timer', async () => {
-      preWarmGPU();
-      await vi.advanceTimersByTimeAsync(0);
-
-      const lease = await acquireGPUDevice();
-
-      // Advance 30 seconds — device should NOT be destroyed
-      vi.advanceTimersByTime(30000);
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mock.device.destroy).not.toHaveBeenCalled();
-
-      lease.release();
     });
   });
 
@@ -438,13 +298,18 @@ describe('gpu-device-manager', () => {
       removeGPUMock();
     });
 
-    it('destroys an unleased prewarmed device', async () => {
-      preWarmGPU();
-      await awaitPreWarm();
+    it('invalidates the shader pre-warm cache without destroying the shared device', async () => {
+      const preWarmer = getPreWarmer();
+      const invalidateSpy = vi.spyOn(preWarmer, 'invalidate');
+      const lease = await acquireGPUDevice();
 
       invalidatePreWarm();
 
-      expect(mock.device.destroy).toHaveBeenCalled();
+      expect(invalidateSpy).toHaveBeenCalled();
+      expect(mock.device.destroy).not.toHaveBeenCalled();
+
+      lease.release();
+      invalidateSpy.mockRestore();
     });
 
     it('does NOT destroy a device that outstanding leases still hold', async () => {
@@ -467,9 +332,7 @@ describe('gpu-device-manager', () => {
       removeGPUMock();
     });
 
-    it('preWarmGPU() is a no-op when navigator.gpu is absent', async () => {
-      preWarmGPU();
-      await Promise.resolve();
+    it('acquireGPUDevice() rejects when navigator.gpu is absent', async () => {
       await expect(acquireGPUDevice()).rejects.toThrow('WebGPU not supported: No adapter found.');
     });
   });
@@ -486,9 +349,7 @@ describe('gpu-device-manager', () => {
       removeGPUMock();
     });
 
-    it('preWarmGPU() is a no-op when requestAdapter returns null', async () => {
-      preWarmGPU();
-      await Promise.resolve();
+    it('acquireGPUDevice() rejects when requestAdapter returns null', async () => {
       await expect(acquireGPUDevice()).rejects.toThrow('WebGPU not supported: No adapter found.');
     });
   });

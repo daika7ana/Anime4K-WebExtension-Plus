@@ -176,6 +176,8 @@ export async function runGPUBenchmark(
 ): Promise<GPUBenchmarkResult> {
     const tiers = PERFORMANCE_TIER_ORDER;
     const samplesByTier: TierFrameSamples = {};
+    // Infinity means "this tier was never measured": validateGPUBenchmarkResult
+    // rejects such a result, so a partial run is not persisted.
     const scores = Object.fromEntries(
         PERFORMANCE_TIER_ORDER.map((tier) => [tier, Infinity] as const),
     ) as Record<PerformanceTier, number>;
@@ -222,148 +224,150 @@ export async function runGPUBenchmark(
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
 
-    // Pre-generate test data (reused across all tiers)
-    const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
-    // crypto.getRandomValues has a 65536 byte limit, fill in chunks
-    const CRYPTO_CHUNK = 65536;
-    for (let offset = 0; offset < testData.length; offset += CRYPTO_CHUNK) {
-        const end = Math.min(offset + CRYPTO_CHUNK, testData.length);
-        crypto.getRandomValues(testData.subarray(offset, end));
-    }
-    // Ensure alpha channel is 255
-    for (let j = 3; j < testData.length; j += 4) {
-        testData[j] = 255;
-    }
-
-    // Dynamically import anime4k-webgpu-async module
-    console.log('[GPUBenchmark] Loading anime4k-webgpu-async module...');
-    const Anime4K = await import('anime4k-webgpu-async');
-
-    console.log('[GPUBenchmark] Starting benchmark...');
-
-    // Global warmup phase: run multiple frames with performance effect chain to warm up GPU
-    console.log('[GPUBenchmark] Global warmup phase...');
-    {
-        device.queue.writeTexture(
-            { texture: inputTexture },
-            testData,
-            { bytesPerRow: TEST_WIDTH * 4, rowsPerImage: TEST_HEIGHT },
-            [TEST_WIDTH, TEST_HEIGHT]
-        );
-        await device.queue.onSubmittedWorkDone();
-
-        const warmupEffects = resolveEffectChain('A+A', 'performance');
-        await runEffectChainTest(device, inputTexture, warmupEffects, Anime4K);
-        console.log('[GPUBenchmark] Global warmup complete');
-    }
-
-    // Progressive testing: from performance to ultra
-    for (let i = 0; i < tiers.length; i++) {
-        const tier = tiers[i];
-
-        // Stop early if the device.lost handler already observed a loss
-        if (deviceLost) {
-            console.warn(`[GPUBenchmark] Device lost before ${tier} test, stopping benchmark`);
-            break;
+    try {
+        // Pre-generate test data (reused across all tiers)
+        const testData = new Uint8Array(TEST_WIDTH * TEST_HEIGHT * 4);
+        // crypto.getRandomValues has a 65536 byte limit, fill in chunks
+        const CRYPTO_CHUNK = 65536;
+        for (let offset = 0; offset < testData.length; offset += CRYPTO_CHUNK) {
+            const end = Math.min(offset + CRYPTO_CHUNK, testData.length);
+            crypto.getRandomValues(testData.subarray(offset, end));
+        }
+        // Ensure alpha channel is 255
+        for (let j = 3; j < testData.length; j += 4) {
+            testData[j] = 255;
         }
 
-        onProgress?.({
-            tier,
-            progress: (i + 0.5) / tiers.length,
-            completed: false,
-        });
+        // Dynamically import anime4k-webgpu-async module
+        console.log('[GPUBenchmark] Loading anime4k-webgpu-async module...');
+        const Anime4K = await import('anime4k-webgpu-async');
 
-        // Re-upload the shared input texture for this tier.
-        try {
+        console.log('[GPUBenchmark] Starting benchmark...');
+
+        // Global warmup phase: run multiple frames with performance effect chain to warm up GPU
+        console.log('[GPUBenchmark] Global warmup phase...');
+        {
             device.queue.writeTexture(
                 { texture: inputTexture },
                 testData,
                 { bytesPerRow: TEST_WIDTH * 4, rowsPerImage: TEST_HEIGHT },
                 [TEST_WIDTH, TEST_HEIGHT]
             );
-            // Wait for texture write to complete
             await device.queue.onSubmittedWorkDone();
-        } catch (error) {
-            console.warn(`[GPUBenchmark] Failed to upload input texture for ${tier}:`, error);
-            break;
+
+            const warmupEffects = resolveEffectChain('A+A', 'performance');
+            await runEffectChainTest(device, inputTexture, warmupEffects, Anime4K);
+            console.log('[GPUBenchmark] Global warmup complete');
         }
 
-        try {
-            // Set crash recovery flag
-            await chrome.storage.local.set({ _benchmarkInProgress: true });
+        // Progressive testing: from performance to ultra
+        for (let i = 0; i < tiers.length; i++) {
+            const tier = tiers[i];
+            let aborted = false;
 
-            // Get the Mode A+A effect chain for this tier
-            const effects = resolveEffectChain('A+A', tier);
-
-            // Run the test
-            const { avgTime, maxTime, samples } = await runWithTimeout(
-                runEffectChainTest(device, inputTexture, effects, Anime4K),
-                TEST_TIMEOUT_MS
-            );
-
-            // Clear crash flag
-            await chrome.storage.local.remove('_benchmarkInProgress');
-
-            scores[tier] = avgTime;
-            maxScores[tier] = maxTime;
-            samplesByTier[tier] = samples;
-            console.log(`[GPUBenchmark] ${tier}: avg=${avgTime.toFixed(2)}ms, max=${maxTime.toFixed(2)}ms per frame`);
-
-        } catch (error) {
-            console.warn(`[GPUBenchmark] ${tier} failed:`, error);
-            await chrome.storage.local.remove('_benchmarkInProgress');
-
-            // If the first tier (performance) fails, throw immediately
-            if (i === 0) {
-                intentionalDestroy = true;
-                inputTexture.destroy();
-                device.destroy();
-                throw error;
+            // Stop early if the device.lost handler already observed a loss
+            if (deviceLost) {
+                console.warn(`[GPUBenchmark] Device lost before ${tier} test, stopping benchmark`);
+                break;
             }
-            // Otherwise use the tiers that succeeded
-            break;
+
+            onProgress?.({
+                tier,
+                progress: (i + 0.5) / tiers.length,
+                completed: false,
+            });
+
+            // Re-upload the shared input texture for this tier.
+            try {
+                device.queue.writeTexture(
+                    { texture: inputTexture },
+                    testData,
+                    { bytesPerRow: TEST_WIDTH * 4, rowsPerImage: TEST_HEIGHT },
+                    [TEST_WIDTH, TEST_HEIGHT]
+                );
+                // Wait for texture write to complete
+                await device.queue.onSubmittedWorkDone();
+            } catch (error) {
+                console.warn(`[GPUBenchmark] Failed to upload input texture for ${tier}:`, error);
+                break;
+            }
+
+            try {
+                // Set crash recovery flag
+                await chrome.storage.local.set({ _benchmarkInProgress: true });
+
+                // Get the Mode A+A effect chain for this tier
+                const effects = resolveEffectChain('A+A', tier);
+
+                // Run the test
+                const { avgTime, maxTime, samples } = await runWithTimeout(
+                    runEffectChainTest(device, inputTexture, effects, Anime4K, undefined, () => aborted),
+                    TEST_TIMEOUT_MS
+                );
+
+                // Clear crash flag
+                await chrome.storage.local.remove('_benchmarkInProgress');
+
+                scores[tier] = avgTime;
+                maxScores[tier] = maxTime;
+                samplesByTier[tier] = samples;
+                console.log(`[GPUBenchmark] ${tier}: avg=${avgTime.toFixed(2)}ms, max=${maxTime.toFixed(2)}ms per frame`);
+
+            } catch (error) {
+                // Stop the abandoned run at its next batch instead of letting it
+                // keep submitting frames until the device is destroyed.
+                aborted = true;
+                console.warn(`[GPUBenchmark] ${tier} failed:`, error);
+                await chrome.storage.local.remove('_benchmarkInProgress');
+
+                // If the first tier (performance) fails, throw immediately
+                if (i === 0) {
+                    throw error;
+                }
+                // Otherwise use the tiers that succeeded
+                break;
+            }
+
+            onProgress?.({
+                tier,
+                progress: (i + 1) / tiers.length,
+                completed: false,
+            });
         }
+
+        // If no tier succeeded (all scores are Infinity), throw
+        if (scores.performance === Infinity) {
+            throw new Error('All benchmark tests failed');
+        }
+
+        // Apply the formal benchmark → tier policy (see recommendTierFromSamples).
+        // `null` means no tested tier met the budget; fall back to the lightest tier.
+        const recommendedTier: PerformanceTier =
+            recommendTierFromSamples(samplesByTier) ?? FALLBACK_PERFORMANCE_TIER;
+
+        const result: GPUBenchmarkResult = {
+            tier: recommendedTier,
+            scores,
+            maxScores,
+            timestamp: Date.now(),
+            adapterInfo,
+        };
 
         onProgress?.({
-            tier,
-            progress: (i + 1) / tiers.length,
-            completed: false,
+            tier: 'done',
+            progress: 1,
+            completed: true,
         });
-    }
 
-    // If no tier succeeded (all scores are Infinity), throw
-    if (scores.performance === Infinity) {
+        return result;
+    } finally {
+        // Every exit path (throw, abandon, success) leaves the device and the
+        // shared input texture destroyed; intentionalDestroy keeps the lost
+        // handler from logging our own teardown as a crash.
         intentionalDestroy = true;
         inputTexture.destroy();
         device.destroy();
-        throw new Error('All benchmark tests failed');
     }
-
-    // Apply the formal benchmark → tier policy (see recommendTierFromSamples).
-    // `null` means no tested tier met the budget; fall back to the lightest tier.
-    const recommendedTier: PerformanceTier =
-        recommendTierFromSamples(samplesByTier) ?? FALLBACK_PERFORMANCE_TIER;
-
-    // Cleanup resources
-    intentionalDestroy = true;
-    inputTexture.destroy();
-    device.destroy();
-
-    const result: GPUBenchmarkResult = {
-        tier: recommendedTier,
-        scores,
-        maxScores,
-        timestamp: Date.now(),
-        adapterInfo,
-    };
-
-    onProgress?.({
-        tier: 'done',
-        progress: 1,
-        completed: true,
-    });
-
-    return result;
 }
 
 /**
@@ -377,6 +381,8 @@ export async function runEffectChainTest(
     Anime4K: typeof import('anime4k-webgpu-async'),
     /** Source/input dimensions. Defaults to the benchmark's 1080p test input. */
     sourceDimensions: Dimensions = { width: TEST_WIDTH, height: TEST_HEIGHT },
+    /** Polled once per batch; when true the test stops and destroys its pipelines. */
+    shouldAbort?: () => boolean,
 ): Promise<{ avgTime: number; maxTime: number; samples: number[] }> {
     // Build pipelines through the shared effect-chain compiler (lockstep with
     // the renderer's pipeline builder). The benchmark's device, warmup, batching
@@ -450,70 +456,74 @@ export async function runEffectChainTest(
         throw new Error('No valid pipelines created');
     }
 
-    // Warmup: run each effect individually to avoid memory pressure from running the full chain
-    for (let pipelineIdx = 0; pipelineIdx < pipelines.length; pipelineIdx++) {
-        const pipeline = pipelines[pipelineIdx];
-        const commandEncoder = device.createCommandEncoder();
-        await pipeline.pass(commandEncoder);
-        device.queue.submit([commandEncoder.finish()]);
-        await device.queue.onSubmittedWorkDone();
-    }
-
-    // Full warmup: run the complete pipeline chain for 4 frames
-    for (let warmup = 0; warmup < 4; warmup++) {
-        const commandEncoder = device.createCommandEncoder();
-        for (const pipeline of pipelines) {
+    try {
+        // Warmup: run each effect individually to avoid memory pressure from running the full chain
+        for (let pipelineIdx = 0; pipelineIdx < pipelines.length; pipelineIdx++) {
+            const pipeline = pipelines[pipelineIdx];
+            const commandEncoder = device.createCommandEncoder();
             await pipeline.pass(commandEncoder);
+            device.queue.submit([commandEncoder.finish()]);
+            await device.queue.onSubmittedWorkDone();
         }
-        device.queue.submit([commandEncoder.finish()]);
-        await device.queue.onSubmittedWorkDone();
-    }
 
-
-    // Actual test: run 120 frames, record per-frame time
-    const testFrames = 120;
-    const frameTimes: number[] = [];
-
-    // To avoid the huge overhead of single-frame sync (onSubmittedWorkDone) on Firefox,
-    // and to avoid TDR (timeout detection) crashes from submitting too many frames at once,
-    // we use a micro-batching strategy.
-    const BATCH_SIZE = 6;
-
-    for (let frame = 0; frame < testFrames; frame += BATCH_SIZE) {
-        const batchStart = performance.now();
-        const framesInBatch = Math.min(BATCH_SIZE, testFrames - frame);
-
-        for (let i = 0; i < framesInBatch; i++) {
+        // Full warmup: run the complete pipeline chain for 4 frames
+        for (let warmup = 0; warmup < 4; warmup++) {
             const commandEncoder = device.createCommandEncoder();
             for (const pipeline of pipelines) {
                 await pipeline.pass(commandEncoder);
             }
             device.queue.submit([commandEncoder.finish()]);
+            await device.queue.onSubmittedWorkDone();
         }
 
-        // Wait for the current batch to complete
-        await device.queue.onSubmittedWorkDone();
 
-        const batchDuration = performance.now() - batchStart;
-        const avgFrameTime = batchDuration / framesInBatch;
+        // Actual test: run 120 frames, record per-frame time
+        const testFrames = 120;
+        const frameTimes: number[] = [];
 
-        // Use the average frame time as the score for each frame in this batch
-        for (let i = 0; i < framesInBatch; i++) {
-            frameTimes.push(avgFrameTime);
+        // To avoid the huge overhead of single-frame sync (onSubmittedWorkDone) on Firefox,
+        // and to avoid TDR (timeout detection) crashes from submitting too many frames at once,
+        // we use a micro-batching strategy.
+        const BATCH_SIZE = 6;
+
+        for (let frame = 0; frame < testFrames; frame += BATCH_SIZE) {
+            if (shouldAbort?.()) throw new Error('aborted');
+            const batchStart = performance.now();
+            const framesInBatch = Math.min(BATCH_SIZE, testFrames - frame);
+
+            for (let i = 0; i < framesInBatch; i++) {
+                const commandEncoder = device.createCommandEncoder();
+                for (const pipeline of pipelines) {
+                    await pipeline.pass(commandEncoder);
+                }
+                device.queue.submit([commandEncoder.finish()]);
+            }
+
+            // Wait for the current batch to complete
+            await device.queue.onSubmittedWorkDone();
+
+            const batchDuration = performance.now() - batchStart;
+            const avgFrameTime = batchDuration / framesInBatch;
+
+            // Use the average frame time as the score for each frame in this batch
+            for (let i = 0; i < framesInBatch; i++) {
+                frameTimes.push(avgFrameTime);
+            }
         }
+
+        // Discard the first 24 frames to eliminate warmup bias (shader compilation latency, GPU frequency ramp-up, etc.)
+        const WARMUP_DISCARD_FRAMES = 24;
+        const stableFrameTimes = frameTimes.slice(WARMUP_DISCARD_FRAMES);
+        const totalTime = stableFrameTimes.reduce((a, b) => a + b, 0);
+        const avgTime = totalTime / stableFrameTimes.length;
+        const maxTime = Math.max(...stableFrameTimes);
+
+        return { avgTime, maxTime, samples: stableFrameTimes };
+    } finally {
+        // Safely cleanup pipelines (wait for sync before destroying); must run on
+        // the abort path too, or a timed-out run leaks its pipelines.
+        await safeDestroyPipelines(device, pipelines);
     }
-
-    // Discard the first 24 frames to eliminate warmup bias (shader compilation latency, GPU frequency ramp-up, etc.)
-    const WARMUP_DISCARD_FRAMES = 24;
-    const stableFrameTimes = frameTimes.slice(WARMUP_DISCARD_FRAMES);
-    const totalTime = stableFrameTimes.reduce((a, b) => a + b, 0);
-    const avgTime = totalTime / stableFrameTimes.length;
-    const maxTime = Math.max(...stableFrameTimes);
-
-    // Safely cleanup pipelines (wait for sync before destroying)
-    await safeDestroyPipelines(device, pipelines);
-
-    return { avgTime, maxTime, samples: stableFrameTimes };
 }
 
 /**
@@ -541,6 +551,9 @@ async function getGPUAdapterInfo(adapter: GPUAdapter): Promise<string> {
  * Promise with timeout
  */
 function runWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    // The loser of the race may settle later (e.g. an aborted chain test);
+    // observe it so an abandoned run cannot raise an unhandled rejection.
+    promise.catch(() => { /* observed here or intentionally abandoned */ });
     return Promise.race([
         promise,
         new Promise<T>((_, reject) =>

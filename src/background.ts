@@ -98,8 +98,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     console.error('[Background] Failed to update DNR ruleset:', error);
   }
 
-  // Open onboarding page on fresh install or update if not completed
-  if (details.reason === 'install' || details.reason === 'update') {
+  // Open onboarding page on fresh install only (not on update if not completed)
+  if (details.reason === 'install') {
     try {
       await checkOnboarding();
     } catch (error) {
@@ -155,6 +155,19 @@ onMessage((message, _sender, _sendResponse) => {
         for (const tab of tabs) {
           if (tab.id) {
             sendTabMessage(tab.id, message).catch(() => {
+              // Tab may not have a content script — ignore silently
+            });
+          }
+        }
+      });
+      break;
+    case 'WHITELIST_UPDATED':
+      // Content scripts cannot receive runtime messages, so relay via
+      // chrome.tabs.sendMessage. URL_UPDATED makes them re-evaluate the whitelist.
+      chrome.tabs.query({}, (tabs) => {
+        for (const tab of tabs) {
+          if (tab.id) {
+            sendTabMessage(tab.id, { type: 'URL_UPDATED', url: tab.url ?? '' }).catch(() => {
               // Tab may not have a content script — ignore silently
             });
           }

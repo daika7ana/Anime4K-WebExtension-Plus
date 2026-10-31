@@ -1,10 +1,9 @@
 /**
  * GPU Device Manager — manages shared GPU adapter/device lifecycle, ref-counted
- * leasing, pre-warming, and loss-driven recovery.
+ * leasing, and loss-driven recovery.
  *
  * Extracted from Renderer to isolate device acquisition responsibilities.
  * Handles:
- *  - Pre-warming a GPU adapter/device so it's ready when the user clicks Enhance
  *  - Ref-counted, shared GPUDevice leases so multiple renderers can share one device
  *  - Requesting fresh GPU devices with appropriate limits
  *  - Invalidating the shader pre-warm cache after device loss or destruction
@@ -30,8 +29,7 @@
  * ---------
  * `release()` decrements the lease count. When the count reaches zero the device
  * is destroyed — there is intentionally no idle retention after the last
- * release. A device created by {@link preWarmGPU} sits at refCount 0 and is
- * destroyed after 30 s if no lease claims it.
+ * release.
  */
 import { PipelinePreWarmer } from './pipeline-prewarmer';
 
@@ -68,12 +66,7 @@ interface SharedDevice {
   lost: boolean;
   lostInfo: GPUDeviceLostInfo | null;
   lostCallbacks: Set<(info: GPUDeviceLostInfo) => void>;
-  /** Idle timer armed only while a prewarmed device sits at refCount 0. */
-  idleTimer: ReturnType<typeof setTimeout> | null;
 }
-
-// --- Static GPU pre-warm state (shared across all Renderer instances) ---
-let prewarmPromise: Promise<void> | null = null;
 
 // --- The single shared device, or null when none is live ---
 let sharedDevice: SharedDevice | null = null;
@@ -138,7 +131,6 @@ function createSharedRecord(device: GPUDevice, adapter: GPUAdapter): SharedDevic
     lost: false,
     lostInfo: null,
     lostCallbacks: new Set(),
-    idleTimer: null,
   };
 }
 
@@ -152,10 +144,6 @@ function attachLostListener(shared: SharedDevice): void {
   shared.device.lost.then((info) => {
     shared.lost = true;
     shared.lostInfo = info;
-    if (shared.idleTimer) {
-      clearTimeout(shared.idleTimer);
-      shared.idleTimer = null;
-    }
     if (sharedDevice === shared) {
       sharedDevice = null;
     }
@@ -169,14 +157,6 @@ function attachLostListener(shared: SharedDevice): void {
       }
     }
   });
-}
-
-/** Cancel a shared device's idle auto-destroy timer, if armed. */
-function cancelIdleTimer(shared: SharedDevice): void {
-  if (shared.idleTimer) {
-    clearTimeout(shared.idleTimer);
-    shared.idleTimer = null;
-  }
 }
 
 /** Build a lease facade over a shared device. */
@@ -198,8 +178,7 @@ function createLease(shared: SharedDevice): GpuDeviceLease {
       if (shared.refCount > 0) shared.refCount -= 1;
       if (shared.refCount > 0) return;
 
-      // Last lease released: no idle retention — clear and destroy.
-      cancelIdleTimer(shared);
+      // Last lease released: destroy.
       if (sharedDevice === shared) {
         sharedDevice = null;
       }
@@ -252,7 +231,6 @@ function requestSharedDevice(): Promise<SharedDevice> {
 async function getOrCreateSharedDevice(): Promise<SharedDevice> {
   if (sharedDevice && !sharedDevice.lost) {
     sharedDevice.refCount += 1;
-    cancelIdleTimer(sharedDevice);
     return sharedDevice;
   }
 
@@ -271,85 +249,20 @@ async function getOrCreateSharedDevice(): Promise<SharedDevice> {
 }
 
 /**
- * Pre-request GPU adapter and device so they're ready when the user clicks Enhance.
- * The device is stored as the shared device at refCount 0 and destroyed after 30 s
- * if no lease claims it. Safe to call multiple times — only the first call does work.
- */
-export function preWarmGPU(): void {
-  if (prewarmPromise) return;
-  prewarmPromise = (async () => {
-    try {
-      if (!navigator.gpu) return;
-      const { device, adapter } = await requestDeviceFor();
-
-      // Another consumer may have acquired a device while the pre-warm was in
-      // flight; prefer the existing shared device.
-      if (sharedDevice && !sharedDevice.lost) {
-        try {
-          device.destroy();
-        } catch {
-          /* already destroyed */
-        }
-        return;
-      }
-
-      const shared = createSharedRecord(device, adapter);
-      sharedDevice = shared;
-      attachLostListener(shared);
-
-      // Auto-destroy a prewarmed device that is never leased within 30 seconds.
-      shared.idleTimer = setTimeout(() => {
-        shared.idleTimer = null;
-        if (shared.refCount === 0 && !shared.lost && sharedDevice === shared) {
-          console.log('[Anime4KWebExt] Prewarmed GPU device unclaimed after 30s, releasing.');
-          sharedDevice = null;
-          try {
-            shared.device.destroy();
-          } catch {
-            /* already destroyed */
-          }
-        }
-      }, 30000);
-    } catch {
-      // Pre-warm is best-effort; errors are non-fatal
-    }
-  })();
-}
-
-/**
- * Acquire a lease on the shared GPUDevice. A pre-warmed device at refCount 0 is
- * claimed and its idle timer cancelled; otherwise a fresh adapter/device is
- * requested. Concurrent calls share one device.
+ * Acquire a lease on the shared GPUDevice, reusing the live device when one
+ * exists or requesting a fresh adapter/device otherwise. Concurrent calls share
+ * one device.
  */
 export async function acquireGPUDevice(): Promise<GpuDeviceLease> {
-  // If a pre-warm is in flight, await it so we can share its device instead of
-  // racing a duplicate request.
-  if (prewarmPromise) await prewarmPromise;
-
-  const shared = await getOrCreateSharedDevice();
-  return createLease(shared);
+  return createLease(await getOrCreateSharedDevice());
 }
 
 /**
- * Invalidate the shader pre-warm cache and the pre-warm promise.
- * A shared device with outstanding leases is left untouched. An unleased
- * (refCount 0) prewarmed device is destroyed to avoid leaking it.
+ * Invalidate the shader pre-warm cache. Outstanding device leases are
+ * unaffected.
  */
 export function invalidatePreWarm(): void {
   preWarmer.invalidate();
-  prewarmPromise = null;
-
-  const shared = sharedDevice;
-  if (!shared || shared.refCount > 0) return;
-  cancelIdleTimer(shared);
-  sharedDevice = null;
-  if (!shared.lost) {
-    try {
-      shared.device.destroy();
-    } catch {
-      /* already destroyed */
-    }
-  }
 }
 
 /**
